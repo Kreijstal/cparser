@@ -57,8 +57,6 @@ int main(void) {
       printf("> ");
       input_t * in = new_input();
 
-      // We need a way to peek at the first char without consuming it from stdin
-      // The old read1 function handled this. Let's re-use it.
       char first_char = read1(in);
       if (first_char == '\n' || first_char == EOF) {
           free(in->buffer);

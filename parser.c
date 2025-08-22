@@ -133,8 +133,6 @@ void skip_whitespace(input_t * in) {
 // Forward declaration for memory management
 void free_combinator(combinator_t* comb);
 
-// --- Actual `comb_fn` implementations ---
-
 combinator_t * new_combinator() {
     return (combinator_t *) safe_malloc(sizeof(combinator_t));
 }
