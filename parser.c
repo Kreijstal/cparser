@@ -158,6 +158,17 @@ ast_t * match_fn(input_t * in, void * args) {
     return NULL;
 }
 
+ast_t * match_raw_fn(input_t * in, void * args) {
+    char * str = ((match_args *) args)->str;
+    int start_pos = in->start;
+    // No skip_whitespace() here
+    int i = 0, len = strlen(str);
+    while (i < len && str[i] == read1(in)) i++;
+    if (i == len) return ast_nil;
+    in->start = start_pos;
+    return NULL;
+}
+
 ast_t * expect_fn(input_t * in, void * args) {
     expect_args * eargs = (expect_args *) args;
     ast_t * ast = parse(in, eargs->comb);
@@ -317,6 +328,15 @@ combinator_t * match(char * str) {
     return comb;
 }
 
+combinator_t * match_raw(char * str) {
+    match_args * args = (match_args*)safe_malloc(sizeof(match_args));
+    args->str = str;
+    combinator_t * comb = new_combinator();
+    comb->fn = match_raw_fn;
+    comb->args = args;
+    return comb;
+}
+
 combinator_t * expect(combinator_t * c, char * msg) {
     expect_args * args = (expect_args*)safe_malloc(sizeof(expect_args));
     args->msg = msg;
@@ -392,6 +412,58 @@ combinator_t * cident() {
     combinator_t * comb = new_combinator();
     comb->fn = cident_fn;
     comb->args = NULL;
+    return comb;
+}
+
+// --- Until Parser Implementation ---
+typedef struct {
+    combinator_t* delimiter;
+} until_args;
+
+ast_t* until_fn(input_t* in, void* args) {
+    until_args* uargs = (until_args*)args;
+    combinator_t* p = uargs->delimiter;
+
+    int initial_pos = in->start;
+
+    while(1) {
+        int current_pos = in->start;
+
+        // Check for delimiter without consuming it
+        if (parse(in, p) != NULL) {
+            in->start = current_pos; // Rewind
+            break;
+        }
+        in->start = current_pos; // Rewind from failed parse
+
+        // Consume one character
+        if (read1(in) == EOF) {
+            break;
+        }
+    }
+
+    int final_pos = in->start;
+    int len = final_pos - initial_pos;
+
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + initial_pos, len);
+    text[len] = '\0';
+
+    ast_t* ast = new_ast();
+    ast->typ = T_STRING;
+    ast->sym = sym_lookup(text);
+    free(text);
+    return ast;
+}
+
+combinator_t* until(combinator_t* p) {
+    until_args* args = (until_args*)safe_malloc(sizeof(until_args));
+    args->delimiter = p;
+
+    combinator_t* comb = new_combinator();
+    comb->fn = until_fn;
+    comb->args = args;
+
     return comb;
 }
 
@@ -504,7 +576,7 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
     new_visited->next = *visited;
     *visited = new_visited;
     if (comb->args != NULL) {
-        if (comb->fn == match_fn) {
+        if (comb->fn == match_fn || comb->fn == match_raw_fn) {
             free((match_args*)comb->args);
         } else if (comb->fn == expect_fn) {
             expect_args* args = (expect_args*)comb->args;
@@ -523,6 +595,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
         } else if (comb->fn == flatMap_fn) {
             flatMap_args* args = (flatMap_args*)comb->args;
             free_combinator_recursive(args->parser, visited);
+            free(args);
+        } else if (comb->fn == until_fn) {
+            until_args* args = (until_args*)comb->args;
+            free_combinator_recursive(args->delimiter, visited);
             free(args);
         } else if (comb->fn == expr_fn) {
             expr_list* list = (expr_list*)comb->args;

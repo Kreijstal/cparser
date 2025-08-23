@@ -21,7 +21,7 @@ typedef struct input_t input_t;
 // AST node types
 typedef enum {
     T_NONE, T_INT, T_IDENT, T_ASSIGN, T_SEQ,
-    T_ADD, T_SUB, T_MUL, T_DIV, T_NEG
+    T_ADD, T_SUB, T_MUL, T_DIV, T_NEG, T_STRING
 } tag_t;
 
 // Symbol
@@ -74,12 +74,14 @@ ast_t * parse(input_t * in, combinator_t * comb);
 
 // --- Combinator Constructors ---
 combinator_t * match(char * str);
+combinator_t * match_raw(char * str);
 combinator_t * expect(combinator_t * c, char * msg);
 combinator_t * seq(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
 combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
 combinator_t * flatMap(combinator_t * p, flatMap_func func);
 combinator_t * integer();
 combinator_t * cident();
+combinator_t * until(combinator_t* p);
 
 // --- Expression Parser Constructors ---
 typedef enum { EXPR_BASE, EXPR_INFIX, EXPR_PREFIX, EXPR_POSTFIX } expr_fix;
