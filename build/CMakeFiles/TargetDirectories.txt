@@ -1,4 +1,0 @@
-/app/build/CMakeFiles/parser_lib.dir
-/app/build/CMakeFiles/calculator.dir
-/app/build/CMakeFiles/edit_cache.dir
-/app/build/CMakeFiles/rebuild_cache.dir
