@@ -107,16 +107,27 @@ input_t * new_input() {
 }
 
 char read1(input_t * in) {
-   if (in->start < in->length) return in->buffer[in->start++];
-   if (in->alloc == in->length) {
-      in->alloc += 50;
-      in->buffer = (char *) realloc(in->buffer, in->alloc);
-      if (!in->buffer) exception("realloc failed");
-   }
-   int c = getchar();
-   if (c == EOF) return EOF;
-   in->start++;
-   return in->buffer[in->length++] = (char)c;
+    if (in->buffer == NULL) {
+        char linebuf[2048];
+        if (fgets(linebuf, sizeof(linebuf), stdin) == NULL) {
+            in->length = 0;
+            in->start = 0;
+            return EOF;
+        }
+        in->length = strlen(linebuf);
+        if (in->length > 0 && linebuf[in->length-1] == '\n') {
+            linebuf[in->length-1] = '\0';
+            in->length--;
+        }
+        in->alloc = in->length + 1;
+        in->buffer = (char*)safe_malloc(in->alloc);
+        strcpy(in->buffer, linebuf);
+        in->start = 0;
+    }
+    if (in->start < in->length) {
+        return in->buffer[in->start++];
+    }
+    return EOF;
 }
 
 void skip_whitespace(input_t * in) {
@@ -130,7 +141,6 @@ void skip_whitespace(input_t * in) {
 // PARSING LOGIC FUNCTIONS (THE `_fn` IMPLEMENTATIONS)
 //=============================================================================
 
-// Forward declaration for memory management
 void free_combinator(combinator_t* comb);
 
 combinator_t * new_combinator() {
@@ -161,7 +171,6 @@ ast_t * seq_fn(input_t * in, void * args) {
     seq_args * sa = (seq_args *) args;
     seq_list * seq = sa->list;
     ast_t * head = NULL, * tail = NULL;
-
     while (seq != NULL) {
         ast_t * a = parse(in, seq->comb);
         if (a == NULL) {
@@ -198,17 +207,13 @@ ast_t * flatMap_fn(input_t * in, void * args) {
     int start_pos = in->start;
     ast_t * initial_result = parse(in, fm_args->parser);
     if (initial_result == NULL) return NULL;
-
     combinator_t * next_parser = fm_args->func(initial_result);
     if (next_parser == NULL) {
         in->start = start_pos;
         return NULL;
     }
-    
     ast_t * final_result = parse(in, next_parser);
-    
     free_combinator(next_parser);
-
     if (final_result == NULL) {
         in->start = start_pos;
         return NULL;
@@ -225,12 +230,10 @@ ast_t * integer_fn(input_t * in, void * args) {
    }
    while (isdigit(c = read1(in))) ;
    in->start--;
-
    int len = in->start - start_pos;
    char * text = (char*)safe_malloc(len + 1);
    strncpy(text, in->buffer + start_pos, len);
    text[len] = '\0';
-
    ast_t * ast = new_ast();
    ast->typ = T_INT;
    ast->sym = sym_lookup(text);
@@ -247,12 +250,10 @@ ast_t * cident_fn(input_t * in, void * args) {
    }
    while ((c = read1(in)) == '_' || isalnum(c)) ;
    in->start--;
-
    int len = in->start - start_pos;
    char * text = (char*)safe_malloc(len + 1);
    strncpy(text, in->buffer + start_pos, len);
    text[len] = '\0';
-
    ast_t * ast = new_ast();
    ast->typ = T_IDENT;
    ast->sym = sym_lookup(text);
@@ -263,13 +264,10 @@ ast_t * cident_fn(input_t * in, void * args) {
 ast_t * expr_fn(input_t * in, void * args) {
    expr_list * list = (expr_list *) args;
    ast_t* lhs;
-
    if (list == NULL) return NULL;
-
    if (list->fix == EXPR_BASE) {
        return parse(in, list->comb);
    }
-
    if (list->fix == EXPR_PREFIX) {
        op_t* op = list->op;
        if (op) {
@@ -282,10 +280,8 @@ ast_t * expr_fn(input_t * in, void * args) {
            in->start = start_pos;
        }
    }
-
    lhs = expr_fn(in, (void *) list->next);
    if (!lhs) return NULL;
-
    if (list->fix == EXPR_INFIX) {
        while (1) {
            op_t *op = list->op;
@@ -305,10 +301,8 @@ ast_t * expr_fn(input_t * in, void * args) {
            if (!found_op) break;
        }
    }
-
    return lhs;
 }
-
 
 //=============================================================================
 // COMBINATOR CREATION FUNCTIONS (THE PUBLIC API)
@@ -347,7 +341,6 @@ combinator_t * seq(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
     }
     current->next = NULL;
     va_end(ap);
-
     seq_args * args = (seq_args*)safe_malloc(sizeof(seq_args));
     args->typ = typ;
     args->list = head;
@@ -370,7 +363,6 @@ combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
     }
     current->next = NULL;
     va_end(ap);
-
     seq_args * args = (seq_args*)safe_malloc(sizeof(seq_args));
     args->typ = typ;
     args->list = head;
@@ -424,7 +416,6 @@ void expr_insert(combinator_t * exp, int prec, tag_t tag, expr_fix fix, expr_ass
     node->fix = fix;
     node->assoc = assoc;
     node->comb = NULL;
-
     expr_list **p_list = (expr_list**)&exp->args;
     for (int i = 0; i < prec; i++) {
         if (*p_list == NULL || (*p_list)->fix == EXPR_BASE) {
@@ -443,14 +434,12 @@ void expr_altern(combinator_t * exp, int prec, tag_t tag, combinator_t * comb) {
         list = list->next;
     }
     if (list->fix == EXPR_BASE || list == NULL) exception("Invalid precedence");
-    
     op_t* op = (op_t*)safe_malloc(sizeof(op_t));
     op->tag = tag;
     op->comb = comb;
     op->next = list->op;
     list->op = op;
 }
-
 
 //=============================================================================
 // THE UNIVERSAL PARSE FUNCTION
@@ -461,7 +450,6 @@ ast_t * parse(input_t * in, combinator_t * comb) {
     }
     return comb->fn(in, (void *)comb->args);
 }
-
 
 //=============================================================================
 // MEMORY MANAGEMENT
@@ -511,12 +499,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
     if (comb == NULL || is_visited(comb, *visited)) {
         return;
     }
-
     visited_node* new_visited = (visited_node*)safe_malloc(sizeof(visited_node));
     new_visited->ptr = comb;
     new_visited->next = *visited;
     *visited = new_visited;
-
     if (comb->args != NULL) {
         if (comb->fn == match_fn) {
             free((match_args*)comb->args);
@@ -557,6 +543,5 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
             }
         }
     }
-    
     free(comb);
 }

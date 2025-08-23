@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/calculator.dir/calc.c.o -o calculator  libparser_lib.a
