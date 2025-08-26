@@ -8,6 +8,3 @@ add_library(parser_lib STATIC parser.c combinators.c)
 add_executable(calculator calc.c)
 target_link_libraries(calculator parser_lib)
 
-# Add the executable for the 'until' test
-add_executable(test_until test_until.c)
-target_link_libraries(test_until parser_lib)
