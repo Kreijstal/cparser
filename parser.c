@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include "parser.h"
+#include "combinator_internals.h"
 
 //=============================================================================
 // Internal Structs & Forward Declarations
@@ -13,29 +14,17 @@
 
 // --- Argument Structs ---
 typedef struct { char * str; } match_args;
-typedef struct { combinator_t * comb; char * msg; } expect_args;
-typedef struct seq_list { combinator_t * comb; struct seq_list * next; } seq_list;
-typedef struct { tag_t typ; seq_list * list; } seq_args;
-typedef struct { combinator_t * parser; flatMap_func func; } flatMap_args;
 typedef struct { combinator_t* delimiter; } until_args;
 typedef struct op_t { tag_t tag; combinator_t * comb; struct op_t * next; } op_t;
 typedef struct expr_list { op_t * op; expr_fix fix; expr_assoc assoc; combinator_t * comb; struct expr_list * next; } expr_list;
 
-// --- Input State ---
-// (Now defined in parser.h)
-
 // --- Static Function Forward Declarations ---
 static ParseResult match_fn(input_t * in, void * args);
 static ParseResult match_raw_fn(input_t * in, void * args);
-static ParseResult expect_fn(input_t * in, void * args);
-static ParseResult seq_fn(input_t * in, void * args);
-static ParseResult multi_fn(input_t * in, void * args);
-static ParseResult flatMap_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
 static ParseResult string_fn(input_t * in, void * args);
 static ParseResult until_fn(input_t* in, void* args);
-static ParseResult optional_fn(input_t* in, void* args);
 static ParseResult expr_fn(input_t * in, void * args);
 
 
@@ -129,7 +118,7 @@ void skip_whitespace(input_t * in) {
 }
 
 //=============================================================================
-// PARSING LOGIC FUNCTIONS (THE `_fn` IMPLEMENTATIONS)
+// PRIMITIVE PARSING FUNCTIONS (THE `_fn` IMPLEMENTATIONS)
 //=============================================================================
 
 combinator_t * new_combinator() { return (combinator_t *) safe_malloc(sizeof(combinator_t)); }
@@ -161,63 +150,6 @@ static ParseResult match_raw_fn(input_t * in, void * args) {
         }
     }
     return make_success(ast_nil);
-}
-
-static ParseResult expect_fn(input_t * in, void * args) {
-    expect_args * eargs = (expect_args *) args;
-    ParseResult res = parse(in, eargs->comb);
-    if (res.is_success) return res;
-    free(res.value.error.message);
-    return make_failure(in, strdup(eargs->msg));
-}
-
-static ParseResult seq_fn(input_t * in, void * args) {
-    InputState state; save_input_state(in, &state);
-    seq_args * sa = (seq_args *) args;
-    seq_list * seq = sa->list;
-    ast_t * head = NULL, * tail = NULL;
-    while (seq != NULL) {
-        ParseResult res = parse(in, seq->comb);
-        if (!res.is_success) { restore_input_state(in, &state); return res; }
-        if (res.value.ast != ast_nil) {
-            if (head == NULL) head = tail = res.value.ast;
-            else { tail->next = res.value.ast; while(tail->next) tail = tail->next; }
-        }
-        seq = seq->next;
-    }
-    return make_success(sa->typ == T_NONE ? head : ast1(sa->typ, head));
-}
-
-static ParseResult multi_fn(input_t * in, void * args) {
-    seq_args * sa = (seq_args *) args;
-    seq_list * seq = sa->list;
-    ParseResult res;
-    while (seq != NULL) {
-        res = parse(in, seq->comb);
-        if (res.is_success) {
-           if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
-           return res;
-        }
-        if (seq->next != NULL) free(res.value.error.message);
-        seq = seq->next;
-    }
-    return res;
-}
-
-static ParseResult flatMap_fn(input_t * in, void * args) {
-    flatMap_args * fm_args = (flatMap_args *)args;
-    InputState state; save_input_state(in, &state);
-    ParseResult res = parse(in, fm_args->parser);
-    if (!res.is_success) return res;
-    combinator_t * next_parser = fm_args->func(res.value.ast);
-    if (next_parser == NULL) {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("flatMap function returned NULL parser."));
-    }
-    ParseResult final_res = parse(in, next_parser);
-    free_combinator(next_parser);
-    if (!final_res.is_success) restore_input_state(in, &state);
-    return final_res;
 }
 
 static ParseResult integer_fn(input_t * in, void * args) {
@@ -355,7 +287,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
 }
 
 //=============================================================================
-// COMBINATOR CREATION FUNCTIONS (THE PUBLIC API)
+// PRIMITIVE PARSER CREATION FUNCTIONS (THE PUBLIC API)
 //=============================================================================
 
 combinator_t * match(char * str) {
@@ -369,48 +301,6 @@ combinator_t * match_raw(char * str) {
     args->str = str;
     combinator_t * comb = new_combinator();
     comb->type = COMB_MATCH_RAW; comb->fn = match_raw_fn; comb->args = args; return comb;
-}
-combinator_t * expect(combinator_t * c, char * msg) {
-    expect_args * args = (expect_args*)safe_malloc(sizeof(expect_args));
-    args->msg = msg; args->comb = c;
-    combinator_t * comb = new_combinator();
-    comb->type = COMB_EXPECT; comb->fn = expect_fn; comb->args = (void *) args; return comb;
-}
-combinator_t * seq(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
-    va_list ap; va_start(ap, c1);
-    seq_list * head = (seq_list*)safe_malloc(sizeof(seq_list));
-    head->comb = c1;
-    seq_list * current = head;
-    combinator_t* c;
-    while ((c = va_arg(ap, combinator_t *)) != NULL) {
-        current->next = (seq_list*)safe_malloc(sizeof(seq_list));
-        current = current->next; current->comb = c;
-    }
-    current->next = NULL; va_end(ap);
-    seq_args * args = (seq_args*)safe_malloc(sizeof(seq_args));
-    args->typ = typ; args->list = head;
-    ret->type = COMB_SEQ; ret->args = (void *) args; ret->fn = seq_fn; return ret;
-}
-combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
-    va_list ap; va_start(ap, c1);
-    seq_list * head = (seq_list*)safe_malloc(sizeof(seq_list));
-    head->comb = c1;
-    seq_list * current = head;
-    combinator_t* c;
-    while ((c = va_arg(ap, combinator_t *)) != NULL) {
-        current->next = (seq_list*)safe_malloc(sizeof(seq_list));
-        current = current->next; current->comb = c;
-    }
-    current->next = NULL; va_end(ap);
-    seq_args * args = (seq_args*)safe_malloc(sizeof(seq_args));
-    args->typ = typ; args->list = head;
-    ret->type = COMB_MULTI; ret->args = (void *) args; ret->fn = multi_fn; return ret;
-}
-combinator_t * flatMap(combinator_t * p, flatMap_func func) {
-    flatMap_args * args = (flatMap_args*)safe_malloc(sizeof(flatMap_args));
-    args->parser = p; args->func = func;
-    combinator_t * comb = new_combinator();
-    comb->type = COMB_FLATMAP; comb->fn = flatMap_fn; comb->args = args; return comb;
 }
 combinator_t * integer() {
     combinator_t * comb = new_combinator();
@@ -427,91 +317,12 @@ combinator_t * string() {
     comb->args = NULL;
     return comb;
 }
-
 combinator_t* until(combinator_t* p) {
     until_args* args = (until_args*)safe_malloc(sizeof(until_args));
     args->delimiter = p;
     combinator_t* comb = new_combinator();
     comb->type = COMB_UNTIL; comb->fn = until_fn; comb->args = args; return comb;
 }
-
-static ParseResult many_fn(input_t* in, void* args) {
-    combinator_t* p = (combinator_t*)args;
-    ast_t* head = NULL;
-    ast_t* tail = NULL;
-    InputState state;
-
-    while(1) {
-        save_input_state(in, &state);
-        ParseResult res = parse(in, p);
-
-        if (res.is_success) {
-            if (in->start == state.start) { // Infinite loop guard
-                if(res.value.ast != ast_nil) free_ast(res.value.ast);
-                break;
-            }
-            if (res.value.ast != ast_nil) {
-                if (head == NULL) {
-                    head = tail = res.value.ast;
-                } else {
-                    tail->next = res.value.ast;
-                    while(tail->next) {
-                        tail = tail->next;
-                    }
-                }
-            }
-        } else {
-            free(res.value.error.message); // We don't care about the error
-            restore_input_state(in, &state);
-            break;
-        }
-    }
-    return make_success(ast1(T_SEQ, head));
-}
-
-combinator_t* many(combinator_t* p) {
-    combinator_t* comb = new_combinator();
-    comb->type = COMB_MANY;
-    comb->fn = many_fn;
-    comb->args = (void*)p;
-    return comb;
-}
-
-static ParseResult optional_fn(input_t* in, void* args) {
-    combinator_t* p = (combinator_t*)args;
-    InputState state;
-    save_input_state(in, &state);
-    ParseResult result = parse(in, p);
-    if (result.is_success) {
-        return result;
-    }
-    free(result.value.error.message);
-    restore_input_state(in, &state);
-    return make_success(ast_nil);
-}
-
-combinator_t* optional(combinator_t* p) {
-    combinator_t* comb = new_combinator();
-    comb->type = COMB_OPTIONAL;
-    comb->fn = optional_fn;
-    comb->args = (void*)p;
-    return comb;
-}
-
-combinator_t* sep_by(combinator_t* p, combinator_t* sep) {
-    combinator_t* rest = seq(new_combinator(), T_NONE, sep, p, NULL);
-    combinator_t* p_and_many_rest = seq(new_combinator(), T_SEQ, p, many(rest), NULL);
-    combinator_t* comb = optional(p_and_many_rest);
-    // We can't just return the optional combinator, because we need to tag it as SEP_BY
-    // for memory management. So we have to create a new one.
-    // This is a bit of a hack. A better way would be a dedicated sep_by_fn.
-    // For now, this will work, but the memory for the inner optional() will leak.
-    // I will fix this later if the user requests it.
-    // Let's try a dedicated fn to be clean.
-    return optional(p_and_many_rest); // Sticking with the simple way for now.
-}
-
-
 combinator_t * expr(combinator_t * exp, combinator_t * base) {
    expr_list * args = (expr_list*)safe_malloc(sizeof(expr_list));
    args->next = NULL; args->fix = EXPR_BASE; args->comb = base; args->op = NULL;
@@ -599,6 +410,13 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
             case COMB_EXPECT: {
                 expect_args* args = (expect_args*)comb->args;
                 free_combinator_recursive(args->comb, visited);
+                free(args);
+                break;
+            }
+            case COMB_SEP_BY: {
+                sep_by_args* args = (sep_by_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free_combinator_recursive(args->sep, visited);
                 free(args);
                 break;
             }

@@ -67,7 +67,7 @@ struct ParseResult {
 typedef enum {
     COMB_MATCH, COMB_MATCH_RAW, COMB_EXPECT, COMB_SEQ, COMB_MULTI,
     COMB_FLATMAP, COMB_INTEGER, COMB_CIDENT, COMB_STRING, COMB_MANY,
-    COMB_UNTIL, COMB_EXPR, COMB_OPTIONAL, COMB_SEP_BY
+    COMB_UNTIL, COMB_EXPR, COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT
 } comb_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
@@ -96,20 +96,24 @@ extern ast_t * ast_nil;
 // --- Core Parser Function ---
 ParseResult parse(input_t * in, combinator_t * comb);
 
-// --- Combinator Constructors ---
+// --- Primitive Parser Constructors ---
 combinator_t * match(char * str);
 combinator_t * match_raw(char * str);
+combinator_t * integer();
+combinator_t * cident();
+combinator_t * string();
+combinator_t * until(combinator_t* p);
+
+// --- Combinator Constructors ---
 combinator_t * expect(combinator_t * c, char * msg);
 combinator_t * seq(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
 combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
 combinator_t * flatMap(combinator_t * p, flatMap_func func);
-combinator_t * integer();
-combinator_t * cident();
-combinator_t * string();
 combinator_t * many(combinator_t* p);
 combinator_t * optional(combinator_t* p);
 combinator_t * sep_by(combinator_t* p, combinator_t* sep);
-combinator_t * until(combinator_t* p);
+combinator_t * left(combinator_t* p1, combinator_t* p2);
+combinator_t * right(combinator_t* p1, combinator_t* p2);
 
 // --- Expression Parser Constructors ---
 typedef enum { EXPR_BASE, EXPR_INFIX, EXPR_PREFIX, EXPR_POSTFIX } expr_fix;
@@ -126,6 +130,8 @@ char read1(input_t * in);
 // --- AST Helpers ---
 ast_t* new_ast();
 void free_ast(ast_t* ast);
+ast_t* ast1(tag_t typ, ast_t* a1);
+ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2);
 
 // --- Combinator Helpers ---
 combinator_t* new_combinator();

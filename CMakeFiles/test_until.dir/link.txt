@@ -1,0 +1,1 @@
+/usr/bin/cc CMakeFiles/test_until.dir/test_until.c.o -o test_until  libparser_lib.a
