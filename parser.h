@@ -17,6 +17,7 @@
 typedef struct ast_t ast_t;
 typedef struct combinator_t combinator_t;
 typedef struct input_t input_t;
+typedef struct ParseResult ParseResult;
 
 // AST node types
 typedef enum {
@@ -43,18 +44,42 @@ struct input_t {
    int alloc;
    int length;
    int start;
+   int line;
+   int col;
+};
+
+// --- Parse Result & Error Structs ---
+typedef struct {
+    int line;
+    int col;
+    char* message;
+} ParseError;
+
+struct ParseResult {
+    bool is_success;
+    union {
+        ast_t* ast;
+        ParseError error;
+    } value;
 };
 
 // Main combinator struct
-typedef ast_t * (*comb_fn)(input_t *in, void *args);
+typedef enum {
+    COMB_MATCH, COMB_MATCH_RAW, COMB_EXPECT, COMB_SEQ, COMB_MULTI,
+    COMB_FLATMAP, COMB_INTEGER, COMB_CIDENT, COMB_STRING, COMB_MANY,
+    COMB_UNTIL, COMB_EXPR, COMB_OPTIONAL, COMB_SEP_BY
+} comb_type_t;
+
+typedef ParseResult (*comb_fn)(input_t *in, void *args);
 
 struct combinator_t {
+    comb_type_t type;
     comb_fn fn;
     void * args;
 };
 
 // For flatMap
-typedef combinator_t * (*flatMap_func)(ast_t *result);
+typedef combinator_t * (*flatMap_func)(ast_t *ast);
 
 
 //=============================================================================
@@ -62,7 +87,6 @@ typedef combinator_t * (*flatMap_func)(ast_t *result);
 //=============================================================================
 
 extern ast_t * ast_nil;
-extern jmp_buf exc;
 
 
 //=============================================================================
@@ -70,7 +94,7 @@ extern jmp_buf exc;
 //=============================================================================
 
 // --- Core Parser Function ---
-ast_t * parse(input_t * in, combinator_t * comb);
+ParseResult parse(input_t * in, combinator_t * comb);
 
 // --- Combinator Constructors ---
 combinator_t * match(char * str);
@@ -81,6 +105,10 @@ combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
 combinator_t * flatMap(combinator_t * p, flatMap_func func);
 combinator_t * integer();
 combinator_t * cident();
+combinator_t * string();
+combinator_t * many(combinator_t* p);
+combinator_t * optional(combinator_t* p);
+combinator_t * sep_by(combinator_t* p, combinator_t* sep);
 combinator_t * until(combinator_t* p);
 
 // --- Expression Parser Constructors ---
@@ -101,6 +129,18 @@ void free_ast(ast_t* ast);
 
 // --- Combinator Helpers ---
 combinator_t* new_combinator();
+
+// --- Extensibility Helpers ---
+typedef struct { int start; int line; int col; } InputState;
+void save_input_state(input_t* in, InputState* state);
+void restore_input_state(input_t* in, InputState* state);
+ParseResult make_success(ast_t* ast);
+ParseResult make_failure(input_t* in, char* message);
+
+// --- Helper Function Prototypes ---
+void skip_whitespace(input_t * in);
+void* safe_malloc(size_t size);
+sym_t * sym_lookup(const char * name);
 
 // --- Memory Management ---
 void free_combinator(combinator_t* comb);

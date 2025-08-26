@@ -57,31 +57,39 @@ int main(void) {
       printf("> ");
       input_t * in = new_input();
 
+      // Read the first character to see if we should exit.
       char first_char = read1(in);
       if (first_char == '\n' || first_char == EOF) {
-          free(in->buffer);
+          if (in->buffer) free(in->buffer);
           free(in);
           break;
       }
-      in->start--;
+      in->start--; // Rewind to the beginning
+      in->line = 1;
+      in->col = 1;
 
-      if (!setjmp(exc)) {
-         ast_t * result_ast = parse(in, root);
-         if (result_ast) {
-            if (result_ast->typ == T_SEQ) {
-                 printf("Successfully parsed flatMap example!\n");
-            } else {
-                 printf("Result: %ld\n", eval(result_ast));
-            }
+      ParseResult result = parse(in, root);
+      if (result.is_success) {
+         ast_t* result_ast = result.value.ast;
+         if (result_ast && result_ast->typ != T_NONE) {
+            printf("Result: %ld\n", eval(result_ast));
             free_ast(result_ast);
          } else {
-            fprintf(stderr, "Error: Invalid expression.\n");
+            printf("Parsed successfully, but no result to show.\n");
          }
       } else {
+         fprintf(stderr, "Error at line %d, col %d: %s\n",
+            result.value.error.line,
+            result.value.error.col,
+            result.value.error.message);
+         free(result.value.error.message); // Free the allocated error message
+
+         // Clear the rest of the line from stdin in case of error
          int c;
          while((c = getchar()) != '\n' && c != EOF);
       }
-      free(in->buffer);
+
+      if (in->buffer) free(in->buffer);
       free(in);
    }
 
