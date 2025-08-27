@@ -100,7 +100,7 @@ static ParseResult bool_core_fn(input_t* in, void* args) {
         ast->sym = sym_lookup("1");
         return make_success(ast);
     }
-    free(res_true.value.error->message);
+    free_error(res_true.value.error);
     restore_input_state(in, &state);
     ParseResult res_false = parse(in, match("false"));
     if (res_false.is_success) {
@@ -128,14 +128,22 @@ combinator_t* json_bool() {
 
 combinator_t* json_parser() {
     combinator_t* json_value = new_combinator();
-    json_value->type = COMB_MULTI;
+
+    // The various types of JSON values
     combinator_t* j_string = string();
     combinator_t* j_number = number();
     combinator_t* j_null = json_null();
     combinator_t* j_bool = json_bool();
-    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(json_value, match(",")), expect(match("]"), "Expected ']'"), NULL);
-    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, j_string, expect(match(":"), "Expected ':'"), json_value, NULL);
+
+    // Recursive definitions for array and object
+    // We use lazy() to wrap the recursive reference to json_value
+    combinator_t* lazy_json_value = lazy(&json_value);
+    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(lazy_json_value, match(",")), expect(match("]"), "Expected ']'"), NULL);
+    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, j_string, expect(match(":"), "Expected ':'"), lazy_json_value, NULL);
     combinator_t* j_object = seq(new_combinator(), T_SEQ, match("{"), sep_by(kv_pair, match(",")), expect(match("}"), "Expected '}'"), NULL);
+
+    // json_value is a choice between any of the above
     multi(json_value, T_NONE, j_string, j_number, j_null, j_bool, j_array, j_object, NULL);
+
     return json_value;
 }
