@@ -32,6 +32,14 @@ typedef struct {
 
 typedef struct {
     combinator_t* p;
+} not_args;
+
+typedef struct {
+    combinator_t* p;
+} peek_args;
+
+typedef struct {
+    combinator_t* p;
     combinator_t* sep;
 } sep_by_args;
 

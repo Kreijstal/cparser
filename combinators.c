@@ -11,8 +11,33 @@ static ParseResult multi_fn(input_t * in, void * args);
 static ParseResult flatMap_fn(input_t * in, void * args);
 static ParseResult left_fn(input_t * in, void * args);
 static ParseResult right_fn(input_t * in, void * args);
+static ParseResult pnot_fn(input_t * in, void * args);
+static ParseResult peek_fn(input_t * in, void * args);
+static ParseResult gseq_fn(input_t * in, void * args);
 
 // --- _fn Implementations ---
+
+static ParseResult pnot_fn(input_t * in, void * args) {
+    not_args* nargs = (not_args*)args;
+    InputState state; save_input_state(in, &state);
+    ParseResult res = parse(in, nargs->p);
+    restore_input_state(in, &state);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+        return make_failure(in, strdup("not combinator failed."));
+    }
+    // The error from the inner parse is consumed and we return success.
+    free(res.value.error.message);
+    return make_success(ast_nil);
+}
+
+static ParseResult peek_fn(input_t * in, void * args) {
+    peek_args* pargs = (peek_args*)args;
+    InputState state; save_input_state(in, &state);
+    ParseResult res = parse(in, pargs->p);
+    restore_input_state(in, &state);
+    return res;
+}
 
 static ParseResult expect_fn(input_t * in, void * args) {
     expect_args * eargs = (expect_args *) args;
@@ -20,6 +45,22 @@ static ParseResult expect_fn(input_t * in, void * args) {
     if (res.is_success) return res;
     free(res.value.error.message);
     return make_failure(in, strdup(eargs->msg));
+}
+
+static ParseResult gseq_fn(input_t * in, void * args) {
+    seq_args * sa = (seq_args *) args;
+    seq_list * seq = sa->list;
+    ast_t * head = NULL, * tail = NULL;
+    while (seq != NULL) {
+        ParseResult res = parse(in, seq->comb);
+        if (!res.is_success) return res;
+        if (res.value.ast != ast_nil) {
+            if (head == NULL) head = tail = res.value.ast;
+            else { tail->next = res.value.ast; while(tail->next) tail = tail->next; }
+        }
+        seq = seq->next;
+    }
+    return make_success(sa->typ == T_NONE ? head : ast1(sa->typ, head));
 }
 
 static ParseResult seq_fn(input_t * in, void * args) {
@@ -162,4 +203,34 @@ combinator_t * right(combinator_t* p1, combinator_t* p2) {
     args->p1 = p1; args->p2 = p2;
     combinator_t * comb = new_combinator();
     comb->type = COMB_RIGHT; comb->fn = right_fn; comb->args = (void *) args; return comb;
+}
+
+combinator_t * pnot(combinator_t* p) {
+    not_args* args = (not_args*)safe_malloc(sizeof(not_args));
+    args->p = p;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_NOT; comb->fn = pnot_fn; comb->args = (void *) args; return comb;
+}
+
+combinator_t * peek(combinator_t* p) {
+    peek_args* args = (peek_args*)safe_malloc(sizeof(peek_args));
+    args->p = p;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_PEEK; comb->fn = peek_fn; comb->args = (void *) args; return comb;
+}
+
+combinator_t * gseq(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
+    va_list ap; va_start(ap, c1);
+    seq_list * head = (seq_list*)safe_malloc(sizeof(seq_list));
+    head->comb = c1;
+    seq_list * current = head;
+    combinator_t* c;
+    while ((c = va_arg(ap, combinator_t *)) != NULL) {
+        current->next = (seq_list*)safe_malloc(sizeof(seq_list));
+        current = current->next; current->comb = c;
+    }
+    current->next = NULL; va_end(ap);
+    seq_args * args = (seq_args*)safe_malloc(sizeof(seq_args));
+    args->typ = typ; args->list = head;
+    ret->type = COMB_GSEQ; ret->args = (void *) args; ret->fn = gseq_fn; return ret;
 }

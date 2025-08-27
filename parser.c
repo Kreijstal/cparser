@@ -420,6 +420,19 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 free(args);
                 break;
             }
+            case COMB_NOT: {
+                not_args* args = (not_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
+            case COMB_PEEK: {
+                peek_args* args = (peek_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
+            case COMB_GSEQ:
             case COMB_SEQ:
             case COMB_MULTI: {
                 seq_args* args = (seq_args*)comb->args;
