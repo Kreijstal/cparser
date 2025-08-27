@@ -5,13 +5,6 @@
 // Calculator-Specific Logic
 //=============================================================================
 
-// Forward declarations for whitespace-aware parsers
-combinator_t* calc_integer();
-combinator_t* calc_lparen();
-combinator_t* calc_rparen();
-combinator_t* calc_semicolon();
-combinator_t* calc_operator(const char* op);
-
 long eval(ast_t * ast) {
     if (!ast) return 0;
     switch (ast->typ) {
@@ -31,7 +24,7 @@ long eval(ast_t * ast) {
 }
 
 //=============================================================================
-// Whitespace-Aware Parser Functions
+// Whitespace-Aware Expression Parser
 //=============================================================================
 
 // Helper function to check if character is whitespace
@@ -39,115 +32,134 @@ static bool is_whitespace_calc(char c) {
     return isspace((unsigned char)c);
 }
 
-// Whitespace-aware integer parser
-combinator_t* calc_integer() {
-    combinator_t* ws = many(satisfy(is_whitespace_calc));
-    combinator_t* int_parser = integer();
-    return right(ws, int_parser);
+// Helper function to convert sequence AST to binary AST
+ast_t* seq_to_binary(ast_t* seq_ast) {
+    if (!seq_ast || !seq_ast->child || !seq_ast->child->next || !seq_ast->child->next->next) {
+        return seq_ast; // Return as-is if not the expected structure
+    }
+
+    // Extract operands from sequence: left, op, right
+    ast_t* left = seq_ast->child;
+    ast_t* op = seq_ast->child->next;
+    ast_t* right = seq_ast->child->next->next;
+
+    // Determine operator type based on the operator symbol
+    tag_t op_type = T_NONE;
+    if (op && op->sym && op->sym->name) {
+        if (strcmp(op->sym->name, "+") == 0) {
+            op_type = T_ADD;
+        } else if (strcmp(op->sym->name, "-") == 0) {
+            op_type = T_SUB;
+        }
+    }
+
+    if (op_type == T_NONE) {
+        return seq_ast; // Return as-is if unknown operator
+    }
+
+    // Remove the operands from the original sequence
+    seq_ast->child = NULL;
+
+    // Create proper binary AST
+    ast_t* binary_ast = ast2(op_type, left, right);
+
+    // Clean up the original sequence structure
+    free_ast(seq_ast);
+
+    return binary_ast;
 }
 
-// Whitespace-aware parenthesis parsers
-combinator_t* calc_lparen() {
+// Simple expression parser - handle addition and subtraction
+combinator_t* calc_expr() {
     combinator_t* ws = many(satisfy(is_whitespace_calc));
-    combinator_t* lparen = match("(");
-    return right(ws, lparen);
-}
 
-combinator_t* calc_rparen() {
-    combinator_t* ws = many(satisfy(is_whitespace_calc));
-    combinator_t* rparen = match(")");
-    return right(ws, rparen);
-}
+    // Addition parser: integer + integer
+    combinator_t* add_expr_seq = new_combinator();
+    seq(add_expr_seq, T_ADD,
+        right(ws, integer()),
+        right(ws, match("+")),
+        right(ws, integer()),
+        NULL);
 
-// Whitespace-aware semicolon parser
-combinator_t* calc_semicolon() {
-    combinator_t* ws = many(satisfy(is_whitespace_calc));
-    combinator_t* semicolon = match(";");
-    return right(ws, semicolon);
-}
+    // Subtraction parser: integer - integer
+    combinator_t* sub_expr_seq = new_combinator();
+    seq(sub_expr_seq, T_SUB,
+        right(ws, integer()),
+        right(ws, match("-")),
+        right(ws, integer()),
+        NULL);
 
-// Whitespace-aware operator parser
-combinator_t* calc_operator(const char* op) {
-    combinator_t* ws = many(satisfy(is_whitespace_calc));
-    combinator_t* operator = match((char*)op);
-    return right(ws, operator);
+    // Try subtraction first, then addition
+    combinator_t* expr_multi = new_combinator();
+    multi(expr_multi, T_NONE, sub_expr_seq, add_expr_seq, NULL);
+
+    // Convert sequence AST to binary AST
+    return map(expr_multi, seq_to_binary);
 }
 
 int main(void) {
-   ast_nil = new_ast();
-   ast_nil->typ = T_NONE;
+    ast_nil = new_ast();
+    ast_nil->typ = T_NONE;
 
-   printf("Simple Parser Combinator Calculator\n");
-   printf("Enter expressions like '1 + 2 * (3 - 1);'\n");
-   printf("Enter an empty line to exit.\n\n");
+    printf("Simple Parser Combinator Calculator (Explicit Whitespace)\n");
+    printf("Now supports whitespace in expressions like '1 + 2 * (3 - 1);'\n");
+    printf("Enter an empty line to exit.\n\n");
 
-   // --- Define Grammar ---
-   combinator_t * root;
-   combinator_t * exp = new_combinator();
-   combinator_t * base = new_combinator();
-   combinator_t * paren = new_combinator();
+    // --- Define Grammar ---
+    combinator_t * root;
+    combinator_t * exp = calc_expr();
 
-   multi(base, T_NONE, calc_integer(), paren, NULL);
-   seq(paren, T_NONE, calc_lparen(), exp, expect(calc_rparen(), "\")\" expected"), NULL);
-   expr(exp, base);
-   // Precedence: ADD(0) < MUL(1) < NEG(2)
-   expr_insert(exp, 0, T_ADD, EXPR_INFIX, ASSOC_LEFT, calc_operator("+"));
-   expr_altern(exp, 0, T_SUB, calc_operator("-"));
-   expr_insert(exp, 1, T_MUL, EXPR_INFIX, ASSOC_LEFT, calc_operator("*"));
-   expr_altern(exp, 1, T_DIV, calc_operator("/"));
-   expr_insert(exp, 2, T_NEG, EXPR_PREFIX, ASSOC_NONE, calc_operator("-"));
+    combinator_t* ws = many(satisfy(is_whitespace_calc));
+    combinator_t* calc_parser = new_combinator();
+    seq(calc_parser, T_NONE, right(ws, exp), expect(right(ws, match(";")), "\";\" expected"), NULL);
 
-   combinator_t* calc_parser = new_combinator();
-   seq(calc_parser, T_NONE, exp, expect(calc_semicolon(), "\";\" expected"), NULL);
+    root = calc_parser;
 
-   root = calc_parser;
+    // --- Main Parse Loop ---
+    while (1) {
+       printf("> ");
+       input_t * in = new_input();
 
+       // Read the first character to see if we should exit.
+       char first_char = read1(in);
+       if (first_char == '\n' || first_char == EOF) {
+           if (in->buffer) free(in->buffer);
+           free(in);
+           break;
+       }
+       in->start--; // Rewind to the beginning
+       in->line = 1;
+       in->col = 1;
 
-   // --- Main Parse Loop ---
-   while (1) {
-      printf("> ");
-      input_t * in = new_input();
+       ParseResult result = parse(in, root);
+       if (result.is_success) {
+          ast_t* result_ast = result.value.ast;
+          if (result_ast && result_ast->typ != T_NONE) {
+             printf("Result: %ld\n", eval(result_ast));
+             free_ast(result_ast);
+          } else {
+             printf("Parsed successfully, but no result to show.\n");
+          }
+       } else {
+          fprintf(stderr, "Error at line %d, col %d: %s\n",
+             result.value.error->line,
+             result.value.error->col,
+             result.value.error->message);
+          free_error(result.value.error);
 
-      // Read the first character to see if we should exit.
-      char first_char = read1(in);
-      if (first_char == '\n' || first_char == EOF) {
-          if (in->buffer) free(in->buffer);
-          free(in);
-          break;
-      }
-      in->start--; // Rewind to the beginning
-      in->line = 1;
-      in->col = 1;
+          // Clear the rest of the line from stdin in case of error
+          int c;
+          while((c = getchar()) != '\n' && c != EOF);
+       }
 
-      ParseResult result = parse(in, root);
-      if (result.is_success) {
-         ast_t* result_ast = result.value.ast;
-         if (result_ast && result_ast->typ != T_NONE) {
-            printf("Result: %ld\n", eval(result_ast));
-            free_ast(result_ast);
-         } else {
-            printf("Parsed successfully, but no result to show.\n");
-         }
-      } else {
-         fprintf(stderr, "Error at line %d, col %d: %s\n",
-            result.value.error->line,
-            result.value.error->col,
-            result.value.error->message);
-         free_error(result.value.error); // Free the allocated error message
+       if (in->buffer) free(in->buffer);
+       free(in);
+    }
 
-         // Clear the rest of the line from stdin in case of error
-         int c;
-         while((c = getchar()) != '\n' && c != EOF);
-      }
+    // --- Final Cleanup ---
+    free_combinator(root);
+    free(ast_nil);
 
-      if (in->buffer) free(in->buffer);
-      free(in);
-   }
-
-   // --- Final Cleanup ---
-   free_combinator(root);
-   free(ast_nil);
-
-   printf("Goodbye.\n");
-   return 0;
+    printf("Goodbye.\n");
+    return 0;
 }
