@@ -210,6 +210,7 @@ static ParseResult many_fn(input_t * in, void * args) {
         ParseResult res = parse(in, p);
         if (!res.is_success) {
             restore_input_state(in, &state);
+            free_error(res.value.error);
             break;
         }
         if (head == NULL) {
@@ -277,7 +278,9 @@ static ParseResult multi_fn(input_t * in, void * args) {
            return res;
         }
         restore_input_state(in, &state);
-        if (seq->next != NULL) free_error(res.value.error);
+        if (seq->next != NULL) {
+            free_error(res.value.error);
+        }
         seq = seq->next;
     }
     return res;

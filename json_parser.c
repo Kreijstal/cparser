@@ -15,8 +15,8 @@ static bool is_whitespace(char c) {
 
 // Forward declarations
 static ParseResult number_fn(input_t* in, void* args);
-static ParseResult null_fn(input_t* in, void* args);
-static ParseResult bool_fn(input_t* in, void* args);
+static ParseResult null_core_fn(input_t* in, void* args);
+static ParseResult bool_core_fn(input_t* in, void* args);
 
 combinator_t* number();
 combinator_t* json_null();
@@ -63,16 +63,14 @@ static ParseResult number_fn(input_t* in, void* args) {
 combinator_t* number() {
     combinator_t* ws = many(satisfy(is_whitespace));
     combinator_t* num = new_combinator();
+    num->type = P_INTEGER;
     num->fn = number_fn;
     num->args = NULL;
     return right(ws, num);
 }
 
-static ParseResult null_fn(input_t* in, void* args) {
-    ParseResult ws = parse(in, many(satisfy(is_whitespace)));
-    if (!ws.is_success) return ws;
-    free_ast(ws.value.ast);
-    ParseResult result = parse(in, (combinator_t*)args);
+static ParseResult null_core_fn(input_t* in, void* args) {
+    ParseResult result = parse(in, match("null"));
     if (result.is_success) {
         free_ast(result.value.ast);
         ast_t* ast = new_ast();
@@ -83,16 +81,15 @@ static ParseResult null_fn(input_t* in, void* args) {
 }
 
 combinator_t* json_null() {
-    combinator_t* comb = new_combinator();
-    comb->fn = null_fn;
-    comb->args = (void*)match("null");
-    return comb;
+    combinator_t* ws = many(satisfy(is_whitespace));
+    combinator_t* null_core = new_combinator();
+    null_core->type = P_MATCH;
+    null_core->fn = null_core_fn;
+    null_core->args = NULL;
+    return right(ws, null_core);
 }
 
-static ParseResult bool_fn(input_t* in, void* args) {
-    ParseResult ws = parse(in, many(satisfy(is_whitespace)));
-    if (!ws.is_success) return ws;
-    free_ast(ws.value.ast);
+static ParseResult bool_core_fn(input_t* in, void* args) {
     InputState state;
     save_input_state(in, &state);
     ParseResult res_true = parse(in, match("true"));
@@ -117,10 +114,12 @@ static ParseResult bool_fn(input_t* in, void* args) {
 }
 
 combinator_t* json_bool() {
-    combinator_t* comb = new_combinator();
-    comb->fn = bool_fn;
-    comb->args = NULL;
-    return comb;
+    combinator_t* ws = many(satisfy(is_whitespace));
+    combinator_t* bool_core = new_combinator();
+    bool_core->type = P_MATCH;
+    bool_core->fn = bool_core_fn;
+    bool_core->args = NULL;
+    return right(ws, bool_core);
 }
 
 //=============================================================================
@@ -129,6 +128,7 @@ combinator_t* json_bool() {
 
 combinator_t* json_parser() {
     combinator_t* json_value = new_combinator();
+    json_value->type = COMB_MULTI;
     combinator_t* j_string = string();
     combinator_t* j_number = number();
     combinator_t* j_null = json_null();

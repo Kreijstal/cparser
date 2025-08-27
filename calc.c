@@ -5,6 +5,13 @@
 // Calculator-Specific Logic
 //=============================================================================
 
+// Forward declarations for whitespace-aware parsers
+combinator_t* calc_integer();
+combinator_t* calc_lparen();
+combinator_t* calc_rparen();
+combinator_t* calc_semicolon();
+combinator_t* calc_operator(const char* op);
+
 long eval(ast_t * ast) {
     if (!ast) return 0;
     switch (ast->typ) {
@@ -23,6 +30,49 @@ long eval(ast_t * ast) {
     }
 }
 
+//=============================================================================
+// Whitespace-Aware Parser Functions
+//=============================================================================
+
+// Helper function to check if character is whitespace
+static bool is_whitespace_calc(char c) {
+    return isspace((unsigned char)c);
+}
+
+// Whitespace-aware integer parser
+combinator_t* calc_integer() {
+    combinator_t* ws = many(satisfy(is_whitespace_calc));
+    combinator_t* int_parser = integer();
+    return right(ws, int_parser);
+}
+
+// Whitespace-aware parenthesis parsers
+combinator_t* calc_lparen() {
+    combinator_t* ws = many(satisfy(is_whitespace_calc));
+    combinator_t* lparen = match("(");
+    return right(ws, lparen);
+}
+
+combinator_t* calc_rparen() {
+    combinator_t* ws = many(satisfy(is_whitespace_calc));
+    combinator_t* rparen = match(")");
+    return right(ws, rparen);
+}
+
+// Whitespace-aware semicolon parser
+combinator_t* calc_semicolon() {
+    combinator_t* ws = many(satisfy(is_whitespace_calc));
+    combinator_t* semicolon = match(";");
+    return right(ws, semicolon);
+}
+
+// Whitespace-aware operator parser
+combinator_t* calc_operator(const char* op) {
+    combinator_t* ws = many(satisfy(is_whitespace_calc));
+    combinator_t* operator = match((char*)op);
+    return right(ws, operator);
+}
+
 int main(void) {
    ast_nil = new_ast();
    ast_nil->typ = T_NONE;
@@ -37,18 +87,18 @@ int main(void) {
    combinator_t * base = new_combinator();
    combinator_t * paren = new_combinator();
 
-   multi(base, T_NONE, integer(), paren, NULL);
-   seq(paren, T_NONE, match("("), exp, expect(match(")"), "\")\" expected"), NULL);
+   multi(base, T_NONE, calc_integer(), paren, NULL);
+   seq(paren, T_NONE, calc_lparen(), exp, expect(calc_rparen(), "\")\" expected"), NULL);
    expr(exp, base);
    // Precedence: ADD(0) < MUL(1) < NEG(2)
-   expr_insert(exp, 0, T_ADD, EXPR_INFIX, ASSOC_LEFT, match("+"));
-   expr_altern(exp, 0, T_SUB, match("-"));
-   expr_insert(exp, 1, T_MUL, EXPR_INFIX, ASSOC_LEFT, match("*"));
-   expr_altern(exp, 1, T_DIV, match("/"));
-   expr_insert(exp, 2, T_NEG, EXPR_PREFIX, ASSOC_NONE, match("-"));
+   expr_insert(exp, 0, T_ADD, EXPR_INFIX, ASSOC_LEFT, calc_operator("+"));
+   expr_altern(exp, 0, T_SUB, calc_operator("-"));
+   expr_insert(exp, 1, T_MUL, EXPR_INFIX, ASSOC_LEFT, calc_operator("*"));
+   expr_altern(exp, 1, T_DIV, calc_operator("/"));
+   expr_insert(exp, 2, T_NEG, EXPR_PREFIX, ASSOC_NONE, calc_operator("-"));
 
    combinator_t* calc_parser = new_combinator();
-   seq(calc_parser, T_NONE, exp, expect(match(";"), "\";\" expected"), NULL);
+   seq(calc_parser, T_NONE, exp, expect(calc_semicolon(), "\";\" expected"), NULL);
 
    root = calc_parser;
 

@@ -16,3 +16,15 @@ target_link_libraries(calculator parser_lib)
 add_executable(tests tests.c)
 target_link_libraries(tests parser_lib)
 add_test(NAME tests COMMAND tests)
+
+# Add the executable for the JSON parser
+add_executable(json_parser json_parser.c)
+target_link_libraries(json_parser parser_lib)
+
+# Add the executable for the final calculator
+add_executable(calc calc_final.c)
+target_link_libraries(calc parser_lib)
+
+# Add the executable for the original calculator
+add_executable(calc_original calc_original.c)
+target_link_libraries(calc_original parser_lib)

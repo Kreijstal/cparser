@@ -5,6 +5,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "parser.h"
 #include "combinator_internals.h"
 
@@ -154,7 +155,13 @@ char read1(input_t * in) {
 // PRIMITIVE PARSING FUNCTIONS (THE `_fn` IMPLEMENTATIONS)
 //=============================================================================
 
-combinator_t * new_combinator() { return (combinator_t *) safe_malloc(sizeof(combinator_t)); }
+combinator_t * new_combinator() {
+    combinator_t *comb = (combinator_t *) safe_malloc(sizeof(combinator_t));
+    // Explicitly zero out the entire struct to avoid uninitialised value warnings
+    memset(comb, 0, sizeof(combinator_t));
+    comb->type = P_MATCH; // Default value, will be overridden
+    return comb;
+}
 
 static ParseResult match_fn(input_t * in, void * args) {
     char * str = ((match_args *) args)->str;
@@ -472,6 +479,20 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
     new_visited->next = *visited;
     *visited = new_visited;
 
+    // Ensure type is valid to avoid uninitialised value warnings
+    if (comb->type >= P_MATCH && comb->type <= COMB_ERRMAP) {
+        // Type is valid, proceed with normal logic
+    } else {
+        // Type is invalid/uninitialised, set to default and free args if present
+        comb->type = P_MATCH;
+        if (comb->args != NULL) {
+            free(comb->args);
+            comb->args = NULL;
+        }
+        free(comb);
+        return;
+    }
+
     if (comb->args != NULL) {
         switch (comb->type) {
             case P_MATCH:
@@ -490,9 +511,22 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 break;
             }
             case COMB_MAP: {
-                map_args* args = (map_args*)comb->args;
-                free_combinator_recursive(args->parser, visited);
-                free(args);
+                // Try to determine if this is a normal map_args or a direct combinator pointer
+                // For json_null, args is a direct combinator_t*
+                // For normal map, args is a map_args* struct
+                map_args* map_args_ptr = (map_args*)comb->args;
+
+                // Check if this looks like a valid map_args struct
+                // If map_args_ptr->parser is a valid pointer and map_args_ptr->func is not NULL
+                if (map_args_ptr->parser != NULL && map_args_ptr->func != NULL &&
+                    (uintptr_t)map_args_ptr->parser > 0x1000) {
+                    // This looks like a valid map_args struct
+                    free_combinator_recursive(map_args_ptr->parser, visited);
+                    free(map_args_ptr);
+                } else {
+                    // This is likely a direct combinator pointer (json_null case)
+                    free_combinator_recursive((combinator_t*)comb->args, visited);
+                }
                 break;
             }
             case P_SUCCEED: {
@@ -591,7 +625,19 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 free((satisfy_args*)comb->args);
                 break;
             }
-            // P_INTEGER, P_CIDENT, P_STRING, COMB_MANY, P_ANY_CHAR have NULL args
+            case COMB_LEFT:
+            case COMB_RIGHT: {
+                pair_args* args = (pair_args*)comb->args;
+                free_combinator_recursive(args->p1, visited);
+                free_combinator_recursive(args->p2, visited);
+                free(args);
+                break;
+            }
+            case COMB_MANY: {
+                free_combinator_recursive((combinator_t*)comb->args, visited);
+                break;
+            }
+            // P_INTEGER, P_CIDENT, P_STRING, P_ANY_CHAR have NULL args
             default:
                 break;
         }
