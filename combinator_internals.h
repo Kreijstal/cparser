@@ -32,7 +32,49 @@ typedef struct {
 
 typedef struct {
     combinator_t* p;
+} not_args;
+
+typedef struct {
+    combinator_t* p;
+} peek_args;
+
+typedef struct {
+    combinator_t* open;
+    combinator_t* close;
+    combinator_t* p;
+} between_args;
+
+typedef struct {
+    combinator_t* p;
     combinator_t* sep;
 } sep_by_args;
+
+typedef struct {
+    combinator_t* p;
+    combinator_t* sep;
+} sep_end_by_args;
+
+typedef struct {
+    combinator_t* p;
+    combinator_t* op;
+} chainl1_args;
+
+typedef struct {
+    ast_t* ast;
+} succeed_args;
+
+typedef struct {
+    combinator_t* parser;
+    map_func func;
+} map_args;
+
+typedef struct {
+    combinator_t* parser;
+    err_map_func func;
+} errmap_args;
+
+typedef struct {
+    char_predicate pred;
+} satisfy_args;
 
 #endif // COMBINATOR_INTERNALS_H

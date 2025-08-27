@@ -24,6 +24,8 @@ static ParseResult match_raw_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
 static ParseResult string_fn(input_t * in, void * args);
+static ParseResult any_char_fn(input_t * in, void * args);
+static ParseResult satisfy_fn(input_t * in, void * args);
 static ParseResult until_fn(input_t* in, void* args);
 static ParseResult expr_fn(input_t * in, void * args);
 
@@ -40,7 +42,21 @@ ParseResult make_success(ast_t* ast) {
 }
 
 ParseResult make_failure(input_t* in, char* message) {
-    return (ParseResult){ .is_success = false, .value.error = { .line = in->line, .col = in->col, .message = message } };
+    ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
+    err->line = in->line;
+    err->col = in->col;
+    err->message = message;
+    err->cause = NULL;
+    return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
+    ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
+    err->line = in->line;
+    err->col = in->col;
+    err->message = message;
+    err->cause = cause.value.error;
+    return (ParseResult){ .is_success = false, .value.error = err };
 }
 
 // --- Input State Management ---
@@ -70,6 +86,17 @@ ast_t* ast1(tag_t typ, ast_t* a1) {
     ast_t* ast = new_ast();
     ast->typ = typ; ast->child = a1; ast->next = NULL;
     return ast;
+}
+
+ast_t* copy_ast(ast_t* orig) {
+    if (orig == NULL) return NULL;
+    if (orig == ast_nil) return ast_nil;
+    ast_t* new = new_ast();
+    new->typ = orig->typ;
+    new->sym = orig->sym ? sym_lookup(orig->sym->name) : NULL;
+    new->child = copy_ast(orig->child);
+    new->next = copy_ast(orig->next);
+    return new;
 }
 
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2) {
@@ -158,14 +185,15 @@ static ParseResult integer_fn(input_t * in, void * args) {
    int start_pos_ws = in->start;
    char c = read1(in);
    if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a digit.")); }
-   while (isdigit(read1(in))) ;
-   in->start--;
+   while (isdigit(c = read1(in))) ;
+   if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
    char * text = (char*)safe_malloc(len + 1);
    strncpy(text, in->buffer + start_pos_ws, len);
    text[len] = '\0';
    ast_t * ast = new_ast();
    ast->typ = T_INT; ast->sym = sym_lookup(text); free(text);
+   ast->child = NULL; ast->next = NULL;
    return make_success(ast);
 }
 
@@ -175,14 +203,15 @@ static ParseResult cident_fn(input_t * in, void * args) {
    int start_pos_ws = in->start;
    char c = read1(in);
    if (c != '_' && !isalpha(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected identifier."));}
-   while ((c = read1(in)) == '_' || isalnum(c)) ;
-   in->start--;
+   while (isalnum(c = read1(in)) || c == '_') ;
+   if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
    char * text = (char*)safe_malloc(len + 1);
    strncpy(text, in->buffer + start_pos_ws, len);
    text[len] = '\0';
    ast_t * ast = new_ast();
    ast->typ = T_IDENT; ast->sym = sym_lookup(text); free(text);
+   ast->child = NULL; ast->next = NULL;
    return make_success(ast);
 }
 
@@ -214,7 +243,41 @@ static ParseResult string_fn(input_t * in, void * args) {
    str_val[len] = '\0';
    ast_t * ast = new_ast();
    ast->typ = T_STRING; ast->sym = sym_lookup(str_val); free(str_val);
+   ast->child = NULL; ast->next = NULL;
    return make_success(ast);
+}
+
+static ParseResult any_char_fn(input_t * in, void * args) {
+    InputState state; save_input_state(in, &state);
+    char c = read1(in);
+    if (c == EOF) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected any character, but found EOF."));
+    }
+    char str[2] = {c, '\0'};
+    ast_t* ast = new_ast();
+    ast->typ = T_STRING;
+    ast->sym = sym_lookup(str);
+    ast->child = NULL;
+    ast->next = NULL;
+    return make_success(ast);
+}
+
+static ParseResult satisfy_fn(input_t * in, void * args) {
+    satisfy_args* sargs = (satisfy_args*)args;
+    InputState state; save_input_state(in, &state);
+    char c = read1(in);
+    if (c == EOF || !sargs->pred(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Predicate not satisfied."));
+    }
+    char str[2] = {c, '\0'};
+    ast_t* ast = new_ast();
+    ast->typ = T_STRING;
+    ast->sym = sym_lookup(str);
+    ast->child = NULL;
+    ast->next = NULL;
+    return make_success(ast);
 }
 
 static ParseResult until_fn(input_t* in, void* args) {
@@ -227,7 +290,7 @@ static ParseResult until_fn(input_t* in, void* args) {
             if (res.value.ast != ast_nil) free_ast(res.value.ast);
             restore_input_state(in, &current_state); break;
         }
-        free(res.value.error.message);
+        free_error(res.value.error);
         restore_input_state(in, &current_state);
         if (read1(in) == EOF) break;
     }
@@ -255,7 +318,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
                if (!rhs_res.is_success) return rhs_res;
                return make_success(ast1(op->tag, rhs_res.value.ast));
            }
-           free(op_res.value.error.message);
+               free_error(op_res.value.error);
            restore_input_state(in, &state);
        }
    }
@@ -270,14 +333,15 @@ static ParseResult expr_fn(input_t * in, void * args) {
            while (op) {
                ParseResult op_res = parse(in, op->comb);
                if (op_res.is_success) {
+                   tag_t op_tag = op_res.value.ast->typ;
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
                    if (!rhs_res.is_success) { free_ast(lhs); return rhs_res; }
-                   lhs = ast2(op->tag, lhs, rhs_res.value.ast);
+                   lhs = ast2(op_tag, lhs, rhs_res.value.ast);
                    found_op = true;
                    break;
                }
-               free(op_res.value.error.message);
+               free_error(op_res.value.error);
                op = op->next;
            }
            if (!found_op) { restore_input_state(in, &loop_state); break; }
@@ -294,34 +358,52 @@ combinator_t * match(char * str) {
     match_args * args = (match_args*)safe_malloc(sizeof(match_args));
     args->str = str;
     combinator_t * comb = new_combinator();
-    comb->type = COMB_MATCH; comb->fn = match_fn; comb->args = args; return comb;
+    comb->type = P_MATCH; comb->fn = match_fn; comb->args = args; return comb;
 }
 combinator_t * match_raw(char * str) {
     match_args * args = (match_args*)safe_malloc(sizeof(match_args));
     args->str = str;
     combinator_t * comb = new_combinator();
-    comb->type = COMB_MATCH_RAW; comb->fn = match_raw_fn; comb->args = args; return comb;
+    comb->type = P_MATCH_RAW; comb->fn = match_raw_fn; comb->args = args; return comb;
 }
 combinator_t * integer() {
     combinator_t * comb = new_combinator();
-    comb->type = COMB_INTEGER; comb->fn = integer_fn; comb->args = NULL; return comb;
+    comb->type = P_INTEGER; comb->fn = integer_fn; comb->args = NULL; return comb;
 }
 combinator_t * cident() {
     combinator_t * comb = new_combinator();
-    comb->type = COMB_CIDENT; comb->fn = cident_fn; comb->args = NULL; return comb;
+    comb->type = P_CIDENT; comb->fn = cident_fn; comb->args = NULL; return comb;
 }
 combinator_t * string() {
     combinator_t * comb = new_combinator();
-    comb->type = COMB_STRING;
+    comb->type = P_STRING;
     comb->fn = string_fn;
     comb->args = NULL;
+    return comb;
+}
+
+combinator_t * satisfy(char_predicate pred) {
+    satisfy_args* args = (satisfy_args*)safe_malloc(sizeof(satisfy_args));
+    args->pred = pred;
+    combinator_t * comb = new_combinator();
+    comb->type = P_SATISFY;
+    comb->fn = satisfy_fn;
+    comb->args = (void*)args;
     return comb;
 }
 combinator_t* until(combinator_t* p) {
     until_args* args = (until_args*)safe_malloc(sizeof(until_args));
     args->delimiter = p;
     combinator_t* comb = new_combinator();
-    comb->type = COMB_UNTIL; comb->fn = until_fn; comb->args = args; return comb;
+    comb->type = P_UNTIL; comb->fn = until_fn; comb->args = args; return comb;
+}
+
+combinator_t * any_char() {
+    combinator_t * comb = new_combinator();
+    comb->type = P_ANY_CHAR;
+    comb->fn = any_char_fn;
+    comb->args = NULL;
+    return comb;
 }
 combinator_t * expr(combinator_t * exp, combinator_t * base) {
    expr_list * args = (expr_list*)safe_malloc(sizeof(expr_list));
@@ -364,6 +446,13 @@ ParseResult parse(input_t * in, combinator_t * comb) {
 // MEMORY MANAGEMENT
 //=============================================================================
 
+void free_error(ParseError* err) {
+    if (err == NULL) return;
+    free(err->message);
+    free_error(err->cause);
+    free(err);
+}
+
 void free_ast(ast_t* ast) {
     if (ast == NULL || ast == ast_nil) return;
     free_ast(ast->child);
@@ -403,13 +492,45 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
 
     if (comb->args != NULL) {
         switch (comb->type) {
-            case COMB_MATCH:
-            case COMB_MATCH_RAW:
+            case P_MATCH:
+            case P_MATCH_RAW:
                 free((match_args*)comb->args);
                 break;
             case COMB_EXPECT: {
                 expect_args* args = (expect_args*)comb->args;
                 free_combinator_recursive(args->comb, visited);
+                free(args);
+                break;
+            }
+            case COMB_ERRMAP: {
+                errmap_args* args = (errmap_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
+                free(args);
+                break;
+            }
+            case COMB_MAP: {
+                map_args* args = (map_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
+                free(args);
+                break;
+            }
+            case P_SUCCEED: {
+                succeed_args* args = (succeed_args*)comb->args;
+                free_ast(args->ast);
+                free(args);
+                break;
+            }
+            case COMB_CHAINL1: {
+                chainl1_args* args = (chainl1_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free_combinator_recursive(args->op, visited);
+                free(args);
+                break;
+            }
+            case COMB_SEP_END_BY: {
+                sep_end_by_args* args = (sep_end_by_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free_combinator_recursive(args->sep, visited);
                 free(args);
                 break;
             }
@@ -420,6 +541,27 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 free(args);
                 break;
             }
+            case COMB_NOT: {
+                not_args* args = (not_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
+            case COMB_PEEK: {
+                peek_args* args = (peek_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
+            case COMB_BETWEEN: {
+                between_args* args = (between_args*)comb->args;
+                free_combinator_recursive(args->open, visited);
+                free_combinator_recursive(args->close, visited);
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
+            case COMB_GSEQ:
             case COMB_SEQ:
             case COMB_MULTI: {
                 seq_args* args = (seq_args*)comb->args;
@@ -439,7 +581,7 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 free(args);
                 break;
             }
-            case COMB_UNTIL: {
+            case P_UNTIL: {
                 until_args* args = (until_args*)comb->args;
                 free_combinator_recursive(args->delimiter, visited);
                 free(args);
@@ -464,7 +606,11 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 }
                 break;
             }
-            // COMB_INTEGER, COMB_CIDENT, COMB_STRING, COMB_MANY have NULL args
+            case P_SATISFY: {
+                free((satisfy_args*)comb->args);
+                break;
+            }
+            // P_INTEGER, P_CIDENT, P_STRING, COMB_MANY, P_ANY_CHAR have NULL args
             default:
                 break;
         }

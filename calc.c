@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "combinators.h"
 
 //=============================================================================
 // Calculator-Specific Logic
@@ -79,10 +80,10 @@ int main(void) {
          }
       } else {
          fprintf(stderr, "Error at line %d, col %d: %s\n",
-            result.value.error.line,
-            result.value.error.col,
-            result.value.error.message);
-         free(result.value.error.message); // Free the allocated error message
+            result.value.error->line,
+            result.value.error->col,
+            result.value.error->message);
+         free_error(result.value.error); // Free the allocated error message
 
          // Clear the rest of the line from stdin in case of error
          int c;
