@@ -63,4 +63,14 @@ typedef struct {
     ast_t* ast;
 } succeed_args;
 
+typedef struct {
+    combinator_t* parser;
+    map_func func;
+} map_args;
+
+typedef struct {
+    combinator_t* parser;
+    err_map_func func;
+} errmap_args;
+
 #endif // COMBINATOR_INTERNALS_H

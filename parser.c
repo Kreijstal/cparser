@@ -41,7 +41,21 @@ ParseResult make_success(ast_t* ast) {
 }
 
 ParseResult make_failure(input_t* in, char* message) {
-    return (ParseResult){ .is_success = false, .value.error = { .line = in->line, .col = in->col, .message = message } };
+    ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
+    err->line = in->line;
+    err->col = in->col;
+    err->message = message;
+    err->cause = NULL;
+    return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
+    ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
+    err->line = in->line;
+    err->col = in->col;
+    err->message = message;
+    err->cause = cause.value.error;
+    return (ParseResult){ .is_success = false, .value.error = err };
 }
 
 // --- Input State Management ---
@@ -258,7 +272,7 @@ static ParseResult until_fn(input_t* in, void* args) {
             if (res.value.ast != ast_nil) free_ast(res.value.ast);
             restore_input_state(in, &current_state); break;
         }
-        free(res.value.error.message);
+        free_error(res.value.error);
         restore_input_state(in, &current_state);
         if (read1(in) == EOF) break;
     }
@@ -286,7 +300,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
                if (!rhs_res.is_success) return rhs_res;
                return make_success(ast1(op->tag, rhs_res.value.ast));
            }
-           free(op_res.value.error.message);
+               free_error(op_res.value.error);
            restore_input_state(in, &state);
        }
    }
@@ -301,14 +315,15 @@ static ParseResult expr_fn(input_t * in, void * args) {
            while (op) {
                ParseResult op_res = parse(in, op->comb);
                if (op_res.is_success) {
+                   tag_t op_tag = op_res.value.ast->typ;
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
                    if (!rhs_res.is_success) { free_ast(lhs); return rhs_res; }
-                   lhs = ast2(op->tag, lhs, rhs_res.value.ast);
+                   lhs = ast2(op_tag, lhs, rhs_res.value.ast);
                    found_op = true;
                    break;
                }
-               free(op_res.value.error.message);
+               free_error(op_res.value.error);
                op = op->next;
            }
            if (!found_op) { restore_input_state(in, &loop_state); break; }
@@ -403,6 +418,13 @@ ParseResult parse(input_t * in, combinator_t * comb) {
 // MEMORY MANAGEMENT
 //=============================================================================
 
+void free_error(ParseError* err) {
+    if (err == NULL) return;
+    free(err->message);
+    free_error(err->cause);
+    free(err);
+}
+
 void free_ast(ast_t* ast) {
     if (ast == NULL || ast == ast_nil) return;
     free_ast(ast->child);
@@ -449,6 +471,18 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
             case COMB_EXPECT: {
                 expect_args* args = (expect_args*)comb->args;
                 free_combinator_recursive(args->comb, visited);
+                free(args);
+                break;
+            }
+            case COMB_ERRMAP: {
+                errmap_args* args = (errmap_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
+                free(args);
+                break;
+            }
+            case COMB_MAP: {
+                map_args* args = (map_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
                 free(args);
                 break;
             }

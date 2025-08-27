@@ -49,17 +49,18 @@ struct input_t {
 };
 
 // --- Parse Result & Error Structs ---
-typedef struct {
+typedef struct ParseError {
     int line;
     int col;
     char* message;
+    struct ParseError* cause;
 } ParseError;
 
 struct ParseResult {
     bool is_success;
     union {
         ast_t* ast;
-        ParseError error;
+        ParseError* error;
     } value;
 };
 
@@ -68,7 +69,7 @@ typedef enum {
     P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR,
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
-    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1
+    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP
 } parser_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
@@ -81,6 +82,12 @@ struct combinator_t {
 
 // For flatMap
 typedef combinator_t * (*flatMap_func)(ast_t *ast);
+
+// For map
+typedef ast_t * (*map_func)(ast_t *ast);
+
+// For errmap
+typedef ParseError * (*err_map_func)(ParseError *err);
 
 
 //=============================================================================
@@ -107,15 +114,6 @@ combinator_t * until(combinator_t* p);
 combinator_t * any_char();
 
 // --- Combinator Constructors ---
-combinator_t * expect(combinator_t * c, char * msg);
-combinator_t * seq(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
-combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
-combinator_t * flatMap(combinator_t * p, flatMap_func func);
-combinator_t * many(combinator_t* p);
-combinator_t * optional(combinator_t* p);
-combinator_t * sep_by(combinator_t* p, combinator_t* sep);
-combinator_t * left(combinator_t* p1, combinator_t* p2);
-combinator_t * right(combinator_t* p1, combinator_t* p2);
 
 // --- Expression Parser Constructors ---
 typedef enum { EXPR_BASE, EXPR_INFIX, EXPR_PREFIX, EXPR_POSTFIX } expr_fix;
@@ -132,6 +130,7 @@ char read1(input_t * in);
 // --- AST Helpers ---
 ast_t* new_ast();
 void free_ast(ast_t* ast);
+void free_error(ParseError* err);
 ast_t* ast1(tag_t typ, ast_t* a1);
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2);
 ast_t* copy_ast(ast_t* orig);
@@ -145,6 +144,7 @@ void save_input_state(input_t* in, InputState* state);
 void restore_input_state(input_t* in, InputState* state);
 ParseResult make_success(ast_t* ast);
 ParseResult make_failure(input_t* in, char* message);
+ParseResult wrap_failure(input_t* in, char* message, ParseResult cause);
 
 // --- Helper Function Prototypes ---
 void skip_whitespace(input_t * in);

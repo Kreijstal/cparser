@@ -19,6 +19,8 @@ static ParseResult sep_by_fn(input_t * in, void * args);
 static ParseResult sep_end_by_fn(input_t * in, void * args);
 static ParseResult chainl1_fn(input_t * in, void * args);
 static ParseResult succeed_fn(input_t * in, void * args);
+static ParseResult map_fn(input_t * in, void * args);
+static ParseResult errmap_fn(input_t * in, void * args);
 
 // --- _fn Implementations ---
 
@@ -32,7 +34,7 @@ static ParseResult pnot_fn(input_t * in, void * args) {
         return make_failure(in, strdup("not combinator failed."));
     }
     // The error from the inner parse is consumed and we return success.
-    free(res.value.error.message);
+    free_error(res.value.error);
     return make_success(ast_nil);
 }
 
@@ -48,8 +50,7 @@ static ParseResult expect_fn(input_t * in, void * args) {
     expect_args * eargs = (expect_args *) args;
     ParseResult res = parse(in, eargs->comb);
     if (res.is_success) return res;
-    free(res.value.error.message);
-    return make_failure(in, strdup(eargs->msg));
+    return wrap_failure(in, strdup(eargs->msg), res);
 }
 
 static ParseResult between_fn(input_t * in, void * args) {
@@ -173,8 +174,8 @@ static ParseResult chainl1_fn(input_t * in, void * args) {
         if (!right_res.is_success) {
             restore_input_state(in, &state);
             free_ast(left);
-            free(op_res.value.error.message);
-            return make_failure(in, strdup("Expected operand after operator in chainl1"));
+            // The op succeeded, so there is no error to free in op_res
+            return wrap_failure(in, strdup("Expected operand after operator in chainl1"), right_res);
         }
         ast_t* right = right_res.value.ast;
         left = ast2(op_tag, left, right);
@@ -186,6 +187,26 @@ static ParseResult chainl1_fn(input_t * in, void * args) {
 static ParseResult succeed_fn(input_t * in, void * args) {
     succeed_args* sargs = (succeed_args*)args;
     return make_success(copy_ast(sargs->ast));
+}
+
+static ParseResult errmap_fn(input_t * in, void * args) {
+    errmap_args* eargs = (errmap_args*)args;
+    ParseResult res = parse(in, eargs->parser);
+    if (res.is_success) {
+        return res;
+    }
+    res.value.error = eargs->func(res.value.error);
+    return res;
+}
+
+static ParseResult map_fn(input_t * in, void * args) {
+    map_args* margs = (map_args*)args;
+    ParseResult res = parse(in, margs->parser);
+    if (!res.is_success) {
+        return res;
+    }
+    ast_t* new_ast = margs->func(res.value.ast);
+    return make_success(new_ast);
 }
 
 static ParseResult gseq_fn(input_t * in, void * args) {
@@ -233,7 +254,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
            return res;
         }
         restore_input_state(in, &state);
-        if (seq->next != NULL) free(res.value.error.message);
+        if (seq->next != NULL) free_error(res.value.error);
         seq = seq->next;
     }
     return res;
@@ -386,6 +407,28 @@ combinator_t * between(combinator_t* open, combinator_t* close, combinator_t* p)
     combinator_t * comb = new_combinator();
     comb->type = COMB_BETWEEN;
     comb->fn = between_fn;
+    comb->args = (void *) args;
+    return comb;
+}
+
+combinator_t * errmap(combinator_t* p, err_map_func func) {
+    errmap_args* args = (errmap_args*)safe_malloc(sizeof(errmap_args));
+    args->parser = p;
+    args->func = func;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_ERRMAP;
+    comb->fn = errmap_fn;
+    comb->args = (void *) args;
+    return comb;
+}
+
+combinator_t * map(combinator_t* p, map_func func) {
+    map_args* args = (map_args*)safe_malloc(sizeof(map_args));
+    args->parser = p;
+    args->func = func;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_MAP;
+    comb->fn = map_fn;
     comb->args = (void *) args;
     return comb;
 }
