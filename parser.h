@@ -151,7 +151,6 @@ ParseResult make_failure(input_t* in, char* message);
 ParseResult wrap_failure(input_t* in, char* message, ParseResult cause);
 
 // --- Helper Function Prototypes ---
-void skip_whitespace(input_t * in);
 void* safe_malloc(size_t size);
 sym_t * sym_lookup(const char * name);
 

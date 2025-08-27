@@ -79,7 +79,14 @@ void exception(const char * err) {
    exit(1);
 }
 
-ast_t * new_ast() { return (ast_t *) safe_malloc(sizeof(ast_t)); }
+ast_t * new_ast() {
+    ast_t* ast = (ast_t *) safe_malloc(sizeof(ast_t));
+    ast->typ = T_NONE;
+    ast->child = NULL;
+    ast->next = NULL;
+    ast->sym = NULL;
+    return ast;
+}
 
 ast_t* ast1(tag_t typ, ast_t* a1) {
     ast_t* ast = new_ast();

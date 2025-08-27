@@ -1,6 +1,13 @@
 #include "json_parser.h"
+#include "combinators.h"
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
+
+// Predicate for whitespace
+static bool is_whitespace(char c) {
+    return isspace((unsigned char)c);
+}
 
 //=============================================================================
 // Custom JSON-Specific Parser Implementations
@@ -19,28 +26,30 @@ combinator_t* json_bool();
 static ParseResult number_fn(input_t* in, void* args) {
     InputState state;
     save_input_state(in, &state);
-    if (read1(in) != '-') { in->start--; }
+    int start_pos = in->start;
     char c = read1(in);
-    if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a number.")); }
-    while (isdigit(read1(in))) {}
-    in->start--;
-    if (read1(in) == '.') {
+    if (!isdigit(c) && c != '-') { restore_input_state(in, &state); return make_failure(in, strdup("Expected a number.")); }
+    if (c == '-') {
         c = read1(in);
-        if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid fractional part.")); }
-        while (isdigit(read1(in))) {}
-        in->start--;
-    } else { in->start--; }
-    c = read1(in);
-    if (c == 'e' || c == 'E') {
-        c = read1(in);
-        if (c == '+' || c == '-') {} else { in->start--; }
-        c = read1(in);
-        if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid exponent part.")); }
-        while (isdigit(read1(in))) {}
-        in->start--;
-    } else { in->start--; }
+        if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a digit after minus.")); }
+    }
+    // consume digits
+    while (in->start < in->length && isdigit(in->buffer[in->start])) in->start++;
+    // check for .
+    if (in->start < in->length && in->buffer[in->start] == '.') {
+        in->start++; // consume .
+        if (in->start >= in->length || !isdigit(in->buffer[in->start])) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid fractional part.")); }
+        while (in->start < in->length && isdigit(in->buffer[in->start])) in->start++;
+    }
+    // check for e or E
+    if (in->start < in->length && (in->buffer[in->start] == 'e' || in->buffer[in->start] == 'E')) {
+        in->start++; // consume e/E
+        if (in->start < in->length && (in->buffer[in->start] == '+' || in->buffer[in->start] == '-')) in->start++; // consume +/-
+        if (in->start >= in->length || !isdigit(in->buffer[in->start])) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid exponent part.")); }
+        while (in->start < in->length && isdigit(in->buffer[in->start])) in->start++;
+    }
     int len = in->start - start_pos;
-    if (len == 0 || (len == 1 && (in->buffer[start_pos] == '-'))) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid number.")); }
+    if (len == 0 || (len == 1 && in->buffer[start_pos] == '-')) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid number.")); }
     char* text = (char*)safe_malloc(len + 1);
     strncpy(text, in->buffer + start_pos, len);
     text[len] = '\0';
@@ -52,13 +61,17 @@ static ParseResult number_fn(input_t* in, void* args) {
 }
 
 combinator_t* number() {
-    combinator_t* comb = new_combinator();
-    comb->fn = number_fn;
-    comb->args = NULL;
-    return comb;
+    combinator_t* ws = many(satisfy(is_whitespace));
+    combinator_t* num = new_combinator();
+    num->fn = number_fn;
+    num->args = NULL;
+    return right(ws, num);
 }
 
 static ParseResult null_fn(input_t* in, void* args) {
+    ParseResult ws = parse(in, many(satisfy(is_whitespace)));
+    if (!ws.is_success) return ws;
+    free_ast(ws.value.ast);
     ParseResult result = parse(in, (combinator_t*)args);
     if (result.is_success) {
         free_ast(result.value.ast);
@@ -77,6 +90,9 @@ combinator_t* json_null() {
 }
 
 static ParseResult bool_fn(input_t* in, void* args) {
+    ParseResult ws = parse(in, many(satisfy(is_whitespace)));
+    if (!ws.is_success) return ws;
+    free_ast(ws.value.ast);
     InputState state;
     save_input_state(in, &state);
     ParseResult res_true = parse(in, match("true"));
@@ -87,7 +103,7 @@ static ParseResult bool_fn(input_t* in, void* args) {
         ast->sym = sym_lookup("1");
         return make_success(ast);
     }
-    free(res_true.value.error.message);
+    free(res_true.value.error->message);
     restore_input_state(in, &state);
     ParseResult res_false = parse(in, match("false"));
     if (res_false.is_success) {

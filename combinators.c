@@ -21,6 +21,7 @@ static ParseResult chainl1_fn(input_t * in, void * args);
 static ParseResult succeed_fn(input_t * in, void * args);
 static ParseResult map_fn(input_t * in, void * args);
 static ParseResult errmap_fn(input_t * in, void * args);
+static ParseResult many_fn(input_t * in, void * args);
 
 // --- _fn Implementations ---
 
@@ -197,6 +198,28 @@ static ParseResult errmap_fn(input_t * in, void * args) {
     }
     res.value.error = eargs->func(res.value.error);
     return res;
+}
+
+static ParseResult many_fn(input_t * in, void * args) {
+    combinator_t* p = (combinator_t*)args;
+    ast_t* head = NULL;
+    ast_t* tail = NULL;
+    while (1) {
+        InputState state;
+        save_input_state(in, &state);
+        ParseResult res = parse(in, p);
+        if (!res.is_success) {
+            restore_input_state(in, &state);
+            break;
+        }
+        if (head == NULL) {
+            head = tail = res.value.ast;
+        } else {
+            tail->next = res.value.ast;
+            tail = tail->next;
+        }
+    }
+    return make_success(head ? head : ast_nil);
 }
 
 static ParseResult map_fn(input_t * in, void * args) {
@@ -473,5 +496,13 @@ combinator_t * succeed(ast_t* ast) {
     comb->type = P_SUCCEED;
     comb->fn = succeed_fn;
     comb->args = (void *) args;
+    return comb;
+}
+
+combinator_t * many(combinator_t* p) {
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_MANY;
+    comb->fn = many_fn;
+    comb->args = (void *) p;
     return comb;
 }
