@@ -77,4 +77,8 @@ typedef struct {
     char_predicate pred;
 } satisfy_args;
 
+typedef struct {
+    combinator_t** parser_ptr;
+} lazy_args;
+
 #endif // COMBINATOR_INTERNALS_H
