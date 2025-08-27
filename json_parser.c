@@ -19,8 +19,6 @@ combinator_t* json_bool();
 static ParseResult number_fn(input_t* in, void* args) {
     InputState state;
     save_input_state(in, &state);
-    skip_whitespace(in);
-    int start_pos = in->start;
     if (read1(in) != '-') { in->start--; }
     char c = read1(in);
     if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a number.")); }

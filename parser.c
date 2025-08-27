@@ -20,7 +20,6 @@ typedef struct expr_list { op_t * op; expr_fix fix; expr_assoc assoc; combinator
 
 // --- Static Function Forward Declarations ---
 static ParseResult match_fn(input_t * in, void * args);
-static ParseResult match_raw_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
 static ParseResult string_fn(input_t * in, void * args);
@@ -138,12 +137,12 @@ char read1(input_t * in) {
     return EOF;
 }
 
-void skip_whitespace(input_t * in) {
+/*void skip_whitespace(input_t * in) {
    char c;
    while ((c = read1(in)) == ' ' || c == '\n' || c == '\t') ;
    if (c != EOF) { in->start--; if (c == '\n') { in->line--; } else { in->col--;} }
 }
-
+*/
 //=============================================================================
 // PRIMITIVE PARSING FUNCTIONS (THE `_fn` IMPLEMENTATIONS)
 //=============================================================================
@@ -153,7 +152,6 @@ combinator_t * new_combinator() { return (combinator_t *) safe_malloc(sizeof(com
 static ParseResult match_fn(input_t * in, void * args) {
     char * str = ((match_args *) args)->str;
     InputState state; save_input_state(in, &state);
-    skip_whitespace(in);
     for (int i = 0, len = strlen(str); i < len; i++) {
         char c = read1(in);
         if (c != str[i]) {
@@ -165,23 +163,8 @@ static ParseResult match_fn(input_t * in, void * args) {
     return make_success(ast_nil);
 }
 
-static ParseResult match_raw_fn(input_t * in, void * args) {
-    char * str = ((match_args *) args)->str;
-    InputState state; save_input_state(in, &state);
-    for (int i = 0, len = strlen(str); i < len; i++) {
-        char c = read1(in);
-        if (c != str[i]) {
-            restore_input_state(in, &state);
-            char* err_msg; asprintf(&err_msg, "Expected raw '%s'", str);
-            return make_failure(in, err_msg);
-        }
-    }
-    return make_success(ast_nil);
-}
-
 static ParseResult integer_fn(input_t * in, void * args) {
    InputState state; save_input_state(in, &state);
-   skip_whitespace(in);
    int start_pos_ws = in->start;
    char c = read1(in);
    if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a digit.")); }
@@ -199,7 +182,6 @@ static ParseResult integer_fn(input_t * in, void * args) {
 
 static ParseResult cident_fn(input_t * in, void * args) {
    InputState state; save_input_state(in, &state);
-   skip_whitespace(in);
    int start_pos_ws = in->start;
    char c = read1(in);
    if (c != '_' && !isalpha(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected identifier."));}
@@ -217,7 +199,6 @@ static ParseResult cident_fn(input_t * in, void * args) {
 
 static ParseResult string_fn(input_t * in, void * args) {
    InputState state; save_input_state(in, &state);
-   skip_whitespace(in);
    if (read1(in) != '"') { restore_input_state(in, &state); return make_failure(in, strdup("Expected '\"'.")); }
    int capacity = 64;
    char * str_val = (char *) safe_malloc(capacity);
@@ -360,12 +341,6 @@ combinator_t * match(char * str) {
     combinator_t * comb = new_combinator();
     comb->type = P_MATCH; comb->fn = match_fn; comb->args = args; return comb;
 }
-combinator_t * match_raw(char * str) {
-    match_args * args = (match_args*)safe_malloc(sizeof(match_args));
-    args->str = str;
-    combinator_t * comb = new_combinator();
-    comb->type = P_MATCH_RAW; comb->fn = match_raw_fn; comb->args = args; return comb;
-}
 combinator_t * integer() {
     combinator_t * comb = new_combinator();
     comb->type = P_INTEGER; comb->fn = integer_fn; comb->args = NULL; return comb;
@@ -493,7 +468,6 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
     if (comb->args != NULL) {
         switch (comb->type) {
             case P_MATCH:
-            case P_MATCH_RAW:
                 free((match_args*)comb->args);
                 break;
             case COMB_EXPECT: {
