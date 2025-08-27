@@ -201,6 +201,35 @@ void test_errmap_combinator(void) {
     free(input);
 }
 
+static bool is_digit_predicate(char c) {
+    return isdigit(c);
+}
+
+void test_satisfy_combinator(void) {
+    input_t* input = new_input();
+    input->buffer = strdup("1a");
+    input->length = 2;
+
+    combinator_t* p = satisfy(is_digit_predicate);
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(strcmp(res.value.ast->sym->name, "1") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+
+    // Test failure
+    p = satisfy(is_digit_predicate);
+    res = parse(input, p);
+    TEST_ASSERT(!res.is_success);
+    free_error(res.value.error);
+    free_combinator(p);
+
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "pnot_combinator", test_pnot_combinator },
     { "peek_combinator", test_peek_combinator },
@@ -212,5 +241,6 @@ TEST_LIST = {
     { "any_char_combinator", test_any_char_combinator },
     { "map_combinator", test_map_combinator },
     { "errmap_combinator", test_errmap_combinator },
+    { "satisfy_combinator", test_satisfy_combinator },
     { NULL, NULL }
 };

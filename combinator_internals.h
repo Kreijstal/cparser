@@ -73,4 +73,8 @@ typedef struct {
     err_map_func func;
 } errmap_args;
 
+typedef struct {
+    char_predicate pred;
+} satisfy_args;
+
 #endif // COMBINATOR_INTERNALS_H

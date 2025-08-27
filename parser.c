@@ -25,6 +25,7 @@ static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
 static ParseResult string_fn(input_t * in, void * args);
 static ParseResult any_char_fn(input_t * in, void * args);
+static ParseResult satisfy_fn(input_t * in, void * args);
 static ParseResult until_fn(input_t* in, void* args);
 static ParseResult expr_fn(input_t * in, void * args);
 
@@ -262,6 +263,23 @@ static ParseResult any_char_fn(input_t * in, void * args) {
     return make_success(ast);
 }
 
+static ParseResult satisfy_fn(input_t * in, void * args) {
+    satisfy_args* sargs = (satisfy_args*)args;
+    InputState state; save_input_state(in, &state);
+    char c = read1(in);
+    if (c == EOF || !sargs->pred(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Predicate not satisfied."));
+    }
+    char str[2] = {c, '\0'};
+    ast_t* ast = new_ast();
+    ast->typ = T_STRING;
+    ast->sym = sym_lookup(str);
+    ast->child = NULL;
+    ast->next = NULL;
+    return make_success(ast);
+}
+
 static ParseResult until_fn(input_t* in, void* args) {
     until_args* uargs = (until_args*)args;
     int start_offset = in->start;
@@ -361,6 +379,16 @@ combinator_t * string() {
     comb->type = P_STRING;
     comb->fn = string_fn;
     comb->args = NULL;
+    return comb;
+}
+
+combinator_t * satisfy(char_predicate pred) {
+    satisfy_args* args = (satisfy_args*)safe_malloc(sizeof(satisfy_args));
+    args->pred = pred;
+    combinator_t * comb = new_combinator();
+    comb->type = P_SATISFY;
+    comb->fn = satisfy_fn;
+    comb->args = (void*)args;
     return comb;
 }
 combinator_t* until(combinator_t* p) {
@@ -576,6 +604,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                     list = list->next;
                     free(temp_list);
                 }
+                break;
+            }
+            case P_SATISFY: {
+                free((satisfy_args*)comb->args);
                 break;
             }
             // P_INTEGER, P_CIDENT, P_STRING, COMB_MANY, P_ANY_CHAR have NULL args

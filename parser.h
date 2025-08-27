@@ -66,7 +66,7 @@ struct ParseResult {
 
 // Main parser struct
 typedef enum {
-    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR,
+    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY,
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
     COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP
@@ -88,6 +88,9 @@ typedef ast_t * (*map_func)(ast_t *ast);
 
 // For errmap
 typedef ParseError * (*err_map_func)(ParseError *err);
+
+// For satisfy
+typedef bool (*char_predicate)(char);
 
 
 //=============================================================================
@@ -112,6 +115,7 @@ combinator_t * cident();
 combinator_t * string();
 combinator_t * until(combinator_t* p);
 combinator_t * any_char();
+combinator_t * satisfy(char_predicate pred);
 
 // --- Combinator Constructors ---
 
