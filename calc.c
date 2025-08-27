@@ -5,46 +5,6 @@
 #include "parser.h"
 #include "combinators.h"
 
-// Forward declaration for AST printing
-static void print_ast_recursive(ast_t *ast, int indent);
-
-// Helper to convert a tag_t to its string representation
-const char* tag_to_string(tag_t tag) {
-    switch (tag) {
-        case T_NONE:   return "NONE";
-        case T_INT:    return "INT";
-        case T_IDENT:  return "IDENT";
-        case T_ASSIGN: return "ASSIGN";
-        case T_SEQ:    return "SEQ";
-        case T_ADD:    return "ADD";
-        case T_SUB:    return "SUB";
-        case T_MUL:    return "MUL";
-        case T_DIV:    return "DIV";
-        case T_NEG:    return "NEG";
-        case T_STRING: return "STRING";
-        default:       return "UNKNOWN";
-    }
-}
-
-// Public function to initiate AST printing
-void print_ast(ast_t *ast) {
-    print_ast_recursive(ast, 0);
-}
-
-// Recursive function to print the AST with indentation
-static void print_ast_recursive(ast_t *ast, int indent) {
-    if (ast == NULL || ast == ast_nil) {
-        return;
-    }
-    for (int i = 0; i < indent; ++i) printf("  ");
-    printf("- %s", tag_to_string(ast->typ));
-    if (ast->sym != NULL && ast->sym->name != NULL) {
-        printf(" (%s)", ast->sym->name);
-    }
-    printf("\n");
-    if (ast->child != NULL) print_ast_recursive(ast->child, indent + 1);
-    if (ast->next != NULL) print_ast_recursive(ast->next, indent);
-}
 
 // Wrapper for isspace to match the required function signature for satisfy.
 static bool is_whitespace_char(char c) {
@@ -55,6 +15,39 @@ static bool is_whitespace_char(char c) {
 static combinator_t* token(combinator_t* p) {
     combinator_t* ws = many(satisfy(is_whitespace_char));
     return right(ws, left(p, many(satisfy(is_whitespace_char))));
+}
+
+// --- Evaluation ---
+// Recursively walks the AST to compute the final numerical value.
+long eval(ast_t *ast) {
+    if (!ast) {
+        fprintf(stderr, "Error: trying to evaluate a NULL AST node.\n");
+        return 0;
+    }
+
+    switch (ast->typ) {
+        case T_INT:
+            return atol(ast->sym->name);
+        case T_ADD:
+            return eval(ast->child) + eval(ast->child->next);
+        case T_SUB:
+            return eval(ast->child) - eval(ast->child->next);
+        case T_MUL:
+            return eval(ast->child) * eval(ast->child->next);
+        case T_DIV: {
+            long divisor = eval(ast->child->next);
+            if (divisor == 0) {
+                fprintf(stderr, "Runtime Error: Division by zero.\n");
+                exit(1);
+            }
+            return eval(ast->child) / divisor;
+        }
+        case T_NEG:
+            return -eval(ast->child);
+        default:
+            fprintf(stderr, "Runtime Error: Unknown AST node type: %d\n", ast->typ);
+            return 0;
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -101,8 +94,8 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Error: Parser did not consume entire input. Trailing characters: '%s'\n", in->buffer + in->start);
             free_ast(result.value.ast);
         } else {
-            printf("Parsing successful. AST:\n");
-            print_ast(result.value.ast);
+            long final_result = eval(result.value.ast);
+            printf("%ld\n", final_result);
             free_ast(result.value.ast);
         }
     } else {
@@ -116,7 +109,7 @@ int main(int argc, char *argv[]) {
     // --- Cleanup ---
     free_combinator(expr_parser);
     free(in);
-    free_ast(ast_nil);
+    free(ast_nil); // free the global nil object
 
     return 0;
 }
