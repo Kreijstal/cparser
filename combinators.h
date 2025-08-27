@@ -16,5 +16,9 @@ combinator_t * right(combinator_t* p1, combinator_t* p2);
 combinator_t * pnot(combinator_t* p);
 combinator_t * peek(combinator_t* p);
 combinator_t * gseq(combinator_t * ret, tag_t typ, combinator_t * c1, ...);
+combinator_t * between(combinator_t* open, combinator_t* close, combinator_t* p);
+combinator_t * sep_end_by(combinator_t* p, combinator_t* sep);
+combinator_t * chainl1(combinator_t* p, combinator_t* op);
+combinator_t * succeed(ast_t* ast);
 
 #endif // COMBINATORS_H

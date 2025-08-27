@@ -68,7 +68,8 @@ typedef enum {
     COMB_MATCH, COMB_MATCH_RAW, COMB_EXPECT, COMB_SEQ, COMB_MULTI,
     COMB_FLATMAP, COMB_INTEGER, COMB_CIDENT, COMB_STRING, COMB_MANY,
     COMB_UNTIL, COMB_EXPR, COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT,
-    COMB_NOT, COMB_PEEK, COMB_GSEQ
+    COMB_NOT, COMB_PEEK, COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1,
+    COMB_SUCCEED
 } comb_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
@@ -133,6 +134,7 @@ ast_t* new_ast();
 void free_ast(ast_t* ast);
 ast_t* ast1(tag_t typ, ast_t* a1);
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2);
+ast_t* copy_ast(ast_t* orig);
 
 // --- Combinator Helpers ---
 combinator_t* new_combinator();

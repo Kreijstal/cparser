@@ -39,8 +39,28 @@ typedef struct {
 } peek_args;
 
 typedef struct {
+    combinator_t* open;
+    combinator_t* close;
+    combinator_t* p;
+} between_args;
+
+typedef struct {
     combinator_t* p;
     combinator_t* sep;
 } sep_by_args;
+
+typedef struct {
+    combinator_t* p;
+    combinator_t* sep;
+} sep_end_by_args;
+
+typedef struct {
+    combinator_t* p;
+    combinator_t* op;
+} chainl1_args;
+
+typedef struct {
+    ast_t* ast;
+} succeed_args;
 
 #endif // COMBINATOR_INTERNALS_H

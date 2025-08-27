@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(ParserCalculator C)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 enable_testing()
 
 # Create a static library for the parser

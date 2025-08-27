@@ -72,6 +72,17 @@ ast_t* ast1(tag_t typ, ast_t* a1) {
     return ast;
 }
 
+ast_t* copy_ast(ast_t* orig) {
+    if (orig == NULL) return NULL;
+    if (orig == ast_nil) return ast_nil;
+    ast_t* new = new_ast();
+    new->typ = orig->typ;
+    new->sym = orig->sym ? sym_lookup(orig->sym->name) : NULL;
+    new->child = copy_ast(orig->child);
+    new->next = copy_ast(orig->next);
+    return new;
+}
+
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2) {
     ast_t* ast = new_ast();
     ast->typ = typ; ast->child = a1; a1->next = a2; ast->next = NULL;
@@ -158,14 +169,15 @@ static ParseResult integer_fn(input_t * in, void * args) {
    int start_pos_ws = in->start;
    char c = read1(in);
    if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a digit.")); }
-   while (isdigit(read1(in))) ;
-   in->start--;
+   while (isdigit(c = read1(in))) ;
+   if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
    char * text = (char*)safe_malloc(len + 1);
    strncpy(text, in->buffer + start_pos_ws, len);
    text[len] = '\0';
    ast_t * ast = new_ast();
    ast->typ = T_INT; ast->sym = sym_lookup(text); free(text);
+   ast->child = NULL; ast->next = NULL;
    return make_success(ast);
 }
 
@@ -175,14 +187,15 @@ static ParseResult cident_fn(input_t * in, void * args) {
    int start_pos_ws = in->start;
    char c = read1(in);
    if (c != '_' && !isalpha(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected identifier."));}
-   while ((c = read1(in)) == '_' || isalnum(c)) ;
-   in->start--;
+   while (isalnum(c = read1(in)) || c == '_') ;
+   if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
    char * text = (char*)safe_malloc(len + 1);
    strncpy(text, in->buffer + start_pos_ws, len);
    text[len] = '\0';
    ast_t * ast = new_ast();
    ast->typ = T_IDENT; ast->sym = sym_lookup(text); free(text);
+   ast->child = NULL; ast->next = NULL;
    return make_success(ast);
 }
 
@@ -214,6 +227,7 @@ static ParseResult string_fn(input_t * in, void * args) {
    str_val[len] = '\0';
    ast_t * ast = new_ast();
    ast->typ = T_STRING; ast->sym = sym_lookup(str_val); free(str_val);
+   ast->child = NULL; ast->next = NULL;
    return make_success(ast);
 }
 
@@ -413,6 +427,26 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 free(args);
                 break;
             }
+            case COMB_SUCCEED: {
+                succeed_args* args = (succeed_args*)comb->args;
+                free_ast(args->ast);
+                free(args);
+                break;
+            }
+            case COMB_CHAINL1: {
+                chainl1_args* args = (chainl1_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free_combinator_recursive(args->op, visited);
+                free(args);
+                break;
+            }
+            case COMB_SEP_END_BY: {
+                sep_end_by_args* args = (sep_end_by_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free_combinator_recursive(args->sep, visited);
+                free(args);
+                break;
+            }
             case COMB_SEP_BY: {
                 sep_by_args* args = (sep_by_args*)comb->args;
                 free_combinator_recursive(args->p, visited);
@@ -428,6 +462,14 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
             }
             case COMB_PEEK: {
                 peek_args* args = (peek_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
+            case COMB_BETWEEN: {
+                between_args* args = (between_args*)comb->args;
+                free_combinator_recursive(args->open, visited);
+                free_combinator_recursive(args->close, visited);
                 free_combinator_recursive(args->p, visited);
                 free(args);
                 break;
