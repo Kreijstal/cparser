@@ -427,7 +427,7 @@ combinator_t * succeed(ast_t* ast) {
     succeed_args* args = (succeed_args*)safe_malloc(sizeof(succeed_args));
     args->ast = ast;
     combinator_t * comb = new_combinator();
-    comb->type = COMB_SUCCEED;
+    comb->type = P_SUCCEED;
     comb->fn = succeed_fn;
     comb->args = (void *) args;
     return comb;

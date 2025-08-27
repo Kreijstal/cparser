@@ -133,6 +133,23 @@ void test_chainl1_combinator(void) {
     free(input);
 }
 
+void test_any_char_combinator(void) {
+    input_t* input = new_input();
+    input->buffer = strdup("a");
+    input->length = 1;
+
+    combinator_t* p = any_char();
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(strcmp(res.value.ast->sym->name, "a") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "pnot_combinator", test_pnot_combinator },
     { "peek_combinator", test_peek_combinator },
@@ -141,5 +158,6 @@ TEST_LIST = {
     { "sep_by_combinator", test_sep_by_combinator },
     { "sep_end_by_combinator", test_sep_end_by_combinator },
     { "chainl1_combinator", test_chainl1_combinator },
+    { "any_char_combinator", test_any_char_combinator },
     { NULL, NULL }
 };

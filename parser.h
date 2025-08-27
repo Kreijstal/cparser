@@ -63,19 +63,18 @@ struct ParseResult {
     } value;
 };
 
-// Main combinator struct
+// Main parser struct
 typedef enum {
-    COMB_MATCH, COMB_MATCH_RAW, COMB_EXPECT, COMB_SEQ, COMB_MULTI,
-    COMB_FLATMAP, COMB_INTEGER, COMB_CIDENT, COMB_STRING, COMB_MANY,
-    COMB_UNTIL, COMB_EXPR, COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT,
-    COMB_NOT, COMB_PEEK, COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1,
-    COMB_SUCCEED
-} comb_type_t;
+    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR,
+    COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
+    COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
+    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1
+} parser_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
 
 struct combinator_t {
-    comb_type_t type;
+    parser_type_t type;
     comb_fn fn;
     void * args;
 };
@@ -105,6 +104,7 @@ combinator_t * integer();
 combinator_t * cident();
 combinator_t * string();
 combinator_t * until(combinator_t* p);
+combinator_t * any_char();
 
 // --- Combinator Constructors ---
 combinator_t * expect(combinator_t * c, char * msg);
