@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(ParserCalculator C)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 enable_testing()
@@ -20,6 +21,7 @@ add_test(NAME tests COMMAND tests)
 # Add the executable for the JSON parser CLI
 add_executable(json_parser_cli json_main.c)
 target_link_libraries(json_parser_cli parser_lib)
+
 
 # Add the executable for the final calculator
 # add_executable(calc calc.c)

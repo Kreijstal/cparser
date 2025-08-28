@@ -269,20 +269,32 @@ static ParseResult seq_fn(input_t * in, void * args) {
 static ParseResult multi_fn(input_t * in, void * args) {
     seq_args * sa = (seq_args *) args;
     seq_list * seq = sa->list;
+    if (seq == NULL) {
+        return make_failure(in, strdup("multi parser has no alternatives."));
+    }
     ParseResult res;
-    while (seq != NULL) {
-        InputState state; save_input_state(in, &state);
+    // Initialize res with the failure of the first alternative, in case all fail.
+    res = parse(in, seq->comb);
+    if (res.is_success) {
+        if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+        return res;
+    }
+
+    // Backtrack and try the rest
+    InputState state;
+    save_input_state(in, &state);
+
+    while (seq->next != NULL) {
+        restore_input_state(in, &state); // Restore for next attempt
+        free_error(res.value.error);     // Free the error from the previous failed attempt
+        seq = seq->next;
         res = parse(in, seq->comb);
         if (res.is_success) {
-           if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
-           return res;
+            if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+            return res;
         }
-        restore_input_state(in, &state);
-        if (seq->next != NULL) {
-            free_error(res.value.error);
-        }
-        seq = seq->next;
     }
+    // Return the failure from the last alternative
     return res;
 }
 
