@@ -20,6 +20,7 @@ typedef struct op_t { tag_t tag; combinator_t * comb; struct op_t * next; } op_t
 typedef struct expr_list { op_t * op; expr_fix fix; expr_assoc assoc; combinator_t * comb; struct expr_list * next; } expr_list;
 
 // --- Static Function Forward Declarations ---
+static ParseResult lazy_fn(input_t * in, void * args);
 static ParseResult match_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
@@ -160,6 +161,7 @@ combinator_t * new_combinator() {
     // Explicitly zero out the entire struct to avoid uninitialised value warnings
     memset(comb, 0, sizeof(combinator_t));
     comb->type = P_MATCH; // Default value, will be overridden
+    comb->extra_to_free = NULL;
     return comb;
 }
 
@@ -328,7 +330,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
            while (op) {
                ParseResult op_res = parse(in, op->comb);
                if (op_res.is_success) {
-                   tag_t op_tag = op_res.value.ast->typ;
+                   tag_t op_tag = op->tag;
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
                    if (!rhs_res.is_success) { free_ast(lhs); return rhs_res; }
@@ -343,6 +345,14 @@ static ParseResult expr_fn(input_t * in, void * args) {
        }
    }
    return make_success(lhs);
+}
+
+static ParseResult lazy_fn(input_t * in, void * args) {
+    lazy_args* largs = (lazy_args*)args;
+    if (largs == NULL || largs->parser_ptr == NULL || *largs->parser_ptr == NULL) {
+        exception("Lazy parser not initialized.");
+    }
+    return parse(in, *largs->parser_ptr);
 }
 
 //=============================================================================
@@ -431,6 +441,16 @@ ParseResult parse(input_t * in, combinator_t * comb) {
     return comb->fn(in, (void *)comb->args);
 }
 
+combinator_t * lazy(combinator_t** parser_ptr) {
+    lazy_args* args = (lazy_args*)safe_malloc(sizeof(lazy_args));
+    args->parser_ptr = parser_ptr;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_LAZY;
+    comb->fn = lazy_fn;
+    comb->args = args;
+    return comb;
+}
+
 //=============================================================================
 // MEMORY MANAGEMENT
 //=============================================================================
@@ -493,6 +513,11 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
         return;
     }
 
+    if (comb->extra_to_free) {
+        free(comb->extra_to_free);
+        comb->extra_to_free = NULL;
+    }
+
     if (comb->args != NULL) {
         switch (comb->type) {
             case P_MATCH:
@@ -511,22 +536,9 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 break;
             }
             case COMB_MAP: {
-                // Try to determine if this is a normal map_args or a direct combinator pointer
-                // For json_null, args is a direct combinator_t*
-                // For normal map, args is a map_args* struct
-                map_args* map_args_ptr = (map_args*)comb->args;
-
-                // Check if this looks like a valid map_args struct
-                // If map_args_ptr->parser is a valid pointer and map_args_ptr->func is not NULL
-                if (map_args_ptr->parser != NULL && map_args_ptr->func != NULL &&
-                    (uintptr_t)map_args_ptr->parser > 0x1000) {
-                    // This looks like a valid map_args struct
-                    free_combinator_recursive(map_args_ptr->parser, visited);
-                    free(map_args_ptr);
-                } else {
-                    // This is likely a direct combinator pointer (json_null case)
-                    free_combinator_recursive((combinator_t*)comb->args, visited);
-                }
+                map_args* args = (map_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
+                free(args);
                 break;
             }
             case P_SUCCEED: {
@@ -600,6 +612,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 until_args* args = (until_args*)comb->args;
                 free_combinator_recursive(args->delimiter, visited);
                 free(args);
+                break;
+            }
+            case COMB_LAZY: {
+                free((lazy_args*)comb->args);
                 break;
             }
             case COMB_EXPR: {

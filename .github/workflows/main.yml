@@ -1,0 +1,27 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: sudo apt-get update && sudo apt-get install -y libunwind-dev
+
+    - name: Configure CMake
+      run: cmake -B build -DBUILD_INTEGRATION_TESTS=ON .
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Test
+      working-directory: ./build
+      run: ctest --output-on-failure

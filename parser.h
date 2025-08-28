@@ -69,7 +69,8 @@ typedef enum {
     P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY,
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
-    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP
+    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP,
+    COMB_LAZY
 } parser_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
@@ -78,6 +79,7 @@ struct combinator_t {
     parser_type_t type;
     comb_fn fn;
     void * args;
+    void * extra_to_free;
 };
 
 // For flatMap
@@ -116,8 +118,10 @@ combinator_t * string();
 combinator_t * until(combinator_t* p);
 combinator_t * any_char();
 combinator_t * satisfy(char_predicate pred);
+combinator_t * eoi();
 
 // --- Combinator Constructors ---
+combinator_t * lazy(combinator_t** parser_ptr);
 
 // --- Expression Parser Constructors ---
 typedef enum { EXPR_BASE, EXPR_INFIX, EXPR_PREFIX, EXPR_POSTFIX } expr_fix;

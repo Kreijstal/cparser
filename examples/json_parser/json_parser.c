@@ -21,6 +21,7 @@ static ParseResult bool_core_fn(input_t* in, void* args);
 combinator_t* number();
 combinator_t* json_null();
 combinator_t* json_bool();
+combinator_t* json_string();
 
 
 static ParseResult number_fn(input_t* in, void* args) {
@@ -100,7 +101,7 @@ static ParseResult bool_core_fn(input_t* in, void* args) {
         ast->sym = sym_lookup("1");
         return make_success(ast);
     }
-    free(res_true.value.error->message);
+    free_error(res_true.value.error);
     restore_input_state(in, &state);
     ParseResult res_false = parse(in, match("false"));
     if (res_false.is_success) {
@@ -122,20 +123,34 @@ combinator_t* json_bool() {
     return right(ws, bool_core);
 }
 
+combinator_t* json_string() {
+    combinator_t* ws = many(satisfy(is_whitespace));
+    return right(ws, string());
+}
+
 //=============================================================================
 // The Complete JSON Grammar
 //=============================================================================
 
 combinator_t* json_parser() {
-    combinator_t* json_value = new_combinator();
-    json_value->type = COMB_MULTI;
-    combinator_t* j_string = string();
+    // The core recursive parser for any single JSON value.
+    combinator_t** p_json_value = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *p_json_value = new_combinator();
+    (*p_json_value)->extra_to_free = p_json_value;
+
+    // The various types of JSON values
+    combinator_t* j_string = json_string();
     combinator_t* j_number = number();
     combinator_t* j_null = json_null();
     combinator_t* j_bool = json_bool();
-    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(json_value, match(",")), expect(match("]"), "Expected ']'"), NULL);
-    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, j_string, expect(match(":"), "Expected ':'"), json_value, NULL);
+
+    // Recursive definitions for array and object, using new lazy proxies each time
+    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, json_string(), expect(match(":"), "Expected ':'"), lazy(p_json_value), NULL);
+    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(lazy(p_json_value), match(",")), expect(match("]"), "Expected ']'"), NULL);
     combinator_t* j_object = seq(new_combinator(), T_SEQ, match("{"), sep_by(kv_pair, match(",")), expect(match("}"), "Expected '}'"), NULL);
-    multi(json_value, T_NONE, j_string, j_number, j_null, j_bool, j_array, j_object, NULL);
-    return json_value;
+
+    // The main json_value parser is a `multi` choice between all possible types.
+    multi(*p_json_value, T_NONE, j_string, j_number, j_null, j_bool, j_array, j_object, NULL);
+
+    return *p_json_value;
 }

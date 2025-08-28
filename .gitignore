@@ -8,5 +8,8 @@ Testing/
 *.a
 *.o
 *.d
-calculator
-tests
+/calculator
+/tests
+/json_parser_cli
+/json_tests
+build/

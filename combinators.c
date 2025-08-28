@@ -246,7 +246,12 @@ static ParseResult gseq_fn(input_t * in, void * args) {
         }
         seq = seq->next;
     }
-    return make_success(sa->typ == T_NONE ? head : ast1(sa->typ, head));
+    ast_t* result_child = head ? head : ast_nil;
+    if (sa->typ == T_NONE) {
+        return make_success(result_child);
+    } else {
+        return make_success(ast1(sa->typ, result_child));
+    }
 }
 
 static ParseResult seq_fn(input_t * in, void * args) {
@@ -256,33 +261,50 @@ static ParseResult seq_fn(input_t * in, void * args) {
     ast_t * head = NULL, * tail = NULL;
     while (seq != NULL) {
         ParseResult res = parse(in, seq->comb);
-        if (!res.is_success) { restore_input_state(in, &state); return res; }
+        if (!res.is_success) { free_ast(head); restore_input_state(in, &state); return res; }
         if (res.value.ast != ast_nil) {
             if (head == NULL) head = tail = res.value.ast;
             else { tail->next = res.value.ast; while(tail->next) tail = tail->next; }
         }
         seq = seq->next;
     }
-    return make_success(sa->typ == T_NONE ? head : ast1(sa->typ, head));
+    ast_t* result_child = head ? head : ast_nil;
+    if (sa->typ == T_NONE) {
+        return make_success(result_child);
+    } else {
+        return make_success(ast1(sa->typ, result_child));
+    }
 }
 
 static ParseResult multi_fn(input_t * in, void * args) {
     seq_args * sa = (seq_args *) args;
     seq_list * seq = sa->list;
+    if (seq == NULL) {
+        return make_failure(in, strdup("multi parser has no alternatives."));
+    }
     ParseResult res;
-    while (seq != NULL) {
-        InputState state; save_input_state(in, &state);
+    // Initialize res with the failure of the first alternative, in case all fail.
+    res = parse(in, seq->comb);
+    if (res.is_success) {
+        if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+        return res;
+    }
+
+    // Backtrack and try the rest
+    InputState state;
+    save_input_state(in, &state);
+
+    while (seq->next != NULL) {
+        restore_input_state(in, &state); // Restore for next attempt
+        free_error(res.value.error);     // Free the error from the previous failed attempt
+        seq = seq->next;
         res = parse(in, seq->comb);
         if (res.is_success) {
-           if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
-           return res;
+            if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+            return res;
         }
-        restore_input_state(in, &state);
-        if (seq->next != NULL) {
-            free_error(res.value.error);
-        }
-        seq = seq->next;
     }
+    // Return the failure from the last alternative
     return res;
 }
 
