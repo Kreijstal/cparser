@@ -51,8 +51,22 @@ long eval(ast_t *ast) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s \"<expression>\"\n", argv[0]);
+    bool print_ast = false;
+    bool count_nodes = false;
+    char *expr_str = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--print-ast") == 0) {
+            print_ast = true;
+        } else if (strcmp(argv[i], "--count-nodes") == 0) {
+            count_nodes = true;
+        } else {
+            expr_str = argv[i];
+        }
+    }
+
+    if (expr_str == NULL) {
+        fprintf(stderr, "Usage: %s [--print-ast] [--count-nodes] \"<expression>\"\n", argv[0]);
         return 1;
     }
 
@@ -80,8 +94,8 @@ int main(int argc, char *argv[]) {
 
     // --- Parsing ---
     input_t *in = new_input();
-    in->buffer = argv[1];
-    in->length = strlen(argv[1]);
+    in->buffer = expr_str;
+    in->length = strlen(expr_str);
 
     ast_nil = new_ast();
     ast_nil->typ = T_NONE;
@@ -89,11 +103,25 @@ int main(int argc, char *argv[]) {
     ParseResult result = parse(in, expr_parser);
 
     // --- Output ---
+// --- Visitor for counting nodes ---
+void count_nodes_visitor(ast_t* node, void* context) {
+    int* counter = (int*)context;
+    (*counter)++;
+}
+
     if (result.is_success) {
         if (in->start < in->length) {
             fprintf(stderr, "Error: Parser did not consume entire input. Trailing characters: '%s'\n", in->buffer + in->start);
             free_ast(result.value.ast);
         } else {
+            if (print_ast) {
+                parser_print_ast(result.value.ast);
+            }
+            if (count_nodes) {
+                int node_count = 0;
+                parser_walk_ast(result.value.ast, count_nodes_visitor, &node_count);
+                printf("AST contains %d nodes.\n", node_count);
+            }
             long final_result = eval(result.value.ast);
             printf("%ld\n", final_result);
             free_ast(result.value.ast);
