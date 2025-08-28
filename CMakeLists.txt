@@ -26,3 +26,8 @@ target_link_libraries(json_parser_cli parser_lib unwind)
 # Add the executable for the final calculator
 # add_executable(calc calc.c)
 # target_link_libraries(calc parser_lib)
+
+# Add the executable for the JSON parser tests
+add_executable(json_tests json_tests.c)
+target_link_libraries(json_tests parser_lib)
+add_test(NAME json_tests COMMAND json_tests)

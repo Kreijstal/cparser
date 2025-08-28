@@ -15,6 +15,8 @@ static bool is_whitespace(char c) {
 
 // Forward declarations
 static ParseResult number_fn(input_t* in, void* args);
+static ParseResult null_core_fn(input_t* in, void* args);
+static ParseResult bool_core_fn(input_t* in, void* args);
 
 combinator_t* number();
 combinator_t* json_null();
@@ -67,44 +69,56 @@ combinator_t* number() {
     return right(ws, num);
 }
 
-static ast_t* map_null(ast_t* ast) {
-    free_ast(ast);
-    ast_t* new = new_ast();
-    new->typ = T_NONE;
-    return new;
+static ParseResult null_core_fn(input_t* in, void* args) {
+    ParseResult result = parse(in, match("null"));
+    if (result.is_success) {
+        free_ast(result.value.ast);
+        ast_t* ast = new_ast();
+        ast->typ = T_NONE;
+        return make_success(ast);
+    }
+    return result;
 }
 
 combinator_t* json_null() {
     combinator_t* ws = many(satisfy(is_whitespace));
-    combinator_t* null_core = map(match("null"), map_null);
+    combinator_t* null_core = new_combinator();
+    null_core->type = P_MATCH;
+    null_core->fn = null_core_fn;
+    null_core->args = NULL;
     return right(ws, null_core);
 }
 
-static ast_t* map_true(ast_t* ast) {
-    free_ast(ast);
-    ast_t* new = new_ast();
-    new->typ = T_INT;
-    new->sym = sym_lookup("1");
-    return new;
-}
-
-static ast_t* map_false(ast_t* ast) {
-    free_ast(ast);
-    ast_t* new = new_ast();
-    new->typ = T_INT;
-    new->sym = sym_lookup("0");
-    return new;
+static ParseResult bool_core_fn(input_t* in, void* args) {
+    InputState state;
+    save_input_state(in, &state);
+    ParseResult res_true = parse(in, match("true"));
+    if (res_true.is_success) {
+        free_ast(res_true.value.ast);
+        ast_t* ast = new_ast();
+        ast->typ = T_INT;
+        ast->sym = sym_lookup("1");
+        return make_success(ast);
+    }
+    free_error(res_true.value.error);
+    restore_input_state(in, &state);
+    ParseResult res_false = parse(in, match("false"));
+    if (res_false.is_success) {
+        free_ast(res_false.value.ast);
+        ast_t* ast = new_ast();
+        ast->typ = T_INT;
+        ast->sym = sym_lookup("0");
+        return make_success(ast);
+    }
+    return res_false;
 }
 
 combinator_t* json_bool() {
     combinator_t* ws = many(satisfy(is_whitespace));
-
-    combinator_t* p_true = map(match("true"), map_true);
-    combinator_t* p_false = map(match("false"), map_false);
-
     combinator_t* bool_core = new_combinator();
-    multi(bool_core, T_NONE, p_true, p_false, NULL);
-
+    bool_core->type = P_MATCH;
+    bool_core->fn = bool_core_fn;
+    bool_core->args = NULL;
     return right(ws, bool_core);
 }
 
