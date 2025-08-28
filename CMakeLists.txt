@@ -20,7 +20,7 @@ add_test(NAME tests COMMAND tests)
 
 # Add the executable for the JSON parser CLI
 add_executable(json_parser_cli json_main.c)
-target_link_libraries(json_parser_cli parser_lib)
+target_link_libraries(json_parser_cli parser_lib unwind)
 
 
 # Add the executable for the final calculator

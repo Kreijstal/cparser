@@ -1,10 +1,39 @@
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "parser.h"
 #include "json_parser.h"
 
+void backtrace_handler(int sig) {
+    unw_cursor_t cursor;
+    unw_context_t context;
+
+    fprintf(stderr, "\n--- Caught signal %d, printing backtrace ---\n", sig);
+
+    unw_getcontext(&context);
+    unw_init_local(&cursor, &context);
+
+    while (unw_step(&cursor) > 0) {
+        unw_word_t offset, pc;
+        char sym[256];
+
+        unw_get_reg(&cursor, UNW_REG_IP, &pc);
+        if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
+            fprintf(stderr, "  at %s (+0x%lx) [0x%lx]\n", sym, offset, pc);
+        } else {
+            fprintf(stderr, "  at <unknown> [0x%lx]\n", pc);
+        }
+    }
+    fprintf(stderr, "------------------------------------------\n");
+    exit(sig);
+}
+
 int main(int argc, char *argv[]) {
+    signal(SIGSEGV, backtrace_handler);
+
     if (argc != 2) {
         fprintf(stderr, "Usage: %s \"<json_string>\"\n", argv[0]);
         return 1;
