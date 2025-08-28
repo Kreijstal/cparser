@@ -403,6 +403,23 @@ combinator_t * any_char() {
     comb->args = NULL;
     return comb;
 }
+
+static ParseResult eoi_fn(input_t * in, void * args) {
+    if (in->start < in->length) {
+        char* err_msg;
+        asprintf(&err_msg, "Expected end of input but found '%c'", in->buffer[in->start]);
+        return make_failure(in, err_msg);
+    }
+    return make_success(ast_nil);
+}
+
+combinator_t* eoi() {
+    combinator_t* comb = new_combinator();
+    comb->fn = eoi_fn;
+    comb->args = NULL;
+    return comb;
+}
+
 combinator_t * expr(combinator_t * exp, combinator_t * base) {
    expr_list * args = (expr_list*)safe_malloc(sizeof(expr_list));
    args->next = NULL; args->fix = EXPR_BASE; args->comb = base; args->op = NULL;
@@ -530,22 +547,9 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 break;
             }
             case COMB_MAP: {
-                // Try to determine if this is a normal map_args or a direct combinator pointer
-                // For json_null, args is a direct combinator_t*
-                // For normal map, args is a map_args* struct
-                map_args* map_args_ptr = (map_args*)comb->args;
-
-                // Check if this looks like a valid map_args struct
-                // If map_args_ptr->parser is a valid pointer and map_args_ptr->func is not NULL
-                if (map_args_ptr->parser != NULL && map_args_ptr->func != NULL &&
-                    (uintptr_t)map_args_ptr->parser > 0x1000) {
-                    // This looks like a valid map_args struct
-                    free_combinator_recursive(map_args_ptr->parser, visited);
-                    free(map_args_ptr);
-                } else {
-                    // This is likely a direct combinator pointer (json_null case)
-                    free_combinator_recursive((combinator_t*)comb->args, visited);
-                }
+                map_args* args = (map_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
+                free(args);
                 break;
             }
             case P_SUCCEED: {

@@ -117,6 +117,7 @@ combinator_t * string();
 combinator_t * until(combinator_t* p);
 combinator_t * any_char();
 combinator_t * satisfy(char_predicate pred);
+combinator_t * eoi();
 
 // --- Combinator Constructors ---
 combinator_t * lazy(combinator_t** parser_ptr);

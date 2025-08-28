@@ -256,7 +256,7 @@ static ParseResult seq_fn(input_t * in, void * args) {
     ast_t * head = NULL, * tail = NULL;
     while (seq != NULL) {
         ParseResult res = parse(in, seq->comb);
-        if (!res.is_success) { restore_input_state(in, &state); return res; }
+        if (!res.is_success) { free_ast(head); restore_input_state(in, &state); return res; }
         if (res.value.ast != ast_nil) {
             if (head == NULL) head = tail = res.value.ast;
             else { tail->next = res.value.ast; while(tail->next) tail = tail->next; }
