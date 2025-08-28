@@ -100,7 +100,7 @@ static ParseResult bool_core_fn(input_t* in, void* args) {
         ast->sym = sym_lookup("1");
         return make_success(ast);
     }
-    free(res_true.value.error->message);
+    free_error(res_true.value.error);
     restore_input_state(in, &state);
     ParseResult res_false = parse(in, match("false"));
     if (res_false.is_success) {
@@ -127,15 +127,27 @@ combinator_t* json_bool() {
 //=============================================================================
 
 combinator_t* json_parser() {
+    // The core recursive parser for any single JSON value.
     combinator_t* json_value = new_combinator();
-    json_value->type = COMB_MULTI;
+
+    // A single lazy proxy is created for json_value and shared.
+    // This avoids creating multiple lazy combinators pointing to the same
+    // target, which may have confused the cycle detection in free_combinator.
+    combinator_t* lazy_json_value = lazy(&json_value);
+
+    // The various types of JSON values
     combinator_t* j_string = string();
     combinator_t* j_number = number();
     combinator_t* j_null = json_null();
     combinator_t* j_bool = json_bool();
-    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(json_value, match(",")), expect(match("]"), "Expected ']'"), NULL);
-    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, j_string, expect(match(":"), "Expected ':'"), json_value, NULL);
+
+    // Recursive definitions for array and object, using the *same* lazy proxy
+    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, j_string, expect(match(":"), "Expected ':'"), lazy_json_value, NULL);
+    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(lazy_json_value, match(",")), expect(match("]"), "Expected ']'"), NULL);
     combinator_t* j_object = seq(new_combinator(), T_SEQ, match("{"), sep_by(kv_pair, match(",")), expect(match("}"), "Expected '}'"), NULL);
+
+    // The main json_value parser is a `multi` choice between all possible types.
     multi(json_value, T_NONE, j_string, j_number, j_null, j_bool, j_array, j_object, NULL);
+
     return json_value;
 }
