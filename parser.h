@@ -79,6 +79,7 @@ struct combinator_t {
     parser_type_t type;
     comb_fn fn;
     void * args;
+    void * extra_to_free;
 };
 
 // For flatMap

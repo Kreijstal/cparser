@@ -246,7 +246,12 @@ static ParseResult gseq_fn(input_t * in, void * args) {
         }
         seq = seq->next;
     }
-    return make_success(sa->typ == T_NONE ? head : ast1(sa->typ, head));
+    ast_t* result_child = head ? head : ast_nil;
+    if (sa->typ == T_NONE) {
+        return make_success(result_child);
+    } else {
+        return make_success(ast1(sa->typ, result_child));
+    }
 }
 
 static ParseResult seq_fn(input_t * in, void * args) {
@@ -263,7 +268,12 @@ static ParseResult seq_fn(input_t * in, void * args) {
         }
         seq = seq->next;
     }
-    return make_success(sa->typ == T_NONE ? head : ast1(sa->typ, head));
+    ast_t* result_child = head ? head : ast_nil;
+    if (sa->typ == T_NONE) {
+        return make_success(result_child);
+    } else {
+        return make_success(ast1(sa->typ, result_child));
+    }
 }
 
 static ParseResult multi_fn(input_t * in, void * args) {

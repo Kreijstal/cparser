@@ -29,6 +29,7 @@ static void run_json_success_test(const char* text, void (*check_ast)(ast_t*)) {
         free_ast(res.value.ast);
     }
 
+    free_combinator(p);
     free(input->buffer);
     free(input);
 }
@@ -54,6 +55,7 @@ static void run_json_fail_test(const char* text) {
         if(res.value.error) free_error(res.value.error);
     }
 
+    free_combinator(p);
     free(input->buffer);
     free(input);
 }
@@ -96,6 +98,10 @@ void check_simple_object(ast_t* ast) {
 // --- Test Cases ---
 
 void test_json_successes(void) {
+    if (ast_nil == NULL) {
+        ast_nil = new_ast();
+        ast_nil->typ = T_NONE;
+    }
     run_json_success_test("null", check_null);
     run_json_success_test("true", check_true);
     run_json_success_test("false", check_false);
@@ -110,6 +116,10 @@ void test_json_successes(void) {
 }
 
 void test_json_failures(void) {
+    if (ast_nil == NULL) {
+        ast_nil = new_ast();
+        ast_nil->typ = T_NONE;
+    }
     run_json_fail_test("1.");
     run_json_fail_test("-");
     run_json_fail_test("1.2.3");
