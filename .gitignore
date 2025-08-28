@@ -10,4 +10,6 @@ Testing/
 *.d
 /calculator
 /tests
+/json_parser_cli
+/json_tests
 build/
