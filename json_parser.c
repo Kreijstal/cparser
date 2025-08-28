@@ -21,6 +21,7 @@ static ParseResult bool_core_fn(input_t* in, void* args);
 combinator_t* number();
 combinator_t* json_null();
 combinator_t* json_bool();
+combinator_t* json_string();
 
 
 static ParseResult number_fn(input_t* in, void* args) {
@@ -122,6 +123,11 @@ combinator_t* json_bool() {
     return right(ws, bool_core);
 }
 
+combinator_t* json_string() {
+    combinator_t* ws = many(satisfy(is_whitespace));
+    return right(ws, string());
+}
+
 //=============================================================================
 // The Complete JSON Grammar
 //=============================================================================
@@ -133,14 +139,13 @@ combinator_t* json_parser() {
     (*p_json_value)->extra_to_free = p_json_value;
 
     // The various types of JSON values
-    combinator_t* j_string = string();
+    combinator_t* j_string = json_string();
     combinator_t* j_number = number();
     combinator_t* j_null = json_null();
     combinator_t* j_bool = json_bool();
 
     // Recursive definitions for array and object, using new lazy proxies each time
-    // A separate string() parser is needed for the key in a kv_pair to avoid double-freeing j_string
-    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, string(), expect(match(":"), "Expected ':'"), lazy(p_json_value), NULL);
+    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, json_string(), expect(match(":"), "Expected ':'"), lazy(p_json_value), NULL);
     combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(lazy(p_json_value), match(",")), expect(match("]"), "Expected ']'"), NULL);
     combinator_t* j_object = seq(new_combinator(), T_SEQ, match("{"), sep_by(kv_pair, match(",")), expect(match("}"), "Expected '}'"), NULL);
 
