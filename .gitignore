@@ -8,6 +8,6 @@ Testing/
 *.a
 *.o
 *.d
-calculator
-tests
+/calculator
+/tests
 build/
