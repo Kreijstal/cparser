@@ -20,6 +20,7 @@ typedef struct op_t { tag_t tag; combinator_t * comb; struct op_t * next; } op_t
 typedef struct expr_list { op_t * op; expr_fix fix; expr_assoc assoc; combinator_t * comb; struct expr_list * next; } expr_list;
 
 // --- Static Function Forward Declarations ---
+static ParseResult lazy_fn(input_t * in, void * args);
 static ParseResult match_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
@@ -328,7 +329,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
            while (op) {
                ParseResult op_res = parse(in, op->comb);
                if (op_res.is_success) {
-                   tag_t op_tag = op_res.value.ast->typ;
+                   tag_t op_tag = op->tag;
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
                    if (!rhs_res.is_success) { free_ast(lhs); return rhs_res; }
@@ -343,6 +344,14 @@ static ParseResult expr_fn(input_t * in, void * args) {
        }
    }
    return make_success(lhs);
+}
+
+static ParseResult lazy_fn(input_t * in, void * args) {
+    lazy_args* largs = (lazy_args*)args;
+    if (largs == NULL || largs->parser_ptr == NULL || *largs->parser_ptr == NULL) {
+        exception("Lazy parser not initialized.");
+    }
+    return parse(in, *largs->parser_ptr);
 }
 
 //=============================================================================
@@ -429,6 +438,16 @@ void expr_altern(combinator_t * exp, int prec, tag_t tag, combinator_t * comb) {
 ParseResult parse(input_t * in, combinator_t * comb) {
     if (!comb || !comb->fn) exception("Attempted to parse with a NULL or uninitialized combinator.");
     return comb->fn(in, (void *)comb->args);
+}
+
+combinator_t * lazy(combinator_t** parser_ptr) {
+    lazy_args* args = (lazy_args*)safe_malloc(sizeof(lazy_args));
+    args->parser_ptr = parser_ptr;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_LAZY;
+    comb->fn = lazy_fn;
+    comb->args = args;
+    return comb;
 }
 
 //=============================================================================
@@ -600,6 +619,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 until_args* args = (until_args*)comb->args;
                 free_combinator_recursive(args->delimiter, visited);
                 free(args);
+                break;
+            }
+            case COMB_LAZY: {
+                free((lazy_args*)comb->args);
                 break;
             }
             case COMB_EXPR: {

@@ -10,3 +10,4 @@ Testing/
 *.d
 calculator
 tests
+build/
