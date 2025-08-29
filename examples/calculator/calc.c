@@ -113,6 +113,7 @@ void count_nodes_visitor(ast_t* node, void* context) {
         if (in->start < in->length) {
             fprintf(stderr, "Error: Parser did not consume entire input. Trailing characters: '%s'\n", in->buffer + in->start);
             free_ast(result.value.ast);
+            return 1;
         } else {
             if (print_ast) {
                 parser_print_ast(result.value.ast);
@@ -132,6 +133,7 @@ void count_nodes_visitor(ast_t* node, void* context) {
                 result.value.error->col,
                 result.value.error->message);
         free_error(result.value.error);
+        return 1;
     }
 
     // --- Cleanup ---
