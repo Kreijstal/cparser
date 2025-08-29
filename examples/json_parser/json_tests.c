@@ -6,7 +6,8 @@
 
 // --- Test Helpers ---
 
-static void run_json_success_test(const char* text, void (*check_ast)(ast_t*)) {
+static void run_json_success_test(const char* text, void (*check_ast)(ast_t*), const char* name) {
+    TEST_CASE(name);
     input_t* input = new_input();
     input->buffer = strdup(text);
     input->length = strlen(text);
@@ -34,7 +35,8 @@ static void run_json_success_test(const char* text, void (*check_ast)(ast_t*)) {
     free(input);
 }
 
-static void run_json_fail_test(const char* text) {
+static void run_json_fail_test(const char* text, const char* name) {
+    TEST_CASE(name);
     input_t* input = new_input();
     input->buffer = strdup(text);
     input->length = strlen(text);
@@ -102,17 +104,17 @@ void test_json_successes(void) {
         ast_nil = new_ast();
         ast_nil->typ = T_NONE;
     }
-    run_json_success_test("null", check_null);
-    run_json_success_test("true", check_true);
-    run_json_success_test("false", check_false);
-    run_json_success_test("\"hello world\"", check_string);
-    run_json_success_test("123", check_int);
-    run_json_success_test("-123.45", check_float);
-    run_json_success_test("6.022e23", check_sci);
-    run_json_success_test("[]", check_empty_array);
-    run_json_success_test("{}", check_empty_object);
-    run_json_success_test("[1, \"two\", true]", check_simple_array);
-    run_json_success_test("{\"key\": \"value\", \"n\": 123}", check_simple_object);
+    run_json_success_test("null", check_null, "null literal");
+    run_json_success_test("true", check_true, "true literal");
+    run_json_success_test("false", check_false, "false literal");
+    run_json_success_test("\"hello world\"", check_string, "string literal");
+    run_json_success_test("123", check_int, "integer literal");
+    run_json_success_test("-123.45", check_float, "float literal");
+    run_json_success_test("6.022e23", check_sci, "scientific literal");
+    run_json_success_test("[]", check_empty_array, "empty array");
+    run_json_success_test("{}", check_empty_object, "empty object");
+    run_json_success_test("[1, \"two\", true]", check_simple_array, "simple array");
+    run_json_success_test("{\"key\": \"value\", \"n\": 123}", check_simple_object, "simple object");
 }
 
 void test_json_failures(void) {
@@ -120,25 +122,25 @@ void test_json_failures(void) {
         ast_nil = new_ast();
         ast_nil->typ = T_NONE;
     }
-    run_json_fail_test("1.");
-    run_json_fail_test("-");
-    run_json_fail_test("1.2.3");
-    run_json_fail_test("1e");
-    run_json_fail_test("1e-");
-    run_json_fail_test("nul");
-    run_json_fail_test("flase");
-    run_json_fail_test("ture");
-    run_json_fail_test("\"hello");
-    run_json_fail_test("[1, 2, ]");
-    run_json_fail_test("[1 2]");
-    run_json_fail_test("[1,");
-    run_json_fail_test("[");
-    run_json_fail_test("{\"a\": 1, }");
-    run_json_fail_test("{\"a\": 1 \"b\": 2}");
-    run_json_fail_test("{\"a\": }");
-    run_json_fail_test("{\"a\"");
-    run_json_fail_test("{");
-    run_json_fail_test("{\"a\": 1");
+    run_json_fail_test("1.", "trailing decimal");
+    run_json_fail_test("-", "lone minus");
+    run_json_fail_test("1.2.3", "multiple decimals");
+    run_json_fail_test("1e", "trailing e");
+    run_json_fail_test("1e-", "trailing e-");
+    run_json_fail_test("nul", "bad null");
+    run_json_fail_test("flase", "bad false");
+    run_json_fail_test("ture", "bad true");
+    run_json_fail_test("\"hello", "unterminated string");
+    run_json_fail_test("[1, 2, ]", "trailing comma in array");
+    run_json_fail_test("[1 2]", "missing comma in array");
+    run_json_fail_test("[1,", "hanging comma in array");
+    run_json_fail_test("[", "unclosed array");
+    run_json_fail_test("{\"a\": 1, }", "trailing comma in object");
+    run_json_fail_test("{\"a\": 1 \"b\": 2}", "missing comma in object");
+    run_json_fail_test("{\"a\": }", "missing value in object");
+    run_json_fail_test("{\"a\"", "missing colon in object");
+    run_json_fail_test("{", "unclosed object");
+    run_json_fail_test("{\"a\": 1", "unclosed object with value");
 }
 
 TEST_LIST = {
