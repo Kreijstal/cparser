@@ -4,12 +4,6 @@
 #include "json_parser.h"
 #include <stdio.h>
 
-// --- Custom Tags for JSON (mirrored from json_parser.c) ---
-typedef enum {
-    JSON_T_NONE, JSON_T_STRING, JSON_T_INT, JSON_T_ASSIGN, JSON_T_SEQ
-} json_tag_t;
-
-
 // --- Test Helpers ---
 
 static void run_json_success_test(const char* text, void (*check_ast)(ast_t*), const char* name) {
@@ -70,36 +64,36 @@ static void run_json_fail_test(const char* text, const char* name) {
 
 // --- AST Check Callbacks ---
 
-void check_null(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_NONE); }
-void check_true(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_INT && strcmp(ast->sym->name, "1") == 0); }
-void check_false(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_INT && strcmp(ast->sym->name, "0") == 0); }
-void check_string(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_STRING && strcmp(ast->sym->name, "hello world") == 0); }
-void check_int(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_INT && strcmp(ast->sym->name, "123") == 0); }
-void check_float(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_INT && strcmp(ast->sym->name, "-123.45") == 0); }
-void check_sci(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_INT && strcmp(ast->sym->name, "6.022e23") == 0); }
-void check_empty_array(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_SEQ && ast->child == ast_nil); }
-void check_empty_object(ast_t* ast) { TEST_ASSERT(ast->typ == JSON_T_SEQ && ast->child == ast_nil); }
+void check_null(ast_t* ast) { TEST_ASSERT(ast->typ == T_NONE); }
+void check_true(ast_t* ast) { TEST_ASSERT(ast->typ == T_INT && strcmp(ast->sym->name, "1") == 0); }
+void check_false(ast_t* ast) { TEST_ASSERT(ast->typ == T_INT && strcmp(ast->sym->name, "0") == 0); }
+void check_string(ast_t* ast) { TEST_ASSERT(ast->typ == T_STRING && strcmp(ast->sym->name, "hello world") == 0); }
+void check_int(ast_t* ast) { TEST_ASSERT(ast->typ == T_INT && strcmp(ast->sym->name, "123") == 0); }
+void check_float(ast_t* ast) { TEST_ASSERT(ast->typ == T_INT && strcmp(ast->sym->name, "-123.45") == 0); }
+void check_sci(ast_t* ast) { TEST_ASSERT(ast->typ == T_INT && strcmp(ast->sym->name, "6.022e23") == 0); }
+void check_empty_array(ast_t* ast) { TEST_ASSERT(ast->typ == T_SEQ && ast->child == ast_nil); }
+void check_empty_object(ast_t* ast) { TEST_ASSERT(ast->typ == T_SEQ && ast->child == ast_nil); }
 
 void check_simple_array(ast_t* ast) {
-    TEST_ASSERT(ast->typ == JSON_T_SEQ);
+    TEST_ASSERT(ast->typ == T_SEQ);
     ast_t* child1 = ast->child;
-    TEST_ASSERT(child1->typ == JSON_T_INT && strcmp(child1->sym->name, "1") == 0);
+    TEST_ASSERT(child1->typ == T_INT && strcmp(child1->sym->name, "1") == 0);
     ast_t* child2 = child1->next;
-    TEST_ASSERT(child2->typ == JSON_T_STRING && strcmp(child2->sym->name, "two") == 0);
+    TEST_ASSERT(child2->typ == T_STRING && strcmp(child2->sym->name, "two") == 0);
     ast_t* child3 = child2->next;
-    TEST_ASSERT(child3->typ == JSON_T_INT && strcmp(child3->sym->name, "1") == 0);
+    TEST_ASSERT(child3->typ == T_INT && strcmp(child3->sym->name, "1") == 0);
 }
 
 void check_simple_object(ast_t* ast) {
-    TEST_ASSERT(ast->typ == JSON_T_SEQ);
+    TEST_ASSERT(ast->typ == T_SEQ);
     ast_t* kv1 = ast->child;
-    TEST_ASSERT(kv1->typ == JSON_T_ASSIGN);
-    TEST_ASSERT(kv1->child->typ == JSON_T_STRING && strcmp(kv1->child->sym->name, "key") == 0);
-    TEST_ASSERT(kv1->child->next->typ == JSON_T_STRING && strcmp(kv1->child->next->sym->name, "value") == 0);
+    TEST_ASSERT(kv1->typ == T_ASSIGN);
+    TEST_ASSERT(kv1->child->typ == T_STRING && strcmp(kv1->child->sym->name, "key") == 0);
+    TEST_ASSERT(kv1->child->next->typ == T_STRING && strcmp(kv1->child->next->sym->name, "value") == 0);
     ast_t* kv2 = kv1->next;
-    TEST_ASSERT(kv2->typ == JSON_T_ASSIGN);
-    TEST_ASSERT(kv2->child->typ == JSON_T_STRING && strcmp(kv2->child->sym->name, "n") == 0);
-    TEST_ASSERT(kv2->child->next->typ == JSON_T_INT && strcmp(kv2->child->next->sym->name, "123") == 0);
+    TEST_ASSERT(kv2->typ == T_ASSIGN);
+    TEST_ASSERT(kv2->child->typ == T_STRING && strcmp(kv2->child->sym->name, "n") == 0);
+    TEST_ASSERT(kv2->child->next->typ == T_INT && strcmp(kv2->child->next->sym->name, "123") == 0);
 }
 
 
@@ -108,7 +102,7 @@ void check_simple_object(ast_t* ast) {
 void test_json_successes(void) {
     if (ast_nil == NULL) {
         ast_nil = new_ast();
-        ast_nil->typ = JSON_T_NONE;
+        ast_nil->typ = T_NONE;
     }
     run_json_success_test("null", check_null, "null literal");
     run_json_success_test("true", check_true, "true literal");
@@ -126,7 +120,7 @@ void test_json_successes(void) {
 void test_json_failures(void) {
     if (ast_nil == NULL) {
         ast_nil = new_ast();
-        ast_nil->typ = JSON_T_NONE;
+        ast_nil->typ = T_NONE;
     }
     run_json_fail_test("1.", "trailing decimal");
     run_json_fail_test("-", "lone minus");

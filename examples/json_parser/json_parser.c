@@ -4,11 +4,6 @@
 #include <string.h>
 #include <ctype.h>
 
-// --- Custom Tags for JSON ---
-typedef enum {
-    JSON_T_NONE, JSON_T_STRING, JSON_T_INT, JSON_T_ASSIGN, JSON_T_SEQ
-} json_tag_t;
-
 // Predicate for whitespace
 static bool is_whitespace(char c) {
     return isspace((unsigned char)c);
@@ -30,7 +25,6 @@ combinator_t* json_string();
 
 
 static ParseResult number_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
     int start_pos = in->start;
@@ -61,55 +55,49 @@ static ParseResult number_fn(input_t* in, void* args) {
     strncpy(text, in->buffer + start_pos, len);
     text[len] = '\0';
     ast_t* ast = new_ast();
-    ast->typ = pargs->tag;
+    ast->typ = T_INT; // Re-using T_INT tag
     ast->sym = sym_lookup(text);
     free(text);
     return make_success(ast);
 }
 
-combinator_t* number(tag_t tag) {
-    combinator_t* ws = many(satisfy(is_whitespace, JSON_T_NONE));
-    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
-    args->tag = tag;
+combinator_t* number() {
+    combinator_t* ws = many(satisfy(is_whitespace));
     combinator_t* num = new_combinator();
     num->type = P_INTEGER;
     num->fn = number_fn;
-    num->args = args;
+    num->args = NULL;
     return right(ws, num);
 }
 
 static ParseResult null_core_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
     ParseResult result = parse(in, match("null"));
     if (result.is_success) {
         free_ast(result.value.ast);
         ast_t* ast = new_ast();
-        ast->typ = pargs->tag;
+        ast->typ = T_NONE;
         return make_success(ast);
     }
     return result;
 }
 
-combinator_t* json_null(tag_t tag) {
-    combinator_t* ws = many(satisfy(is_whitespace, JSON_T_NONE));
-    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
-    args->tag = tag;
+combinator_t* json_null() {
+    combinator_t* ws = many(satisfy(is_whitespace));
     combinator_t* null_core = new_combinator();
     null_core->type = P_MATCH;
     null_core->fn = null_core_fn;
-    null_core->args = args;
+    null_core->args = NULL;
     return right(ws, null_core);
 }
 
 static ParseResult bool_core_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
     ParseResult res_true = parse(in, match("true"));
     if (res_true.is_success) {
         free_ast(res_true.value.ast);
         ast_t* ast = new_ast();
-        ast->typ = pargs->tag;
+        ast->typ = T_INT;
         ast->sym = sym_lookup("1");
         return make_success(ast);
     }
@@ -119,27 +107,25 @@ static ParseResult bool_core_fn(input_t* in, void* args) {
     if (res_false.is_success) {
         free_ast(res_false.value.ast);
         ast_t* ast = new_ast();
-        ast->typ = pargs->tag;
+        ast->typ = T_INT;
         ast->sym = sym_lookup("0");
         return make_success(ast);
     }
     return res_false;
 }
 
-combinator_t* json_bool(tag_t tag) {
-    combinator_t* ws = many(satisfy(is_whitespace, JSON_T_NONE));
-    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
-    args->tag = tag;
+combinator_t* json_bool() {
+    combinator_t* ws = many(satisfy(is_whitespace));
     combinator_t* bool_core = new_combinator();
     bool_core->type = P_MATCH;
     bool_core->fn = bool_core_fn;
-    bool_core->args = args;
+    bool_core->args = NULL;
     return right(ws, bool_core);
 }
 
-combinator_t* json_string(tag_t tag) {
-    combinator_t* ws = many(satisfy(is_whitespace, JSON_T_NONE));
-    return right(ws, string(tag));
+combinator_t* json_string() {
+    combinator_t* ws = many(satisfy(is_whitespace));
+    return right(ws, string());
 }
 
 //=============================================================================
@@ -153,18 +139,18 @@ combinator_t* json_parser() {
     (*p_json_value)->extra_to_free = p_json_value;
 
     // The various types of JSON values
-    combinator_t* j_string = json_string(JSON_T_STRING);
-    combinator_t* j_number = number(JSON_T_INT);
-    combinator_t* j_null = json_null(JSON_T_NONE);
-    combinator_t* j_bool = json_bool(JSON_T_INT); // Using INT for bool
+    combinator_t* j_string = json_string();
+    combinator_t* j_number = number();
+    combinator_t* j_null = json_null();
+    combinator_t* j_bool = json_bool();
 
     // Recursive definitions for array and object, using new lazy proxies each time
-    combinator_t* kv_pair = seq(new_combinator(), JSON_T_ASSIGN, json_string(JSON_T_STRING), expect(match(":"), "Expected ':'"), lazy(p_json_value), NULL);
-    combinator_t* j_array = seq(new_combinator(), JSON_T_SEQ, match("["), sep_by(lazy(p_json_value), match(",")), expect(match("]"), "Expected ']'"), NULL);
-    combinator_t* j_object = seq(new_combinator(), JSON_T_SEQ, match("{"), sep_by(kv_pair, match(",")), expect(match("}"), "Expected '}'"), NULL);
+    combinator_t* kv_pair = seq(new_combinator(), T_ASSIGN, json_string(), expect(match(":"), "Expected ':'"), lazy(p_json_value), NULL);
+    combinator_t* j_array = seq(new_combinator(), T_SEQ, match("["), sep_by(lazy(p_json_value), match(",")), expect(match("]"), "Expected ']'"), NULL);
+    combinator_t* j_object = seq(new_combinator(), T_SEQ, match("{"), sep_by(kv_pair, match(",")), expect(match("}"), "Expected '}'"), NULL);
 
     // The main json_value parser is a `multi` choice between all possible types.
-    multi(*p_json_value, JSON_T_NONE, j_string, j_number, j_null, j_bool, j_array, j_object, NULL);
+    multi(*p_json_value, T_NONE, j_string, j_number, j_null, j_bool, j_array, j_object, NULL);
 
     return *p_json_value;
 }
