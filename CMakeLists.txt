@@ -31,7 +31,7 @@ if(BUILD_INTEGRATION_TESTS)
     # --- JSON Parser Example (optional, depends on libunwind) ---
     find_package(PkgConfig)
     if(PKG_CONFIG_FOUND)
-        pkg_check_modules(UNWIND QUIET unwind)
+        pkg_check_modules(UNWIND QUIET libunwind)
         if(UNWIND_FOUND)
             message(STATUS "Found libunwind, building JSON example.")
             add_library(json_parser_lib STATIC
