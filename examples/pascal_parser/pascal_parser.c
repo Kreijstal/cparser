@@ -5,7 +5,7 @@
 
 // --- Custom Tags for Pascal ---
 typedef enum {
-    PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK
+    PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK, PASCAL_T_IDENT_LIST
 } pascal_tag_t;
 
 // --- Forward Declarations ---
@@ -72,6 +72,22 @@ static combinator_t* p_dot() {
     return token(match("."));
 }
 
+static combinator_t* p_lparen() {
+    return token(match("("));
+}
+
+static combinator_t* p_rparen() {
+    return token(match(")"));
+}
+
+static combinator_t* p_comma() {
+    return token(match(","));
+}
+
+combinator_t* p_identifier_list() {
+    return sep_by(p_ident(), p_comma());
+}
+
 // --- ASM Block Parser ---
 
 // Custom parser function to consume the body of an ASM block.
@@ -130,7 +146,12 @@ combinator_t* p_program() {
     return seq(new_combinator(), PASCAL_T_PROGRAM,
         p_program_kw(),
         p_ident(),
+        p_lparen(),
+        p_identifier_list(),
+        p_rparen(),
         p_semicolon(),
+        // Declarations would go here
+        // Subprogram declarations would go here
         p_begin_kw(),
         p_statement_list(),
         p_end_kw(),
