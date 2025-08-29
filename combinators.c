@@ -247,7 +247,7 @@ static ParseResult gseq_fn(input_t * in, void * args) {
         seq = seq->next;
     }
     ast_t* result_child = head ? head : ast_nil;
-    if (sa->typ == T_NONE) {
+    if (sa->typ == 0) {
         return make_success(result_child);
     } else {
         return make_success(ast1(sa->typ, result_child));
@@ -269,7 +269,7 @@ static ParseResult seq_fn(input_t * in, void * args) {
         seq = seq->next;
     }
     ast_t* result_child = head ? head : ast_nil;
-    if (sa->typ == T_NONE) {
+    if (sa->typ == 0) {
         return make_success(result_child);
     } else {
         return make_success(ast1(sa->typ, result_child));
@@ -286,7 +286,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
     // Initialize res with the failure of the first alternative, in case all fail.
     res = parse(in, seq->comb);
     if (res.is_success) {
-        if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+        if (sa->typ != 0) res.value.ast = ast1(sa->typ, res.value.ast);
         return res;
     }
 
@@ -300,7 +300,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
         seq = seq->next;
         res = parse(in, seq->comb);
         if (res.is_success) {
-            if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+            if (sa->typ != 0) res.value.ast = ast1(sa->typ, res.value.ast);
             return res;
         }
     }

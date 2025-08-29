@@ -75,6 +75,7 @@ typedef struct {
 
 typedef struct {
     char_predicate pred;
+    tag_t tag;
 } satisfy_args;
 
 typedef struct {
