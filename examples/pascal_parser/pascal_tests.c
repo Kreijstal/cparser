@@ -6,7 +6,8 @@
 typedef enum {
     PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK, PASCAL_T_IDENT_LIST,
     PASCAL_T_INT_NUM, PASCAL_T_REAL_NUM,
-    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV
+    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV,
+    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL
 } pascal_tag_t;
 
 void test_pascal_minimal_program(void) {
@@ -210,10 +211,68 @@ void test_pascal_expressions(void) {
 }
 
 
+void test_pascal_declarations(void) {
+    const char* input_str = "program a(i,o); var x, y : integer; begin end.";
+
+    input_t *in = new_input();
+    in->buffer = strdup(input_str);
+    in->length = strlen(input_str);
+
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    combinator_t* parser = p_program();
+    ParseResult result = parse(in, parser);
+
+    TEST_CHECK(result.is_success == true);
+    if (!result.is_success) {
+        TEST_MSG("Parser failed: %s", result.value.error->message);
+        free_error(result.value.error);
+    } else {
+        ast_t* ast = result.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_PROGRAM);
+
+        // Children of program: prog_name -> param1 -> param2 -> var_decls -> stmts
+        ast_t* prog_name = ast->child;
+        TEST_CHECK(prog_name->typ == PASCAL_T_IDENT);
+
+        ast_t* param1 = prog_name->next;
+        TEST_CHECK(param1->typ == PASCAL_T_IDENT);
+
+        ast_t* param2 = param1->next;
+        TEST_CHECK(param2->typ == PASCAL_T_IDENT);
+
+        ast_t* var_decls = param2->next;
+        TEST_CHECK(var_decls != NULL);
+        if(var_decls) {
+            TEST_CHECK(var_decls->typ == PASCAL_T_VAR_DECL);
+
+            // Children of VAR_DECL are: ident -> ident -> type
+            ast_t* id1 = var_decls->child;
+            TEST_CHECK(id1->typ == PASCAL_T_IDENT && strcmp(id1->sym->name, "x") == 0);
+
+            ast_t* id2 = id1->next;
+            TEST_CHECK(id2->typ == PASCAL_T_IDENT && strcmp(id2->sym->name, "y") == 0);
+
+            ast_t* type_node = id2->next;
+            TEST_CHECK(type_node->typ == PASCAL_T_TYPE_INTEGER);
+        }
+
+        free_ast(ast);
+    }
+
+    free_combinator(parser);
+    free(in->buffer);
+    free(in);
+    free(ast_nil);
+}
+
+
 TEST_LIST = {
     { "test_pascal_minimal_program", test_pascal_minimal_program },
     { "test_pascal_asm_block", test_pascal_asm_block },
     { "test_pascal_identifier_list", test_pascal_identifier_list },
     { "test_pascal_expressions", test_pascal_expressions },
+    { "test_pascal_declarations", test_pascal_declarations },
     { NULL, NULL }
 };

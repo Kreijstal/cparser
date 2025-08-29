@@ -564,6 +564,12 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
                 free(args);
                 break;
             }
+            case COMB_OPTIONAL: {
+                optional_args* args = (optional_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
+                free(args);
+                break;
+            }
             case COMB_ERRMAP: {
                 errmap_args* args = (errmap_args*)comb->args;
                 free_combinator_recursive(args->parser, visited);

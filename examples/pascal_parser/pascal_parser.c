@@ -7,7 +7,8 @@
 typedef enum {
     PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK, PASCAL_T_IDENT_LIST,
     PASCAL_T_INT_NUM, PASCAL_T_REAL_NUM,
-    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV
+    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV,
+    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL
 } pascal_tag_t;
 
 // --- Forward Declarations ---
@@ -92,6 +93,14 @@ static combinator_t* p_star() {
 
 static combinator_t* p_slash() {
     return token(match("/"));
+}
+
+static combinator_t* p_colon() {
+    return token(match(":"));
+}
+
+static combinator_t* p_var_kw() {
+    return token(keyword("var"));
 }
 
 static combinator_t* p_lparen() {
@@ -179,6 +188,46 @@ combinator_t* p_expression() {
 }
 
 
+// --- Declaration Parser ---
+
+// Helper map functions to convert keyword ASTs to type ASTs
+static ast_t* map_to_integer_type(ast_t* ast) {
+    free_ast(ast); // free the keyword ast
+    return ast1(PASCAL_T_TYPE_INTEGER, ast_nil);
+}
+
+static ast_t* map_to_real_type(ast_t* ast) {
+    free_ast(ast);
+    return ast1(PASCAL_T_TYPE_REAL, ast_nil);
+}
+
+static combinator_t* p_standard_type() {
+    return multi(new_combinator(), PASCAL_T_NONE,
+        map(keyword("integer"), map_to_integer_type),
+        map(keyword("real"), map_to_real_type),
+        NULL
+    );
+}
+
+static combinator_t* p_var_declaration_line() {
+    return seq(new_combinator(), PASCAL_T_VAR_DECL,
+        p_identifier_list(),
+        p_colon(),
+        p_standard_type(),
+        p_semicolon(),
+        NULL
+    );
+}
+
+combinator_t* p_declarations() {
+    return seq(new_combinator(), PASCAL_T_NONE, // Don't create a wrapping node for the whole var block
+        p_var_kw(),
+        many(p_var_declaration_line()),
+        NULL
+    );
+}
+
+
 // --- Program Structure Parser ---
 
 // For now, a statement is just an asm block.
@@ -198,7 +247,7 @@ combinator_t* p_program() {
         p_identifier_list(),
         p_rparen(),
         p_semicolon(),
-        // Declarations would go here
+        optional(p_declarations()),
         // Subprogram declarations would go here
         p_begin_kw(),
         p_statement_list(),

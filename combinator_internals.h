@@ -39,6 +39,10 @@ typedef struct {
 } peek_args;
 
 typedef struct {
+    combinator_t* p;
+} optional_args;
+
+typedef struct {
     combinator_t* open;
     combinator_t* close;
     combinator_t* p;

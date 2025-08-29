@@ -9,5 +9,6 @@ combinator_t* p_program();
 combinator_t* p_asm_block();
 combinator_t* p_identifier_list();
 combinator_t* p_expression();
+combinator_t* p_declarations();
 
 #endif // PASCAL_PARSER_H

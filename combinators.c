@@ -25,6 +25,20 @@ static ParseResult many_fn(input_t * in, void * args);
 
 // --- _fn Implementations ---
 
+static ParseResult optional_fn(input_t * in, void * args) {
+    optional_args* oargs = (optional_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    ParseResult res = parse(in, oargs->p);
+    if (res.is_success) {
+        return res;
+    }
+    // If it fails, we restore the input and return success with a nil AST.
+    restore_input_state(in, &state);
+    free_error(res.value.error);
+    return make_success(ast_nil);
+}
+
 static ParseResult pnot_fn(input_t * in, void * args) {
     not_args* nargs = (not_args*)args;
     InputState state; save_input_state(in, &state);
@@ -529,5 +543,15 @@ combinator_t * many(combinator_t* p) {
     comb->type = COMB_MANY;
     comb->fn = many_fn;
     comb->args = (void *) p;
+    return comb;
+}
+
+combinator_t * optional(combinator_t* p) {
+    optional_args* args = (optional_args*)safe_malloc(sizeof(optional_args));
+    args->p = p;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_OPTIONAL;
+    comb->fn = optional_fn;
+    comb->args = (void *) args;
     return comb;
 }
