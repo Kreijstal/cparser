@@ -25,6 +25,20 @@ static ParseResult many_fn(input_t * in, void * args);
 
 // --- _fn Implementations ---
 
+static ParseResult optional_fn(input_t * in, void * args) {
+    optional_args* oargs = (optional_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    ParseResult res = parse(in, oargs->p);
+    if (res.is_success) {
+        return res;
+    }
+    // If it fails, we restore the input and return success with a nil AST.
+    restore_input_state(in, &state);
+    free_error(res.value.error);
+    return make_success(ast_nil);
+}
+
 static ParseResult pnot_fn(input_t * in, void * args) {
     not_args* nargs = (not_args*)args;
     InputState state; save_input_state(in, &state);
@@ -247,7 +261,7 @@ static ParseResult gseq_fn(input_t * in, void * args) {
         seq = seq->next;
     }
     ast_t* result_child = head ? head : ast_nil;
-    if (sa->typ == T_NONE) {
+    if (sa->typ == 0) {
         return make_success(result_child);
     } else {
         return make_success(ast1(sa->typ, result_child));
@@ -269,7 +283,7 @@ static ParseResult seq_fn(input_t * in, void * args) {
         seq = seq->next;
     }
     ast_t* result_child = head ? head : ast_nil;
-    if (sa->typ == T_NONE) {
+    if (sa->typ == 0) {
         return make_success(result_child);
     } else {
         return make_success(ast1(sa->typ, result_child));
@@ -286,7 +300,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
     // Initialize res with the failure of the first alternative, in case all fail.
     res = parse(in, seq->comb);
     if (res.is_success) {
-        if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+        if (sa->typ != 0) res.value.ast = ast1(sa->typ, res.value.ast);
         return res;
     }
 
@@ -300,7 +314,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
         seq = seq->next;
         res = parse(in, seq->comb);
         if (res.is_success) {
-            if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+            if (sa->typ != 0) res.value.ast = ast1(sa->typ, res.value.ast);
             return res;
         }
     }
@@ -529,5 +543,15 @@ combinator_t * many(combinator_t* p) {
     comb->type = COMB_MANY;
     comb->fn = many_fn;
     comb->args = (void *) p;
+    return comb;
+}
+
+combinator_t * optional(combinator_t* p) {
+    optional_args* args = (optional_args*)safe_malloc(sizeof(optional_args));
+    args->p = p;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_OPTIONAL;
+    comb->fn = optional_fn;
+    comb->args = (void *) args;
     return comb;
 }

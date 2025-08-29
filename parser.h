@@ -20,11 +20,7 @@ typedef struct input_t input_t;
 typedef struct ParseResult ParseResult;
 
 // AST node types
-typedef enum {
-    T_NONE, T_INT, T_IDENT, T_ASSIGN, T_SEQ,
-    T_ADD, T_SUB, T_MUL, T_DIV, T_NEG, T_STRING,
-    T_PROGRAM
-} tag_t;
+typedef unsigned int tag_t;
 
 // Symbol
 typedef struct sym_t {
@@ -67,7 +63,7 @@ struct ParseResult {
 
 // Main parser struct
 typedef enum {
-    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY,
+    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY, P_CI_KEYWORD,
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
     COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP,
@@ -113,12 +109,12 @@ ParseResult parse(input_t * in, combinator_t * comb);
 // --- Primitive Parser Constructors ---
 combinator_t * match(char * str);
 combinator_t * match_raw(char * str);
-combinator_t * integer();
-combinator_t * cident();
-combinator_t * string();
-combinator_t * until(combinator_t* p);
-combinator_t * any_char();
-combinator_t * satisfy(char_predicate pred);
+combinator_t * integer(tag_t tag);
+combinator_t * cident(tag_t tag);
+combinator_t * string(tag_t tag);
+combinator_t * until(combinator_t* p, tag_t tag);
+combinator_t * any_char(tag_t tag);
+combinator_t * satisfy(char_predicate pred, tag_t tag);
 combinator_t * eoi();
 
 // --- Combinator Constructors ---
@@ -141,7 +137,6 @@ typedef void (*ast_visitor_fn)(ast_t* node, void* context);
 void parser_walk_ast(ast_t* ast, ast_visitor_fn visitor, void* context);
 ast_t* new_ast();
 void free_ast(ast_t* ast);
-void parser_print_ast(ast_t* ast);
 void free_error(ParseError* err);
 ast_t* ast1(tag_t typ, ast_t* a1);
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2);
