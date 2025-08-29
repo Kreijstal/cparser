@@ -552,6 +552,9 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
 
     if (comb->args != NULL) {
         switch (comb->type) {
+            case P_CI_KEYWORD:
+                free(comb->args);
+                break;
             case P_MATCH:
                 free((match_args*)comb->args);
                 break;

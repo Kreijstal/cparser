@@ -69,4 +69,17 @@ if(BUILD_INTEGRATION_TESTS)
     # target_link_libraries(fpc_tests fpc_parser_lib)
     # add_test(NAME fpc_tests COMMAND fpc_tests)
 
+    # --- Pascal Parser Example ---
+    add_library(pascal_parser_lib STATIC
+        examples/pascal_parser/pascal_parser.c
+        examples/pascal_parser/pascal_parser.h
+    )
+    target_link_libraries(pascal_parser_lib PUBLIC parser_lib)
+    target_include_directories(pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
+
+    add_executable(pascal_tests examples/pascal_parser/pascal_tests.c)
+    target_include_directories(pascal_tests PUBLIC ${CMAKE_SOURCE_DIR})
+    target_link_libraries(pascal_tests pascal_parser_lib)
+    add_test(NAME pascal_tests COMMAND pascal_tests)
+
 endif()
