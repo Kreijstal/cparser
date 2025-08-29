@@ -7,48 +7,53 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 enable_testing()
 
 # --- Main Parser Library ---
-# The core parser_lib should not include example-specific code like json_parser.c
 add_library(parser_lib STATIC parser.c combinators.c)
 
-# --- Examples ---
+# --- Unit Tests ---
+# These are the core unit tests for the parser library. They are always built.
+add_executable(tests tests.c)
+target_link_libraries(tests parser_lib)
+add_test(unit_tests tests)
+
+
+# --- Examples and Integration Tests ---
 option(BUILD_INTEGRATION_TESTS "Build the example applications and their tests" OFF)
 
 if(BUILD_INTEGRATION_TESTS)
-    message(STATUS "Building examples...")
-
-    # --- JSON Parser Example ---
-    # The JSON parser is now part of the examples, so its sources are here.
-    # We create a separate library for it so it can be shared between the CLI and the tests.
-    add_library(json_parser_lib STATIC
-        examples/json_parser/json_parser.c
-        examples/json_parser/json_parser.h
-    )
-    # The json_parser_lib depends on the main parser_lib
-    target_link_libraries(json_parser_lib PUBLIC parser_lib)
-    target_include_directories(json_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
-
-    # Add the executable for the JSON parser CLI
-    add_executable(json_parser_cli examples/json_parser/json_main.c)
-    target_link_libraries(json_parser_cli json_parser_lib unwind)
-
-    # Add the executable for the JSON parser tests
-    add_executable(json_tests examples/json_parser/json_tests.c)
-    target_include_directories(json_tests PUBLIC ${CMAKE_SOURCE_DIR})
-    target_link_libraries(json_tests json_parser_lib unwind)
-    add_test(NAME json_tests COMMAND json_tests)
+    message(STATUS "Building integration tests and examples...")
 
     # --- Calculator Example ---
     add_executable(calculator examples/calculator/calc.c)
     target_include_directories(calculator PUBLIC ${CMAKE_SOURCE_DIR})
     target_link_libraries(calculator parser_lib)
-    add_test(NAME calculator_tests COMMAND calculator "1 + 1")
+    add_test(NAME calculator_tests COMMAND ${CMAKE_SOURCE_DIR}/examples/calculator/test_calculator.sh)
+
+    # --- JSON Parser Example (optional, depends on libunwind) ---
+    find_package(PkgConfig)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(UNWIND QUIET libunwind)
+        if(UNWIND_FOUND)
+            message(STATUS "Found libunwind, building JSON example.")
+            add_library(json_parser_lib STATIC
+                examples/json_parser/json_parser.c
+                examples/json_parser/json_parser.h
+            )
+            target_link_libraries(json_parser_lib PUBLIC parser_lib)
+            target_include_directories(json_parser_lib PUBLIC ${CMAKE_SOURCE_DIR} ${UNWIND_INCLUDE_DIRS})
+
+            add_executable(json_parser_cli examples/json_parser/json_main.c)
+            target_link_libraries(json_parser_cli json_parser_lib ${UNWIND_LIBRARIES})
+            target_include_directories(json_parser_cli PUBLIC ${UNWIND_INCLUDE_DIRS})
+
+            add_executable(json_tests examples/json_parser/json_tests.c)
+            target_include_directories(json_tests PUBLIC ${CMAKE_SOURCE_DIR} ${UNWIND_INCLUDE_DIRS})
+            target_link_libraries(json_tests json_parser_lib ${UNWIND_LIBRARIES})
+            add_test(NAME json_tests COMMAND json_tests --verbose=3)
+        else()
+            message(STATUS "libunwind not found, skipping JSON example.")
+        endif()
+    else()
+        message(STATUS "pkg-config not found, skipping JSON example.")
+    endif()
 
 endif()
-
-
-# Note: The original 'tests' target is not included as it seems to be a generic
-# test runner, and the new structure separates tests per example.
-# If it's needed, it should be moved into the if(BUILD_INTEGRATION_TESTS) block.
-# add_executable(tests tests.c)
-# target_link_libraries(tests parser_lib)
-# add_test(NAME tests COMMAND tests)

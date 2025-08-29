@@ -136,8 +136,11 @@ input_t * new_input();
 char read1(input_t * in);
 
 // --- AST Helpers ---
+typedef void (*ast_visitor_fn)(ast_t* node, void* context);
+void parser_walk_ast(ast_t* ast, ast_visitor_fn visitor, void* context);
 ast_t* new_ast();
 void free_ast(ast_t* ast);
+void parser_print_ast(ast_t* ast);
 void free_error(ParseError* err);
 ast_t* ast1(tag_t typ, ast_t* a1);
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2);

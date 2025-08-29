@@ -470,6 +470,77 @@ void free_ast(ast_t* ast) {
     free(ast);
 }
 
+static const char* tag_to_string(tag_t tag) {
+    switch (tag) {
+        case T_NONE: return "NONE";
+        case T_INT: return "INT";
+        case T_IDENT: return "IDENT";
+        case T_ASSIGN: return "ASSIGN";
+        case T_SEQ: return "SEQ";
+        case T_ADD: return "ADD";
+        case T_SUB: return "SUB";
+        case T_MUL: return "MUL";
+        case T_DIV: return "DIV";
+        case T_NEG: return "NEG";
+        case T_STRING: return "STRING";
+        default: return "UNKNOWN";
+    }
+}
+
+static void print_ast_recursive(ast_t* ast, int indent) {
+    if (ast == NULL || ast == ast_nil) {
+        return;
+    }
+
+    // Print indentation
+    for (int i = 0; i < indent; i++) {
+        printf("  ");
+    }
+
+    // Print node type
+    printf("(%s", tag_to_string(ast->typ));
+
+    // Print symbol if it exists
+    if (ast->sym) {
+        printf(" %s", ast->sym->name);
+    }
+
+    // Print children
+    if (ast->child) {
+        printf("\n");
+        print_ast_recursive(ast->child, indent + 1);
+    }
+
+    printf(")");
+
+    // Print siblings
+    if (ast->next) {
+        printf("\n");
+        print_ast_recursive(ast->next, indent);
+    }
+}
+
+void parser_print_ast(ast_t* ast) {
+    print_ast_recursive(ast, 0);
+    printf("\n");
+}
+
+void parser_walk_ast(ast_t* ast, ast_visitor_fn visitor, void* context) {
+    if (ast == NULL || ast == ast_nil) {
+        return;
+    }
+
+    visitor(ast, context);
+
+    if (ast->child) {
+        parser_walk_ast(ast->child, visitor, context);
+    }
+
+    if (ast->next) {
+        parser_walk_ast(ast->next, visitor, context);
+    }
+}
+
 typedef struct visited_node { const void* ptr; struct visited_node* next; } visited_node;
 
 void free_combinator_recursive(combinator_t* comb, visited_node** visited);
