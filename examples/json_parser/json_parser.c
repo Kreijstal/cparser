@@ -4,11 +4,6 @@
 #include <string.h>
 #include <ctype.h>
 
-// --- Custom Tags for JSON ---
-typedef enum {
-    JSON_T_NONE, JSON_T_STRING, JSON_T_INT, JSON_T_ASSIGN, JSON_T_SEQ
-} json_tag_t;
-
 // Predicate for whitespace
 static bool is_whitespace(char c) {
     return isspace((unsigned char)c);

@@ -14,7 +14,6 @@
 //=============================================================================
 
 // --- Argument Structs ---
-typedef struct { tag_t tag; } prim_args;
 typedef struct { char * str; } match_args;
 typedef struct { combinator_t* delimiter; tag_t tag; } until_args;
 typedef struct op_t { tag_t tag; combinator_t * comb; struct op_t * next; } op_t;

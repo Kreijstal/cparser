@@ -22,6 +22,9 @@ typedef struct ParseResult ParseResult;
 // AST node types
 typedef unsigned int tag_t;
 
+// --- Argument Structs ---
+typedef struct { tag_t tag; } prim_args;
+
 // Symbol
 typedef struct sym_t {
    char * name;

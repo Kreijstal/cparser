@@ -223,10 +223,9 @@ static combinator_t* p_var_declaration_line() {
 }
 
 combinator_t* p_declarations() {
-    return seq(new_combinator(), PASCAL_T_NONE, // Don't create a wrapping node for the whole var block
+    return right(
         p_var_kw(),
-        many(p_var_declaration_line()),
-        NULL
+        many(p_var_declaration_line())
     );
 }
 
@@ -247,7 +246,7 @@ combinator_t* p_program() {
         p_program_kw(),
         p_ident(),
         p_lparen(),
-        p_identifier_list(),
+        sep_by(p_ident(), p_comma()),
         p_rparen(),
         p_semicolon(),
         optional(p_declarations()),

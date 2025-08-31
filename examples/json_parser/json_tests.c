@@ -4,12 +4,6 @@
 #include "json_parser.h"
 #include <stdio.h>
 
-// --- Custom Tags for JSON (mirrored from json_parser.c) ---
-typedef enum {
-    JSON_T_NONE, JSON_T_STRING, JSON_T_INT, JSON_T_ASSIGN, JSON_T_SEQ
-} json_tag_t;
-
-
 // --- Test Helpers ---
 
 static void run_json_success_test(const char* text, void (*check_ast)(ast_t*), const char* name) {
