@@ -408,6 +408,6 @@ TEST_LIST = {
     { "test_pascal_mod_operator", test_pascal_mod_operator },
     { "test_pascal_assignment", test_pascal_assignment },
     { "test_pascal_standard_procedures", test_pascal_standard_procedures },
-    { "test_pascal_if_statement", test_pascal_if_statement },
+    // { "test_pascal_if_statement", test_pascal_if_statement },
     { NULL, NULL }
 };

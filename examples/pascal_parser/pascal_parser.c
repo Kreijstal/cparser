@@ -386,7 +386,6 @@ combinator_t* p_if_statement() {
 // For now, a statement is just an asm block.
 combinator_t* p_statement() {
     return multi(new_combinator(), PASCAL_T_NONE,
-        p_if_statement(),
         p_asm_block(),
         p_proc_call_statement(),
         p_assignment_statement(),
