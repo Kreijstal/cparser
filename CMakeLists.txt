@@ -82,4 +82,8 @@ if(BUILD_INTEGRATION_TESTS)
     target_link_libraries(pascal_tests pascal_parser_lib)
     add_test(NAME pascal_tests COMMAND pascal_tests)
 
+    add_executable(pascal_driver examples/pascal_parser/pascal_driver.c)
+    target_include_directories(pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
+    target_link_libraries(pascal_driver pascal_parser_lib)
+
 endif()
