@@ -2,14 +2,6 @@
 #include "pascal_parser.h"
 #include <string.h>
 
-// --- Custom Tags for Pascal (mirrored from pascal_parser.c) ---
-typedef enum {
-    PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK, PASCAL_T_IDENT_LIST,
-    PASCAL_T_INT_NUM, PASCAL_T_REAL_NUM,
-    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV,
-    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL
-} pascal_tag_t;
-
 void test_pascal_minimal_program(void) {
     const char* input_str = "program MyTestProgram(input, output); begin end.";
 
@@ -273,6 +265,139 @@ void test_pascal_declarations(void) {
     free(ast_nil);
 }
 
+void test_pascal_mod_operator(void) {
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    const char* input = "10 mod 3";
+    input_t *in = new_input();
+    in->buffer = strdup(input);
+    in->length = strlen(input);
+    combinator_t* parser = p_expression();
+    ParseResult res = parse(in, parser);
+    TEST_CHECK(res.is_success);
+    if(res.is_success) {
+        ast_t* ast = res.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_MOD);
+        TEST_CHECK(ast->child->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(ast->child->sym->name, "10") == 0);
+        TEST_CHECK(ast->child->next->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(ast->child->next->sym->name, "3") == 0);
+        free_ast(ast);
+    }
+    free_combinator(parser);
+    free(in->buffer);
+    free(in);
+
+    free(ast_nil);
+}
+
+void test_pascal_assignment(void) {
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    const char* input = "x := 5";
+    input_t *in = new_input();
+    in->buffer = strdup(input);
+    in->length = strlen(input);
+    combinator_t* parser = p_statement();
+    ParseResult res = parse(in, parser);
+    TEST_CHECK(res.is_success);
+    if(res.is_success) {
+        ast_t* ast = res.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_ASSIGN);
+        TEST_CHECK(ast->child->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(ast->child->sym->name, "x") == 0);
+        TEST_CHECK(ast->child->next->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(ast->child->next->sym->name, "5") == 0);
+        free_ast(ast);
+    }
+    free_combinator(parser);
+    free(in->buffer);
+    free(in);
+
+    free(ast_nil);
+}
+
+void test_pascal_standard_procedures(void) {
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    // Test read(x)
+    const char* input_read = "read(x);";
+    input_t *in_read = new_input();
+    in_read->buffer = strdup(input_read);
+    in_read->length = strlen(input_read);
+    combinator_t* parser_read = p_statement();
+    ParseResult res_read = parse(in_read, parser_read);
+    TEST_CHECK(res_read.is_success);
+    if(res_read.is_success) {
+        ast_t* ast = res_read.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_PROC_CALL);
+        TEST_CHECK(strcmp(ast->sym->name, "read") == 0);
+        TEST_CHECK(ast->child->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(ast->child->sym->name, "x") == 0);
+        free_ast(ast);
+    }
+    free_combinator(parser_read);
+    free(in_read->buffer);
+    free(in_read);
+
+    // Test writeln('hello')
+    const char* input_writeln = "writeln('hello');";
+    input_t *in_writeln = new_input();
+    in_writeln->buffer = strdup(input_writeln);
+    in_writeln->length = strlen(input_writeln);
+    combinator_t* parser_writeln = p_statement();
+    ParseResult res_writeln = parse(in_writeln, parser_writeln);
+    TEST_CHECK(res_writeln.is_success);
+    if(res_writeln.is_success) {
+        ast_t* ast = res_writeln.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_PROC_CALL);
+        TEST_CHECK(strcmp(ast->sym->name, "writeln") == 0);
+        TEST_CHECK(ast->child->typ == PASCAL_T_STRING);
+        TEST_CHECK(strcmp(ast->child->sym->name, "hello") == 0);
+        free_ast(ast);
+    }
+    free_combinator(parser_writeln);
+    free(in_writeln->buffer);
+    free(in_writeln);
+
+    free(ast_nil);
+}
+
+void test_pascal_if_statement(void) {
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    const char* input = "if x > 10 then x := 1 else x := 2";
+    input_t *in = new_input();
+    in->buffer = strdup(input);
+    in->length = strlen(input);
+    combinator_t* parser = p_if_statement();
+    ParseResult res = parse(in, parser);
+    TEST_CHECK(res.is_success);
+    if(res.is_success) {
+        ast_t* ast = res.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_IF);
+
+        ast_t* cond = ast->child;
+        TEST_CHECK(cond->typ == PASCAL_T_GT);
+
+        ast_t* then_stmt = cond->next;
+        TEST_CHECK(then_stmt->typ == PASCAL_T_ASSIGN);
+
+        ast_t* else_stmt = then_stmt->next;
+        TEST_CHECK(else_stmt->typ == PASCAL_T_ASSIGN);
+
+        free_ast(ast);
+    }
+    free_combinator(parser);
+    free(in->buffer);
+    free(in);
+
+    free(ast_nil);
+}
 
 TEST_LIST = {
     { "test_pascal_minimal_program", test_pascal_minimal_program },
@@ -280,5 +405,9 @@ TEST_LIST = {
     { "test_pascal_identifier_list", test_pascal_identifier_list },
     { "test_pascal_expressions", test_pascal_expressions },
     { "test_pascal_declarations", test_pascal_declarations },
+    { "test_pascal_mod_operator", test_pascal_mod_operator },
+    { "test_pascal_assignment", test_pascal_assignment },
+    { "test_pascal_standard_procedures", test_pascal_standard_procedures },
+    { "test_pascal_if_statement", test_pascal_if_statement },
     { NULL, NULL }
 };

@@ -100,6 +100,7 @@ static ParseResult sep_by_fn(input_t * in, void * args) {
 
     ParseResult res = parse(in, sargs->p);
     if (!res.is_success) {
+        free_error(res.value.error);
         return make_success(ast_nil);
     }
     head = tail = res.value.ast;
@@ -132,6 +133,7 @@ static ParseResult sep_end_by_fn(input_t * in, void * args) {
 
     ParseResult res = parse(in, sargs->p);
     if (!res.is_success) {
+        free_error(res.value.error);
         return make_success(ast_nil);
     }
     head = tail = res.value.ast;

@@ -3,18 +3,12 @@
 #include <string.h>
 #include <stdio.h>
 
-// --- Custom Tags for Pascal ---
-typedef enum {
-    PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK, PASCAL_T_IDENT_LIST,
-    PASCAL_T_INT_NUM, PASCAL_T_REAL_NUM,
-    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV,
-    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL
-} pascal_tag_t;
-
 // --- Forward Declarations ---
 static combinator_t* token(combinator_t* p);
 static combinator_t* keyword(const char* s);
 static ParseResult p_match_ci(input_t* in, void* args);
+static combinator_t* p_pascal_string();
+static ParseResult p_pascal_string_fn(input_t* in, void* args);
 
 // --- Helper Functions ---
 static bool is_whitespace_char(char c) {
@@ -95,6 +89,82 @@ static combinator_t* p_slash() {
     return token(match("/"));
 }
 
+static combinator_t* p_gt() {
+    return token(match(">"));
+}
+
+static combinator_t* p_lt() {
+    return token(match("<"));
+}
+
+static combinator_t* p_eq() {
+    return token(match("="));
+}
+
+static combinator_t* p_if_kw() {
+    return token(keyword("if"));
+}
+
+static combinator_t* p_then_kw() {
+    return token(keyword("then"));
+}
+
+static combinator_t* p_else_kw() {
+    return token(keyword("else"));
+}
+
+static combinator_t* p_mod_kw() {
+    return token(keyword("mod"));
+}
+
+static combinator_t* p_assign() {
+    return token(match(":="));
+}
+
+// Custom parser for single-quoted strings
+static ParseResult p_pascal_string_fn(input_t * in, void * args) {
+   prim_args* pargs = (prim_args*)args;
+   InputState state; save_input_state(in, &state);
+   if (read1(in) != '\'') { restore_input_state(in, &state); return make_failure(in, strdup("Expected '\\''.")); }
+   int capacity = 64;
+   char * str_val = (char *) safe_malloc(capacity);
+   int len = 0; char c;
+   while ((c = read1(in)) != '\'') {
+      if (c == EOF) { free(str_val); return make_failure(in, strdup("Unterminated string.")); }
+      // Pascal uses two single quotes to represent a single quote inside a string.
+      if (c == '\'') {
+         if (in->start < in->length && in->buffer[in->start] == '\'') {
+            in->start++; // consume the second single quote
+         } else {
+            free(str_val);
+            return make_failure(in, strdup("Unterminated string."));
+         }
+      }
+      if (len + 1 >= capacity) {
+         capacity *= 2;
+         char* new_str_val = realloc(str_val, capacity);
+         if (!new_str_val) { free(str_val); exception("realloc failed"); }
+         str_val = new_str_val;
+      }
+      str_val[len++] = c;
+   }
+   str_val[len] = '\0';
+   ast_t * ast = new_ast();
+   ast->typ = pargs->tag; ast->sym = sym_lookup(str_val); free(str_val);
+   ast->child = NULL; ast->next = NULL;
+   return make_success(ast);
+}
+
+static combinator_t* p_pascal_string() {
+    prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = PASCAL_T_STRING;
+    combinator_t * comb = new_combinator();
+    comb->type = P_STRING; // This is a bit of a hack, the type is not really P_STRING
+    comb->fn = p_pascal_string_fn;
+    comb->args = args;
+    return token(comb);
+}
+
 static combinator_t* p_colon() {
     return token(match(":"));
 }
@@ -172,6 +242,7 @@ combinator_t* p_expression() {
     // The base of the expression grammar (a "factor")
     combinator_t* factor = multi(new_combinator(), PASCAL_T_NONE,
         p_int_num(),
+        p_ident(),
         between(p_lparen(), p_rparen(), lazy(&expr_parser)),
         NULL
     );
@@ -180,12 +251,17 @@ combinator_t* p_expression() {
     expr(expr_parser, factor);
 
     // Add operators with precedence (higher number = higher precedence)
-    // Level 0: +, -
-    expr_insert(expr_parser, 0, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, p_plus());
-    expr_altern(expr_parser, 0, PASCAL_T_SUB, p_minus());
-    // Level 1: *, /
-    expr_insert(expr_parser, 1, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, p_star());
-    expr_altern(expr_parser, 1, PASCAL_T_DIV, p_slash());
+    // Level 0: >, <, =
+    expr_insert(expr_parser, 0, PASCAL_T_GT, EXPR_INFIX, ASSOC_LEFT, p_gt());
+    expr_altern(expr_parser, 0, PASCAL_T_LT, p_lt());
+    expr_altern(expr_parser, 0, PASCAL_T_EQ, p_eq());
+    // Level 1: +, -
+    expr_insert(expr_parser, 1, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, p_plus());
+    expr_altern(expr_parser, 1, PASCAL_T_SUB, p_minus());
+    // Level 2: *, /
+    expr_insert(expr_parser, 2, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, p_star());
+    expr_altern(expr_parser, 2, PASCAL_T_DIV, p_slash());
+    expr_altern(expr_parser, 2, PASCAL_T_MOD, p_mod_kw());
 
     return expr_parser;
 }
@@ -223,32 +299,110 @@ static combinator_t* p_var_declaration_line() {
 }
 
 combinator_t* p_declarations() {
-    return seq(new_combinator(), PASCAL_T_NONE, // Don't create a wrapping node for the whole var block
+    return right(
         p_var_kw(),
-        many(p_var_declaration_line()),
-        NULL
+        many(p_var_declaration_line())
     );
 }
 
 
 // --- Program Structure Parser ---
 
+// The arguments to a procedure/function call are expressions.
+// We also need to allow strings as arguments.
+static combinator_t* p_arg() {
+    return multi(new_combinator(), PASCAL_T_NONE,
+        p_expression(),
+        p_pascal_string(),
+        NULL
+    );
+}
+
+static combinator_t* p_arg_list() {
+    return between(p_lparen(), p_rparen(), sep_by(p_arg(), p_comma()));
+}
+
+// This function will be used to transform the AST of a procedure call.
+// The raw AST from the seq parser will be:
+//   PASCAL_T_PROC_CALL
+//     |
+//     child -> PASCAL_T_IDENT (the procedure name)
+//            -> next -> (the argument list)
+// We want to move the procedure name to the `sym` field of the root node.
+static ast_t* map_proc_call(ast_t* ast) {
+    if (ast == NULL || ast == ast_nil) return ast;
+    ast_t* ident_node = ast->child;
+    if(ident_node == NULL || ident_node == ast_nil) return ast; // Should not happen
+    ast_t* arg_list_node = ident_node->next;
+    ast->sym = ident_node->sym;
+    ast->child = arg_list_node;
+    ident_node->sym = NULL; // prevent double free
+    ident_node->next = NULL;
+    free_ast(ident_node);
+    return ast;
+}
+
+static combinator_t* p_proc_call() {
+    return map(
+        seq(new_combinator(), PASCAL_T_PROC_CALL,
+            p_ident(),
+            optional(p_arg_list()),
+            NULL
+        ),
+        map_proc_call
+    );
+}
+
+static combinator_t* p_proc_call_statement() {
+    return left(p_proc_call(), p_semicolon());
+}
+
+static combinator_t* p_assignment_statement() {
+    return seq(new_combinator(), PASCAL_T_ASSIGN,
+        p_ident(),
+        p_assign(),
+        p_expression(),
+        NULL
+    );
+}
+
+combinator_t* p_if_statement() {
+    return seq(new_combinator(), PASCAL_T_IF,
+        p_if_kw(),
+        p_expression(),
+        p_then_kw(),
+        p_statement(),
+        optional(
+            seq(new_combinator(), PASCAL_T_NONE,
+                p_else_kw(),
+                p_statement(),
+                NULL
+            )
+        ),
+        NULL
+    );
+}
+
 // For now, a statement is just an asm block.
-static combinator_t* p_statement() {
-    return p_asm_block();
+combinator_t* p_statement() {
+    return multi(new_combinator(), PASCAL_T_NONE,
+        p_if_statement(),
+        p_asm_block(),
+        p_proc_call_statement(),
+        p_assignment_statement(),
+        NULL
+    );
 }
 
 static combinator_t* p_statement_list() {
-    return many(p_statement());
+    return sep_end_by(p_statement(), p_semicolon());
 }
 
 combinator_t* p_program() {
     return seq(new_combinator(), PASCAL_T_PROGRAM,
         p_program_kw(),
         p_ident(),
-        p_lparen(),
-        p_identifier_list(),
-        p_rparen(),
+        optional(between(p_lparen(), p_rparen(), sep_by(p_ident(), p_comma()))),
         p_semicolon(),
         optional(p_declarations()),
         // Subprogram declarations would go here
