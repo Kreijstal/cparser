@@ -49,7 +49,51 @@ ParseResult make_failure(input_t* in, char* message) {
     err->col = in->col;
     err->message = message;
     err->cause = NULL;
+    err->partial_ast = NULL;
     return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult make_failure_with_ast(input_t* in, char* message, ast_t* partial_ast) {
+    ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
+    err->line = in->line;
+    err->col = in->col;
+    err->message = message;
+    err->cause = NULL;
+    err->partial_ast = partial_ast;
+    return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult original_result, ast_t* partial_ast) {
+    if (original_result.is_success) {
+        return original_result;
+    }
+    
+    // Validate input parameters
+    if (original_result.value.error == NULL) {
+        return make_failure(in, "Cannot wrap NULL error");
+    }
+    
+    if (message == NULL) {
+        return make_failure(in, "Cannot wrap with NULL message");
+    }
+    
+    ParseError* original_error = original_result.value.error;
+    ParseError* new_err = (ParseError*)safe_malloc(sizeof(ParseError));
+    if (new_err == NULL) {
+        return make_failure(in, "Memory allocation failed for error wrapper");
+    }
+    
+    new_err->line = in->line;
+    new_err->col = in->col;
+    new_err->message = strdup(message);
+    if (new_err->message == NULL) {
+        free(new_err);
+        return make_failure(in, "Memory allocation failed for error message");
+    }
+    new_err->cause = original_error;
+    new_err->partial_ast = partial_ast;
+    
+    return (ParseResult){ .is_success = false, .value.error = new_err };
 }
 
 ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
@@ -58,6 +102,7 @@ ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
     err->col = in->col;
     err->message = message;
     err->cause = cause.value.error;
+    err->partial_ast = NULL;
     return (ParseResult){ .is_success = false, .value.error = err };
 }
 
@@ -474,6 +519,9 @@ void free_error(ParseError* err) {
     if (err == NULL) return;
     free(err->message);
     free_error(err->cause);
+    if (err->partial_ast != NULL) {
+        free_ast(err->partial_ast);
+    }
     free(err);
 }
 

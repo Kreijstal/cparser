@@ -3,10 +3,15 @@
 #include "combinators.h"
 #include <stdio.h>
 
+// Declare wrap_failure_with_ast function
+ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult original_result, ast_t* partial_ast);
+
 // --- Custom Tags for Tests ---
 typedef enum {
-    TEST_T_NONE, TEST_T_INT, TEST_T_IDENT, TEST_T_ADD
+    TEST_T_NONE, TEST_T_INT, TEST_T_IDENT, TEST_T_ADD, TEST_T_SUB, TEST_T_MUL, TEST_T_DIV
 } test_tag_t;
+
+
 
 
 void test_pnot_combinator(void) {
@@ -186,6 +191,7 @@ static ParseError* add_context_to_error(ParseError* err) {
     new_err->col = err->col;
     new_err->message = strdup("In custom context");
     new_err->cause = err;
+    new_err->partial_ast = NULL;
     return new_err;
 }
 
@@ -236,6 +242,137 @@ void test_satisfy_combinator(void) {
     free(input);
 }
 
+void test_partial_ast_functionality(void) {
+    input_t* input = new_input();
+    input->buffer = strdup("invalid input");
+    input->length = strlen("invalid input");
+
+    // Create a parser that will definitely fail
+    combinator_t* p = match("expected_keyword");
+    
+    // Create a partial AST representing what would be successfully parsed
+    ast_t* partial_ast = new_ast();
+    partial_ast->typ = TEST_T_INT;
+    partial_ast->sym = sym_lookup("42");
+    partial_ast->child = NULL;
+    partial_ast->next = NULL;
+
+    // Parse to get a real failure
+    ParseResult original_result = parse(input, p);
+    TEST_ASSERT(!original_result.is_success);
+
+    // Wrap the failure with partial AST
+    ParseResult wrapped_result = wrap_failure_with_ast(input, "Parsing failed with partial result", original_result, partial_ast);
+    TEST_ASSERT(!wrapped_result.is_success);
+    
+    // Verify the wrapped error contains the partial AST
+    TEST_ASSERT(wrapped_result.value.error != NULL);
+    TEST_ASSERT(wrapped_result.value.error->partial_ast != NULL);
+    TEST_ASSERT(wrapped_result.value.error->partial_ast->typ == TEST_T_INT);
+    TEST_ASSERT(strcmp(wrapped_result.value.error->partial_ast->sym->name, "42") == 0);
+    
+    // Verify the original error is preserved as cause
+    TEST_ASSERT(wrapped_result.value.error->cause != NULL);
+    TEST_ASSERT(strstr(wrapped_result.value.error->cause->message, "Expected 'expected_keyword'") != NULL);
+
+    free_error(wrapped_result.value.error);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_expression_parser_partial_ast(void) {
+    input_t* input = new_input();
+    input->buffer = strdup("1 + 2");
+    input->length = strlen("1 + 2");
+
+    // Create a proper expression parser
+    combinator_t* expr_parser = new_combinator();
+    combinator_t* factor = multi(new_combinator(), TEST_T_NONE,
+        integer(TEST_T_INT),
+        cident(TEST_T_IDENT),
+        NULL
+    );
+    expr(expr_parser, factor);
+    expr_insert(expr_parser, 0, TEST_T_ADD, EXPR_INFIX, ASSOC_LEFT, match("+"));
+    expr_altern(expr_parser, 0, TEST_T_SUB, match("-"));
+
+    // Parse a valid expression first
+    ParseResult valid_result = parse(input, expr_parser);
+    TEST_ASSERT(valid_result.is_success);
+    TEST_ASSERT(valid_result.value.ast != NULL);
+    
+    // Save the AST for partial result testing
+    ast_t* valid_ast = valid_result.value.ast;
+    
+    // Reset input for error case
+    free(input->buffer);
+    input->buffer = strdup("invalid");
+    input->length = strlen("invalid");
+    input->start = 0;
+
+    // Create a parser that will definitely fail
+    combinator_t* failing_parser = match("expected_keyword");
+    ParseResult failure_result = parse(input, failing_parser);
+    TEST_ASSERT(!failure_result.is_success);
+
+    // Wrap the failure with the valid AST as partial result
+    ParseResult wrapped_result = wrap_failure_with_ast(input, "Expression parsing failed", failure_result, valid_ast);
+    TEST_ASSERT(!wrapped_result.is_success);
+    
+    // Verify the wrapped error contains the partial AST
+    TEST_ASSERT(wrapped_result.value.error != NULL);
+    TEST_ASSERT(wrapped_result.value.error->partial_ast != NULL);
+    
+    // The expression parser stops at the first successful parse (the integer 1)
+    // So the partial AST should be just the integer, not the full addition
+    ast_t* partial_ast = wrapped_result.value.error->partial_ast;
+    TEST_ASSERT(partial_ast->typ == TEST_T_INT);
+    TEST_ASSERT(strcmp(partial_ast->sym->name, "1") == 0);
+
+    free_error(wrapped_result.value.error);
+    free_combinator(expr_parser);
+    free_combinator(failing_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_expression_parser_invalid_input(void) {
+    input_t* input = new_input();
+    input->buffer = strdup("1 + * 2");  // Invalid: operator after operator
+    input->length = strlen("1 + * 2");
+
+    // Create expression parser
+    combinator_t* expr_parser = new_combinator();
+    combinator_t* factor = multi(new_combinator(), TEST_T_NONE,
+        integer(TEST_T_INT),
+        cident(TEST_T_IDENT),
+        NULL
+    );
+    expr(expr_parser, factor);
+    expr_insert(expr_parser, 0, TEST_T_ADD, EXPR_INFIX, ASSOC_LEFT, match("+"));
+    expr_altern(expr_parser, 0, TEST_T_SUB, match("-"));
+    expr_insert(expr_parser, 1, TEST_T_MUL, EXPR_INFIX, ASSOC_LEFT, match("*"));
+    expr_altern(expr_parser, 1, TEST_T_DIV, match("/"));
+
+    // Parse invalid input - should succeed partially
+    ParseResult result = parse(input, expr_parser);
+    
+    // Expression parser is permissive - it parses what it can and stops
+    TEST_ASSERT(result.is_success);
+    TEST_ASSERT(result.value.ast != NULL);
+    TEST_ASSERT(result.value.ast->typ == TEST_T_INT);
+    TEST_ASSERT(strcmp(result.value.ast->sym->name, "1") == 0);
+    
+    // Only part of input should be consumed
+    TEST_ASSERT(input->start < input->length);
+
+    free_ast(result.value.ast);
+    free_combinator(expr_parser);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "pnot_combinator", test_pnot_combinator },
     { "peek_combinator", test_peek_combinator },
@@ -248,5 +385,8 @@ TEST_LIST = {
     { "map_combinator", test_map_combinator },
     { "errmap_combinator", test_errmap_combinator },
     { "satisfy_combinator", test_satisfy_combinator },
+    { "partial_ast_functionality", test_partial_ast_functionality },
+    { "expression_parser_partial_ast", test_expression_parser_partial_ast },
+    { "expression_parser_invalid_input", test_expression_parser_invalid_input },
     { NULL, NULL }
 };

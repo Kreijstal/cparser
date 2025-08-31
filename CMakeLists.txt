@@ -102,3 +102,18 @@ endif()
 add_executable(debug_test debug_test.c)
 target_include_directories(debug_test PUBLIC ${CMAKE_SOURCE_DIR})
 target_link_libraries(debug_test parser_lib pascal_parser_lib)
+
+# --- Partial AST Test ---
+add_executable(partial_ast_test test_partial_ast.c)
+target_include_directories(partial_ast_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(partial_ast_test parser_lib)
+
+# --- Expression Debug Test ---
+add_executable(expression_debug_test test_expression_debug.c)
+target_include_directories(expression_debug_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(expression_debug_test parser_lib)
+
+# --- Expression Partial Test ---
+add_executable(expression_partial_test test_expression_partial.c)
+target_include_directories(expression_partial_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(expression_partial_test parser_lib)

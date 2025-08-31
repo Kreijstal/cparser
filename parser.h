@@ -54,6 +54,7 @@ typedef struct ParseError {
     int col;
     char* message;
     struct ParseError* cause;
+    ast_t* partial_ast;
 } ParseError;
 
 struct ParseResult {
@@ -94,6 +95,8 @@ typedef ParseError * (*err_map_func)(ParseError *err);
 // For satisfy
 typedef bool (*char_predicate)(char);
 
+// Partial AST error wrapping
+ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult original_result, ast_t* partial_ast);
 
 //=============================================================================
 // Global Variables
