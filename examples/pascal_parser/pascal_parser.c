@@ -260,9 +260,10 @@ combinator_t* p_expression() {
     combinator_t* expr_parser = new_combinator();
 
     // The base of the expression grammar (a "factor")
-    // Use a lazy reference to avoid immediate evaluation during construction
+    // Create a lazy reference for recursion with proper memory management
     combinator_t** expr_parser_ref = (combinator_t**)safe_malloc(sizeof(combinator_t*));
     *expr_parser_ref = expr_parser;
+    expr_parser->extra_to_free = expr_parser_ref;
     
     combinator_t* factor = multi(new_combinator(), PASCAL_T_NONE,
         p_int_num(),

@@ -483,6 +483,115 @@ void test_pascal_for_statement(void) {
     free(ast_nil);
 }
 
+void test_pascal_unary_minus(void) {
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    // Test case 1: Simple unary minus
+    const char* input1 = "-5";
+    input_t *in1 = new_input();
+    in1->buffer = strdup(input1);
+    in1->length = strlen(input1);
+    combinator_t* parser1 = p_expression();
+    ParseResult res1 = parse(in1, parser1);
+    TEST_CHECK(res1.is_success);
+    if(res1.is_success) {
+        ast_t* ast = res1.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_NEG);
+        TEST_CHECK(ast->child->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(ast->child->sym->name, "5") == 0);
+        free_ast(ast);
+    }
+    free_combinator(parser1);
+    free(in1->buffer);
+    free(in1);
+
+    // Test case 2: Unary minus with variable
+    const char* input2 = "-x";
+    input_t *in2 = new_input();
+    in2->buffer = strdup(input2);
+    in2->length = strlen(input2);
+    combinator_t* parser2 = p_expression();
+    ParseResult res2 = parse(in2, parser2);
+    TEST_CHECK(res2.is_success);
+    if(res2.is_success) {
+        ast_t* ast = res2.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_NEG);
+        TEST_CHECK(ast->child->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(ast->child->sym->name, "x") == 0);
+        free_ast(ast);
+    }
+    free_combinator(parser2);
+    free(in2->buffer);
+    free(in2);
+
+    // Test case 3: Complex expression with unary minus
+    const char* input3 = "a + -b * -c";
+    input_t *in3 = new_input();
+    in3->buffer = strdup(input3);
+    in3->length = strlen(input3);
+    combinator_t* parser3 = p_expression();
+    ParseResult res3 = parse(in3, parser3);
+    TEST_CHECK(res3.is_success);
+    if(res3.is_success) {
+        ast_t* ast = res3.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_ADD);
+        
+        // Left child should be identifier 'a'
+        TEST_CHECK(ast->child->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(ast->child->sym->name, "a") == 0);
+        
+        // Right child should be multiplication
+        ast_t* mul_node = ast->child->next;
+        TEST_CHECK(mul_node->typ == PASCAL_T_MUL);
+        
+        // Left child of multiplication should be unary minus on 'b'
+        ast_t* neg_b = mul_node->child;
+        TEST_CHECK(neg_b->typ == PASCAL_T_NEG);
+        TEST_CHECK(neg_b->child->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(neg_b->child->sym->name, "b") == 0);
+        
+        // Right child of multiplication should be unary minus on 'c'
+        ast_t* neg_c = neg_b->next;
+        TEST_CHECK(neg_c->typ == PASCAL_T_NEG);
+        TEST_CHECK(neg_c->child->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(neg_c->child->sym->name, "c") == 0);
+        
+        free_ast(ast);
+    }
+    free_combinator(parser3);
+    free(in3->buffer);
+    free(in3);
+
+    // Test case 4: Double unary minus
+    const char* input4 = "--5";
+    input_t *in4 = new_input();
+    in4->buffer = strdup(input4);
+    in4->length = strlen(input4);
+    combinator_t* parser4 = p_expression();
+    ParseResult res4 = parse(in4, parser4);
+    TEST_CHECK(res4.is_success);
+    if(res4.is_success) {
+        ast_t* ast = res4.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_NEG);
+        
+        // Child should be another unary minus
+        ast_t* inner_neg = ast->child;
+        TEST_CHECK(inner_neg->typ == PASCAL_T_NEG);
+        
+        // Grandchild should be the number 5
+        TEST_CHECK(inner_neg->child->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(inner_neg->child->sym->name, "5") == 0);
+        
+        free_ast(ast);
+    }
+    free_combinator(parser4);
+    free(in4->buffer);
+    free(in4);
+
+    free(ast_nil);
+}
+
 TEST_LIST = {
     { "test_pascal_minimal_program", test_pascal_minimal_program },
     { "test_pascal_asm_block", test_pascal_asm_block },
@@ -494,5 +603,6 @@ TEST_LIST = {
     { "test_pascal_standard_procedures", test_pascal_standard_procedures },
     { "test_pascal_if_statement", test_pascal_if_statement },
     { "test_pascal_for_statement", test_pascal_for_statement },
+    { "test_pascal_unary_minus", test_pascal_unary_minus },
     { NULL, NULL }
 };
