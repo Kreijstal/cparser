@@ -24,11 +24,15 @@ static ParseResult p_match_ci(input_t* in, void* args) {
     const char* to_match = (const char*)args;
     int len = strlen(to_match);
     if (in->start + len > in->length) {
-        return make_failure(in, NULL); // No message needed, will be wrapped.
+        char* err_msg;
+        asprintf(&err_msg, "Expected keyword '%s'", to_match);
+        return make_failure(in, err_msg);
     }
     for (int i = 0; i < len; i++) {
         if (tolower((unsigned char)in->buffer[in->start + i]) != tolower((unsigned char)to_match[i])) {
-            return make_failure(in, NULL); // No message needed, will be wrapped.
+            char* err_msg;
+            asprintf(&err_msg, "Expected keyword '%s'", to_match);
+            return make_failure(in, err_msg);
         }
     }
     in->start += len;

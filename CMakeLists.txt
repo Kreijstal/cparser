@@ -89,11 +89,11 @@ if(BUILD_INTEGRATION_TESTS)
 endif()
 
 # --- Debug Program ---
-add_executable(debug_pascal debug_pascal.c)
-target_include_directories(debug_pascal PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(debug_pascal parser_lib pascal_parser_lib)
+#add_executable(debug_pascal debug_pascal.c)
+#target_include_directories(debug_pascal PUBLIC ${CMAKE_SOURCE_DIR})
+#target_link_libraries(debug_pascal parser_lib pascal_parser_lib)
 
 # --- Simple Debug Program ---
-add_executable(simple_debug simple_debug.c)
-target_include_directories(simple_debug PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(simple_debug parser_lib)
+#add_executable(simple_debug simple_debug.c)
+#target_include_directories(simple_debug PUBLIC ${CMAKE_SOURCE_DIR})
+#target_link_libraries(simple_debug parser_lib)
