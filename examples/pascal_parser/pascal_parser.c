@@ -3,6 +3,14 @@
 #include <string.h>
 #include <stdio.h>
 
+// --- Custom Tags for Pascal ---
+typedef enum {
+    PASCAL_T_NONE, PASCAL_T_IDENT, PASCAL_T_PROGRAM, PASCAL_T_ASM_BLOCK, PASCAL_T_IDENT_LIST,
+    PASCAL_T_INT_NUM, PASCAL_T_REAL_NUM,
+    PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV,
+    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL
+} pascal_tag_t;
+
 // --- Forward Declarations ---
 static combinator_t* token(combinator_t* p);
 static combinator_t* keyword(const char* s);
@@ -215,9 +223,10 @@ static combinator_t* p_var_declaration_line() {
 }
 
 combinator_t* p_declarations() {
-    return right(
+    return seq(new_combinator(), PASCAL_T_NONE, // Don't create a wrapping node for the whole var block
         p_var_kw(),
-        many(p_var_declaration_line())
+        many(p_var_declaration_line()),
+        NULL
     );
 }
 
@@ -237,7 +246,9 @@ combinator_t* p_program() {
     return seq(new_combinator(), PASCAL_T_PROGRAM,
         p_program_kw(),
         p_ident(),
-        optional(between(p_lparen(), p_rparen(), sep_by(p_ident(), p_comma()))),
+        p_lparen(),
+        p_identifier_list(),
+        p_rparen(),
         p_semicolon(),
         optional(p_declarations()),
         // Subprogram declarations would go here
