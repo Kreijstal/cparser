@@ -97,3 +97,8 @@ endif()
 #add_executable(simple_debug simple_debug.c)
 #target_include_directories(simple_debug PUBLIC ${CMAKE_SOURCE_DIR})
 #target_link_libraries(simple_debug parser_lib)
+
+# --- Debug Test for Pascal Parser ---
+add_executable(debug_test debug_test.c)
+target_include_directories(debug_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(debug_test parser_lib pascal_parser_lib)

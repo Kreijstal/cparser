@@ -260,10 +260,14 @@ combinator_t* p_expression() {
     combinator_t* expr_parser = new_combinator();
 
     // The base of the expression grammar (a "factor")
+    // Use a lazy reference to avoid immediate evaluation during construction
+    combinator_t** expr_parser_ref = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *expr_parser_ref = expr_parser;
+    
     combinator_t* factor = multi(new_combinator(), PASCAL_T_NONE,
         p_int_num(),
         p_ident(),
-        between(p_lparen(), p_rparen(), lazy(&expr_parser)),
+        between(p_lparen(), p_rparen(), lazy(expr_parser_ref)),
         NULL
     );
 
@@ -282,6 +286,8 @@ combinator_t* p_expression() {
     expr_insert(expr_parser, 2, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, p_star());
     expr_altern(expr_parser, 2, PASCAL_T_DIV, p_slash());
     expr_altern(expr_parser, 2, PASCAL_T_MOD, p_mod_kw());
+    // Level 3: unary minus (prefix) - higher precedence than multiplication/division
+    expr_insert(expr_parser, 3, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, p_minus());
 
     return expr_parser;
 }
