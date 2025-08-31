@@ -11,7 +11,8 @@ typedef enum {
     PASCAL_T_ADD, PASCAL_T_SUB, PASCAL_T_MUL, PASCAL_T_DIV, PASCAL_T_MOD,
     PASCAL_T_ASSIGN, PASCAL_T_PROC_CALL, PASCAL_T_STRING,
     PASCAL_T_IF, PASCAL_T_GT, PASCAL_T_LT, PASCAL_T_EQ,
-    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL
+    PASCAL_T_VAR_DECL, PASCAL_T_TYPE_INTEGER, PASCAL_T_TYPE_REAL,
+    PASCAL_T_FOR, PASCAL_T_FOR_TO, PASCAL_T_FOR_DOWNTO
 } pascal_tag_t;
 
 // --- Public parser constructors ---
@@ -22,5 +23,6 @@ combinator_t* p_expression();
 combinator_t* p_declarations();
 combinator_t* p_statement();
 combinator_t* p_if_statement();
+combinator_t* p_for_statement();
 
 #endif // PASCAL_PARSER_H

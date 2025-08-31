@@ -4,6 +4,15 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+// Initialize ast_nil if not already initialized
+static ast_t* ensure_ast_nil_initialized() {
+    if (ast_nil == NULL) {
+        ast_nil = new_ast();
+        ast_nil->typ = 0;
+    }
+    return ast_nil;
+}
+
 // --- Static Function Forward Declarations ---
 static ParseResult expect_fn(input_t * in, void * args);
 static ParseResult seq_fn(input_t * in, void * args);
@@ -36,7 +45,7 @@ static ParseResult optional_fn(input_t * in, void * args) {
     // If it fails, we restore the input and return success with a nil AST.
     restore_input_state(in, &state);
     free_error(res.value.error);
-    return make_success(ast_nil);
+    return make_success(ensure_ast_nil_initialized());
 }
 
 static ParseResult pnot_fn(input_t * in, void * args) {

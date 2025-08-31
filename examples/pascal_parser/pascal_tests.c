@@ -22,7 +22,6 @@ void test_pascal_minimal_program(void) {
     } else {
         ast_t* ast = result.value.ast;
         TEST_CHECK(ast->typ == PASCAL_T_PROGRAM);
-        TEST_MSG("Expected root AST node to be PASCAL_T_PROGRAM, but got %d", ast->typ);
 
         ast_t* child = ast->child;
         TEST_CHECK(child != NULL);
@@ -399,6 +398,91 @@ void test_pascal_if_statement(void) {
     free(ast_nil);
 }
 
+void test_pascal_for_statement(void) {
+    ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
+
+    // Test FOR TO statement
+    const char* input1 = "for i := 1 to 10 do x := x + i";
+    input_t *in1 = new_input();
+    in1->buffer = strdup(input1);
+    in1->length = strlen(input1);
+    combinator_t* parser1 = p_for_statement();
+    ParseResult res1 = parse(in1, parser1);
+    TEST_CHECK(res1.is_success);
+    if(res1.is_success) {
+        ast_t* ast = res1.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_FOR);
+        
+        // Check structure: ident -> start_expr -> direction -> statement
+        ast_t* ident = ast->child;
+        TEST_CHECK(ident->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(ident->sym->name, "i") == 0);
+        
+        ast_t* start_expr = ident->next;
+        TEST_CHECK(start_expr->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(start_expr->sym->name, "1") == 0);
+        
+        ast_t* direction = start_expr->next;
+        TEST_CHECK(direction->typ == PASCAL_T_FOR_TO);
+        
+        // The end expression is a child of the direction node
+        TEST_CHECK(direction->child != NULL);
+        ast_t* end_expr = direction->child;
+        TEST_CHECK(end_expr->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(end_expr->sym->name, "10") == 0);
+        
+        ast_t* statement = direction->next;
+        TEST_CHECK(statement->typ == PASCAL_T_ASSIGN);
+        
+        free_ast(ast);
+    }
+    free_combinator(parser1);
+    free(in1->buffer);
+    free(in1);
+
+    // Test FOR DOWNTO statement
+    const char* input2 = "for i := 10 downto 1 do x := x - i";
+    input_t *in2 = new_input();
+    in2->buffer = strdup(input2);
+    in2->length = strlen(input2);
+    combinator_t* parser2 = p_for_statement();
+    ParseResult res2 = parse(in2, parser2);
+    TEST_CHECK(res2.is_success);
+    if(res2.is_success) {
+        ast_t* ast = res2.value.ast;
+        TEST_CHECK(ast->typ == PASCAL_T_FOR);
+        
+        // Check structure: ident -> start_expr -> direction -> statement
+        ast_t* ident = ast->child;
+        TEST_CHECK(ident->typ == PASCAL_T_IDENT);
+        TEST_CHECK(strcmp(ident->sym->name, "i") == 0);
+        
+        ast_t* start_expr = ident->next;
+        TEST_CHECK(start_expr->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(start_expr->sym->name, "10") == 0);
+        
+        ast_t* direction = start_expr->next;
+        TEST_CHECK(direction->typ == PASCAL_T_FOR_DOWNTO);
+        
+        // The end expression is a child of the direction node
+        TEST_CHECK(direction->child != NULL);
+        ast_t* end_expr = direction->child;
+        TEST_CHECK(end_expr->typ == PASCAL_T_INT_NUM);
+        TEST_CHECK(strcmp(end_expr->sym->name, "1") == 0);
+        
+        ast_t* statement = direction->next;
+        TEST_CHECK(statement->typ == PASCAL_T_ASSIGN);
+        
+        free_ast(ast);
+    }
+    free_combinator(parser2);
+    free(in2->buffer);
+    free(in2);
+
+    free(ast_nil);
+}
+
 TEST_LIST = {
     { "test_pascal_minimal_program", test_pascal_minimal_program },
     { "test_pascal_asm_block", test_pascal_asm_block },
@@ -408,6 +492,7 @@ TEST_LIST = {
     { "test_pascal_mod_operator", test_pascal_mod_operator },
     { "test_pascal_assignment", test_pascal_assignment },
     { "test_pascal_standard_procedures", test_pascal_standard_procedures },
-    // { "test_pascal_if_statement", test_pascal_if_statement },
+    { "test_pascal_if_statement", test_pascal_if_statement },
+    { "test_pascal_for_statement", test_pascal_for_statement },
     { NULL, NULL }
 };

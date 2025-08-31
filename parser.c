@@ -25,17 +25,18 @@ static ParseResult match_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
 static ParseResult string_fn(input_t * in, void * args);
+static ParseResult until_fn(input_t * in, void * args);
 static ParseResult any_char_fn(input_t * in, void * args);
 static ParseResult satisfy_fn(input_t * in, void * args);
-static ParseResult until_fn(input_t* in, void* args);
 static ParseResult expr_fn(input_t * in, void * args);
+static ast_t* ensure_ast_nil_initialized();
 
 
 //=============================================================================
 // GLOBAL STATE & HELPER FUNCTIONS
 //=============================================================================
 
-ast_t * ast_nil;
+ast_t * ast_nil = NULL;
 
 // --- Result & Error Helpers ---
 ParseResult make_success(ast_t* ast) {
@@ -98,7 +99,7 @@ ast_t* ast1(tag_t typ, ast_t* a1) {
 
 ast_t* copy_ast(ast_t* orig) {
     if (orig == NULL) return NULL;
-    if (orig == ast_nil) return ast_nil;
+    if (orig == ensure_ast_nil_initialized()) return ensure_ast_nil_initialized();
     ast_t* new = new_ast();
     new->typ = orig->typ;
     new->sym = orig->sym ? sym_lookup(orig->sym->name) : NULL;
@@ -176,7 +177,7 @@ static ParseResult match_fn(input_t * in, void * args) {
             return make_failure(in, err_msg);
         }
     }
-    return make_success(ast_nil);
+    return make_success(ensure_ast_nil_initialized());
 }
 
 static ParseResult integer_fn(input_t * in, void * args) {
@@ -288,7 +289,7 @@ static ParseResult until_fn(input_t* in, void* args) {
         InputState current_state; save_input_state(in, &current_state);
         ParseResult res = parse(in, uargs->delimiter);
         if (res.is_success) {
-            if (res.value.ast != ast_nil) free_ast(res.value.ast);
+            if (res.value.ast != ensure_ast_nil_initialized()) free_ast(res.value.ast);
             restore_input_state(in, &current_state); break;
         }
         free_error(res.value.error);
@@ -477,16 +478,25 @@ void free_error(ParseError* err) {
 }
 
 void free_ast(ast_t* ast) {
-    if (ast == NULL || ast == ast_nil) return;
+    if (ast == NULL || ast == ensure_ast_nil_initialized()) return;
     free_ast(ast->child);
     free_ast(ast->next);
     if (ast->sym) { free(ast->sym->name); free(ast->sym); }
     free(ast);
 }
 
+// Initialize ast_nil if not already initialized
+static ast_t* ensure_ast_nil_initialized() {
+    if (ast_nil == NULL) {
+        ast_nil = new_ast();
+        ast_nil->typ = 0;
+    }
+    return ast_nil;
+}
+
 
 void parser_walk_ast(ast_t* ast, ast_visitor_fn visitor, void* context) {
-    if (ast == NULL || ast == ast_nil) {
+    if (ast == NULL || ast == ensure_ast_nil_initialized()) {
         return;
     }
 

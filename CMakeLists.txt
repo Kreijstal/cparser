@@ -87,3 +87,13 @@ if(BUILD_INTEGRATION_TESTS)
     target_link_libraries(pascal_driver pascal_parser_lib)
 
 endif()
+
+# --- Debug Program ---
+add_executable(debug_pascal debug_pascal.c)
+target_include_directories(debug_pascal PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(debug_pascal parser_lib pascal_parser_lib)
+
+# --- Simple Debug Program ---
+add_executable(simple_debug simple_debug.c)
+target_include_directories(simple_debug PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(simple_debug parser_lib)

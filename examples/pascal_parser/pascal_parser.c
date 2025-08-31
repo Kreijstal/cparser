@@ -113,6 +113,22 @@ static combinator_t* p_else_kw() {
     return token(keyword("else"));
 }
 
+static combinator_t* p_for_kw() {
+    return token(keyword("for"));
+}
+
+static combinator_t* p_to_kw() {
+    return token(keyword("to"));
+}
+
+static combinator_t* p_downto_kw() {
+    return token(keyword("downto"));
+}
+
+static combinator_t* p_do_kw() {
+    return token(keyword("do"));
+}
+
 static combinator_t* p_mod_kw() {
     return token(keyword("mod"));
 }
@@ -367,15 +383,28 @@ static combinator_t* p_assignment_statement() {
 }
 
 combinator_t* p_if_statement() {
+    // Create a lazy reference to the statement parser for recursion
+    combinator_t** p_statement_ref = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *p_statement_ref = new_combinator();
+    (*p_statement_ref)->extra_to_free = p_statement_ref;
+    
+    // Initialize the statement parser with all statement types
+    multi(*p_statement_ref, PASCAL_T_NONE,
+        p_asm_block(),
+        p_proc_call_statement(),
+        p_assignment_statement(),
+        NULL
+    );
+    
     return seq(new_combinator(), PASCAL_T_IF,
         p_if_kw(),
         p_expression(),
         p_then_kw(),
-        p_statement(),
+        lazy(p_statement_ref),
         optional(
             seq(new_combinator(), PASCAL_T_NONE,
                 p_else_kw(),
-                p_statement(),
+                lazy(p_statement_ref),
                 NULL
             )
         ),
@@ -386,6 +415,8 @@ combinator_t* p_if_statement() {
 // For now, a statement is just an asm block.
 combinator_t* p_statement() {
     return multi(new_combinator(), PASCAL_T_NONE,
+        p_if_statement(),
+        p_for_statement(),
         p_asm_block(),
         p_proc_call_statement(),
         p_assignment_statement(),
@@ -395,6 +426,45 @@ combinator_t* p_statement() {
 
 static combinator_t* p_statement_list() {
     return sep_end_by(p_statement(), p_semicolon());
+}
+
+combinator_t* p_for_statement() {
+    // Create a lazy reference to the statement parser for recursion
+    combinator_t** p_statement_ref = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *p_statement_ref = new_combinator();
+    (*p_statement_ref)->extra_to_free = p_statement_ref;
+    
+    // Initialize the statement parser with all statement types
+    multi(*p_statement_ref, PASCAL_T_NONE,
+        p_if_statement(),
+        p_asm_block(),
+        p_proc_call_statement(),
+        p_assignment_statement(),
+        NULL
+    );
+    
+    return seq(new_combinator(), PASCAL_T_FOR,
+        p_for_kw(),
+        p_ident(),
+        p_assign(),
+        p_expression(),
+        multi(new_combinator(), PASCAL_T_NONE,
+            seq(new_combinator(), PASCAL_T_FOR_TO,
+                p_to_kw(),
+                p_expression(),
+                NULL
+            ),
+            seq(new_combinator(), PASCAL_T_FOR_DOWNTO,
+                p_downto_kw(),
+                p_expression(),
+                NULL
+            ),
+            NULL
+        ),
+        p_do_kw(),
+        lazy(p_statement_ref),
+        NULL
+    );
 }
 
 combinator_t* p_program() {

@@ -18,10 +18,10 @@ static ParseResult number_fn(input_t* in, void* args);
 static ParseResult null_core_fn(input_t* in, void* args);
 static ParseResult bool_core_fn(input_t* in, void* args);
 
-combinator_t* number();
-combinator_t* json_null();
-combinator_t* json_bool();
-combinator_t* json_string();
+combinator_t* number(tag_t tag);
+combinator_t* json_null(tag_t tag);
+combinator_t* json_bool(tag_t tag);
+combinator_t* json_string(tag_t tag);
 
 
 static ParseResult number_fn(input_t* in, void* args) {
