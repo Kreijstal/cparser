@@ -11,6 +11,53 @@ typedef enum {
     TEST_T_NONE, TEST_T_INT, TEST_T_IDENT, TEST_T_ADD, TEST_T_SUB, TEST_T_MUL, TEST_T_DIV
 } test_tag_t;
 
+// Helper function to print AST with indentation
+static void print_ast_indented(ast_t* ast, int depth) {
+    if (ast == NULL) return;
+    
+    for (int i = 0; i < depth; i++) printf("  ");
+    
+    switch (ast->typ) {
+        case TEST_T_NONE: printf("NONE"); break;
+        case TEST_T_INT: printf("INT(%s)", ast->sym ? ast->sym->name : "NULL"); break;
+        case TEST_T_IDENT: printf("IDENT(%s)", ast->sym ? ast->sym->name : "NULL"); break;
+        case TEST_T_ADD: printf("ADD"); break;
+        case TEST_T_SUB: printf("SUB"); break;
+        case TEST_T_MUL: printf("MUL"); break;
+        case TEST_T_DIV: printf("DIV"); break;
+        default: printf("UNKNOWN(%d)", ast->typ); break;
+    }
+    printf("\n");
+    
+    if (ast->child) {
+        print_ast_indented(ast->child, depth + 1);
+    }
+    if (ast->next) {
+        print_ast_indented(ast->next, depth);
+    }
+}
+
+// Helper function to print ParseError with partial AST
+static void print_error_with_partial_ast(ParseError* error, int depth) {
+    if (error == NULL) return;
+    
+    for (int i = 0; i < depth; i++) printf("  ");
+    printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
+    
+    if (error->partial_ast != NULL) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("Partial AST:\n");
+        print_ast_indented(error->partial_ast, depth + 1);
+    }
+    
+    if (error->cause != NULL) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("Caused by:\n");
+        print_error_with_partial_ast(error->cause, depth + 1);
+    }
+}
+
+
 
 
 
@@ -373,6 +420,42 @@ void test_expression_parser_invalid_input(void) {
     free(input);
 }
 
+void test_expression_parser_behavior(void) {
+    input_t* input = new_input();
+    input->buffer = strdup("1 + * 2");  // Invalid: operator after operator
+    input->length = strlen("1 + * 2");
+
+    // Create expression parser
+    combinator_t* expr_parser = new_combinator();
+    combinator_t* factor = multi(new_combinator(), TEST_T_NONE,
+        integer(TEST_T_INT),
+        cident(TEST_T_IDENT),
+        NULL
+    );
+    expr(expr_parser, factor);
+    expr_insert(expr_parser, 0, TEST_T_ADD, EXPR_INFIX, ASSOC_LEFT, match("+"));
+    expr_altern(expr_parser, 0, TEST_T_SUB, match("-"));
+    expr_insert(expr_parser, 1, TEST_T_MUL, EXPR_INFIX, ASSOC_LEFT, match("*"));
+    expr_altern(expr_parser, 1, TEST_T_DIV, match("/"));
+
+    // Parse invalid input - should succeed partially
+    ParseResult result = parse(input, expr_parser);
+    
+    // Expression parser is permissive - it parses what it can and stops
+    TEST_ASSERT(result.is_success);
+    TEST_ASSERT(result.value.ast != NULL);
+    TEST_ASSERT(result.value.ast->typ == TEST_T_INT);
+    TEST_ASSERT(strcmp(result.value.ast->sym->name, "1") == 0);
+    
+    // Only part of input should be consumed
+    TEST_ASSERT(input->start < input->length);
+
+    free_ast(result.value.ast);
+    free_combinator(expr_parser);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "pnot_combinator", test_pnot_combinator },
     { "peek_combinator", test_peek_combinator },
@@ -388,5 +471,6 @@ TEST_LIST = {
     { "partial_ast_functionality", test_partial_ast_functionality },
     { "expression_parser_partial_ast", test_expression_parser_partial_ast },
     { "expression_parser_invalid_input", test_expression_parser_invalid_input },
+    { "expression_parser_behavior", test_expression_parser_behavior },
     { NULL, NULL }
 };

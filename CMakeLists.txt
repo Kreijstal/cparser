@@ -87,33 +87,3 @@ if(BUILD_INTEGRATION_TESTS)
     target_link_libraries(pascal_driver pascal_parser_lib)
 
 endif()
-
-# --- Debug Program ---
-#add_executable(debug_pascal debug_pascal.c)
-#target_include_directories(debug_pascal PUBLIC ${CMAKE_SOURCE_DIR})
-#target_link_libraries(debug_pascal parser_lib pascal_parser_lib)
-
-# --- Simple Debug Program ---
-#add_executable(simple_debug simple_debug.c)
-#target_include_directories(simple_debug PUBLIC ${CMAKE_SOURCE_DIR})
-#target_link_libraries(simple_debug parser_lib)
-
-# --- Debug Test for Pascal Parser ---
-add_executable(debug_test debug_test.c)
-target_include_directories(debug_test PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(debug_test parser_lib pascal_parser_lib)
-
-# --- Partial AST Test ---
-add_executable(partial_ast_test test_partial_ast.c)
-target_include_directories(partial_ast_test PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(partial_ast_test parser_lib)
-
-# --- Expression Debug Test ---
-add_executable(expression_debug_test test_expression_debug.c)
-target_include_directories(expression_debug_test PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(expression_debug_test parser_lib)
-
-# --- Expression Partial Test ---
-add_executable(expression_partial_test test_expression_partial.c)
-target_include_directories(expression_partial_test PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(expression_partial_test parser_lib)
