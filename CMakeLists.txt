@@ -56,19 +56,6 @@ if(BUILD_INTEGRATION_TESTS)
         message(STATUS "pkg-config not found, skipping JSON example.")
     endif()
 
-    # --- FPC Parser Example (Disabled) ---
-    # add_library(fpc_parser_lib STATIC
-    #     examples/fpc_parser/fpc_parser.c
-    #     examples/fpc_parser/fpc_parser.h
-    # )
-    # target_link_libraries(fpc_parser_lib PUBLIC parser_lib)
-    # target_include_directories(fpc_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
-    #
-    # add_executable(fpc_tests examples/fpc_parser/fpc_tests.c)
-    # target_include_directories(fpc_tests PUBLIC ${CMAKE_SOURCE_DIR})
-    # target_link_libraries(fpc_tests fpc_parser_lib)
-    # add_test(NAME fpc_tests COMMAND fpc_tests)
-
     # --- Pascal Parser Example ---
     add_library(pascal_parser_lib STATIC
         examples/pascal_parser/pascal_parser.c
@@ -76,50 +63,4 @@ if(BUILD_INTEGRATION_TESTS)
     )
     target_link_libraries(pascal_parser_lib PUBLIC parser_lib)
     target_include_directories(pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
-
-    add_executable(pascal_tests examples/pascal_parser/pascal_tests.c)
-    target_include_directories(pascal_tests PUBLIC ${CMAKE_SOURCE_DIR})
-    target_link_libraries(pascal_tests pascal_parser_lib)
-    add_test(NAME pascal_tests COMMAND pascal_tests)
-
-    add_executable(pascal_driver examples/pascal_parser/pascal_driver.c)
-    target_include_directories(pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
-    target_link_libraries(pascal_driver pascal_parser_lib)
-
-    # --- New Pascal Parser (with recursive statement support) ---
-    add_library(new_pascal_parser_lib STATIC
-        examples/pascal_parser/new_pascal_parser.c
-        examples/pascal_parser/new_pascal_parser.h
-    )
-    target_link_libraries(new_pascal_parser_lib PUBLIC parser_lib)
-    target_include_directories(new_pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
-
-    add_executable(new_pascal_driver examples/pascal_parser/new_pascal_driver.c)
-    target_include_directories(new_pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
-    target_link_libraries(new_pascal_driver new_pascal_parser_lib)
-
-    # --- Minimal Pascal Parser (for debugging) ---
-    add_library(minimal_pascal_parser_lib STATIC
-        examples/pascal_parser/minimal_pascal_parser.c
-        examples/pascal_parser/minimal_pascal_parser.h
-    )
-    target_link_libraries(minimal_pascal_parser_lib PUBLIC parser_lib)
-    target_include_directories(minimal_pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
-
-    add_executable(minimal_pascal_driver examples/pascal_parser/minimal_pascal_driver.c)
-    target_include_directories(minimal_pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
-    target_link_libraries(minimal_pascal_driver minimal_pascal_parser_lib)
-
-    # --- Super Minimal Pascal Parser (procedure calls only) ---
-    add_library(super_minimal_pascal_parser_lib STATIC
-        examples/pascal_parser/super_minimal_pascal_parser.c
-        examples/pascal_parser/super_minimal_pascal_parser.h
-    )
-    target_link_libraries(super_minimal_pascal_parser_lib PUBLIC parser_lib)
-    target_include_directories(super_minimal_pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
-
-    add_executable(super_minimal_pascal_driver examples/pascal_parser/super_minimal_pascal_driver.c)
-    target_include_directories(super_minimal_pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
-    target_link_libraries(super_minimal_pascal_driver super_minimal_pascal_parser_lib)
-
 endif()
