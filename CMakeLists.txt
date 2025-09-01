@@ -86,4 +86,40 @@ if(BUILD_INTEGRATION_TESTS)
     target_include_directories(pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
     target_link_libraries(pascal_driver pascal_parser_lib)
 
+    # --- New Pascal Parser (with recursive statement support) ---
+    add_library(new_pascal_parser_lib STATIC
+        examples/pascal_parser/new_pascal_parser.c
+        examples/pascal_parser/new_pascal_parser.h
+    )
+    target_link_libraries(new_pascal_parser_lib PUBLIC parser_lib)
+    target_include_directories(new_pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
+
+    add_executable(new_pascal_driver examples/pascal_parser/new_pascal_driver.c)
+    target_include_directories(new_pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
+    target_link_libraries(new_pascal_driver new_pascal_parser_lib)
+
+    # --- Minimal Pascal Parser (for debugging) ---
+    add_library(minimal_pascal_parser_lib STATIC
+        examples/pascal_parser/minimal_pascal_parser.c
+        examples/pascal_parser/minimal_pascal_parser.h
+    )
+    target_link_libraries(minimal_pascal_parser_lib PUBLIC parser_lib)
+    target_include_directories(minimal_pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
+
+    add_executable(minimal_pascal_driver examples/pascal_parser/minimal_pascal_driver.c)
+    target_include_directories(minimal_pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
+    target_link_libraries(minimal_pascal_driver minimal_pascal_parser_lib)
+
+    # --- Super Minimal Pascal Parser (procedure calls only) ---
+    add_library(super_minimal_pascal_parser_lib STATIC
+        examples/pascal_parser/super_minimal_pascal_parser.c
+        examples/pascal_parser/super_minimal_pascal_parser.h
+    )
+    target_link_libraries(super_minimal_pascal_parser_lib PUBLIC parser_lib)
+    target_include_directories(super_minimal_pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
+
+    add_executable(super_minimal_pascal_driver examples/pascal_parser/super_minimal_pascal_driver.c)
+    target_include_directories(super_minimal_pascal_driver PUBLIC ${CMAKE_SOURCE_DIR})
+    target_link_libraries(super_minimal_pascal_driver super_minimal_pascal_parser_lib)
+
 endif()

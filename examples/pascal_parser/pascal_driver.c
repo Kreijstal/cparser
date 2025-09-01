@@ -1,12 +1,54 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include "parser.h"
 #include "pascal_parser.h"
 
+// Global set for cycle detection
+#define MAX_VISITED_NODES 1000
+static ast_t* visited_nodes[MAX_VISITED_NODES];
+static int visited_count = 0;
+
+static void reset_visited_nodes() {
+    visited_count = 0;
+}
+
+static bool is_node_visited(ast_t* node) {
+    for (int i = 0; i < visited_count; i++) {
+        if (visited_nodes[i] == node) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void mark_node_visited(ast_t* node) {
+    if (visited_count < MAX_VISITED_NODES) {
+        visited_nodes[visited_count++] = node;
+    }
+}
+
 // Function to print AST with indentation
 static void print_ast_indented(ast_t* ast, int depth) {
-    if (ast == NULL || ast->typ == 0) return;
+    if (ast == NULL) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("NULL\n");
+        return;
+    }
+    if (ast->typ == 0) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("NIL [%p]\n", (void*)ast);
+        return;
+    }
+    
+    // Check for cycles
+    if (is_node_visited(ast)) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("CYCLE DETECTED [%p]\n", (void*)ast);
+        return;
+    }
+    mark_node_visited(ast);
     
     for (int i = 0; i < depth; i++) printf("  ");
     
@@ -35,10 +77,59 @@ static void print_ast_indented(ast_t* ast, int depth) {
         case PASCAL_T_STRING:
             printf("STRING: %s", ast->sym ? ast->sym->name : "NULL");
             break;
+        case PASCAL_T_VAR_DECL:
+            printf("VAR_DECL");
+            break;
+        case PASCAL_T_TYPE_INTEGER:
+            printf("TYPE_INTEGER");
+            break;
+        case PASCAL_T_TYPE_REAL:
+            printf("TYPE_REAL");
+            break;
+        case PASCAL_T_IDENT_LIST:
+            printf("IDENT_LIST");
+            break;
+        case PASCAL_T_ASM_BLOCK:
+            printf("ASM_BLOCK");
+            break;
+        case PASCAL_T_ADD:
+            printf("ADD");
+            break;
+        case PASCAL_T_SUB:
+            printf("SUB");
+            break;
+        case PASCAL_T_MUL:
+            printf("MUL");
+            break;
+        case PASCAL_T_DIV:
+            printf("DIV");
+            break;
+        case PASCAL_T_MOD:
+            printf("MOD");
+            break;
+        case PASCAL_T_NEG:
+            printf("NEG");
+            break;
+        case PASCAL_T_GT:
+            printf("GT");
+            break;
+        case PASCAL_T_LT:
+            printf("LT");
+            break;
+        case PASCAL_T_EQ:
+            printf("EQ");
+            break;
+        case PASCAL_T_FOR_TO:
+            printf("FOR_TO");
+            break;
+        case PASCAL_T_FOR_DOWNTO:
+            printf("FOR_DOWNTO");
+            break;
         default:
             printf("UNKNOWN(%d)", ast->typ);
             break;
     }
+    printf(" [%p] [line=%d, col=%d]", (void*)ast, ast->line, ast->col);
     printf("\n");
     
     // Print children
@@ -46,13 +137,6 @@ static void print_ast_indented(ast_t* ast, int depth) {
     while (child != NULL) {
         print_ast_indented(child, depth + 1);
         child = child->next;
-    }
-    
-    // Print siblings
-    ast_t* sibling = ast->next;
-    while (sibling != NULL) {
-        print_ast_indented(sibling, depth);
-        sibling = sibling->next;
     }
 }
 
@@ -62,10 +146,22 @@ static void print_error_with_partial_ast(ParseError* error, int depth) {
     
     for (int i = 0; i < depth; i++) printf("  ");
     printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
+    for (int i = 0; i < depth; i++) printf("  ");
+    printf("Error pointer: %p\n", (void*)error);
+    for (int i = 0; i < depth; i++) printf("  ");
+    printf("Partial AST pointer: %p\n", (void*)error->partial_ast);
+    if (error->cause != NULL) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("Cause pointer: %p\n", (void*)error->cause);
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("Cause partial AST pointer: %p\n", (void*)(error->cause->partial_ast));
+    }
     
-    if (error->partial_ast != NULL) {
+    // Only print partial AST at the deepest level to avoid duplicates
+    if (error->partial_ast != NULL && (error->cause == NULL || error->cause->partial_ast != error->partial_ast)) {
         for (int i = 0; i < depth; i++) printf("  ");
         printf("Partial AST:\n");
+        reset_visited_nodes();
         print_ast_indented(error->partial_ast, depth + 1);
     }
     
@@ -108,8 +204,7 @@ int main(int argc, char *argv[]) {
 
     // --- Parsing ---
     input_t *in = new_input();
-    in->buffer = buffer;
-    in->length = length;
+    init_input_buffer(in, buffer, length);
 
     ast_nil = new_ast();
     ast_nil->typ = 0; // PASCAL_T_NONE is not defined here, but 0 should be fine.

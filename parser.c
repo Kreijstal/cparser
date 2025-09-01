@@ -133,7 +133,17 @@ ast_t * new_ast() {
     ast->child = NULL;
     ast->next = NULL;
     ast->sym = NULL;
+    ast->line = 0;
+    ast->col = 0;
     return ast;
+}
+
+// Set AST node position from current input state
+void set_ast_position(ast_t* ast, input_t* in) {
+    if (ast != NULL && in != NULL) {
+        ast->line = in->line;
+        ast->col = in->col;
+    }
 }
 
 ast_t* ast1(tag_t typ, ast_t* a1) {
@@ -170,6 +180,25 @@ input_t * new_input() {
     input_t * in = (input_t *) safe_malloc(sizeof(input_t));
     in->buffer = NULL; in->alloc = 0; in->length = 0; in->start = 0; in->line = 1; in->col = 1;
     return in;
+}
+
+// Initialize input buffer with proper line/column tracking
+void init_input_buffer(input_t *in, char *buffer, int length) {
+    in->buffer = buffer;
+    in->length = length;
+    in->start = 0;
+    in->line = 1;
+    in->col = 1;
+    
+    // Count lines in the buffer to set proper line tracking
+    for (int i = 0; i < length; i++) {
+        if (buffer[i] == '\n') {
+            in->line++;
+        }
+    }
+    // Reset to beginning for parsing
+    in->line = 1;
+    in->col = 1;
 }
 
 char read1(input_t * in) {
@@ -240,6 +269,7 @@ static ParseResult integer_fn(input_t * in, void * args) {
    ast_t * ast = new_ast();
    ast->typ = pargs->tag; ast->sym = sym_lookup(text); free(text);
    ast->child = NULL; ast->next = NULL;
+   set_ast_position(ast, in);
    return make_success(ast);
 }
 
@@ -258,6 +288,7 @@ static ParseResult cident_fn(input_t * in, void * args) {
    ast_t * ast = new_ast();
    ast->typ = pargs->tag; ast->sym = sym_lookup(text); free(text);
    ast->child = NULL; ast->next = NULL;
+   set_ast_position(ast, in);
    return make_success(ast);
 }
 
@@ -290,6 +321,7 @@ static ParseResult string_fn(input_t * in, void * args) {
    ast_t * ast = new_ast();
    ast->typ = pargs->tag; ast->sym = sym_lookup(str_val); free(str_val);
    ast->child = NULL; ast->next = NULL;
+   set_ast_position(ast, in);
    return make_success(ast);
 }
 
@@ -307,6 +339,7 @@ static ParseResult any_char_fn(input_t * in, void * args) {
     ast->sym = sym_lookup(str);
     ast->child = NULL;
     ast->next = NULL;
+    set_ast_position(ast, in);
     return make_success(ast);
 }
 
@@ -324,6 +357,7 @@ static ParseResult satisfy_fn(input_t * in, void * args) {
     ast->sym = sym_lookup(str);
     ast->child = NULL;
     ast->next = NULL;
+    set_ast_position(ast, in);
     return make_success(ast);
 }
 
@@ -347,6 +381,7 @@ static ParseResult until_fn(input_t* in, void* args) {
     text[len] = '\0';
     ast_t* ast = new_ast();
     ast->typ = uargs->tag; ast->sym = sym_lookup(text); free(text);
+    set_ast_position(ast, in);
     return make_success(ast);
 }
 

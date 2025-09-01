@@ -287,12 +287,11 @@ static ParseResult seq_fn(input_t * in, void * args) {
     while (seq != NULL) {
         ParseResult res = parse(in, seq->comb);
         if (!res.is_success) {
-            free_ast(head);
             restore_input_state(in, &state);
             if (res.value.error->message == NULL) {
-                return wrap_failure(in, strdup("Failed to parse sequence."), res);
+                return wrap_failure_with_ast(in, strdup("Failed to parse sequence."), res, head);
             }
-            return res;
+            return wrap_failure_with_ast(in, res.value.error->message, res, head);
         }
         if (res.value.ast != ast_nil) {
             if (head == NULL) head = tail = res.value.ast;

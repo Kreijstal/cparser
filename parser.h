@@ -36,6 +36,8 @@ struct ast_t {
    ast_t * child;
    ast_t * next;
    sym_t * sym;
+   int line;
+   int col;
 };
 
 // Input stream
@@ -137,6 +139,8 @@ void expr_altern(combinator_t * exp, int prec, tag_t tag, combinator_t * comb);
 // --- Input Stream Helpers ---
 input_t * new_input();
 char read1(input_t * in);
+void set_ast_position(ast_t* ast, input_t* in);
+void init_input_buffer(input_t *in, char *buffer, int length);
 
 // --- AST Helpers ---
 typedef void (*ast_visitor_fn)(ast_t* node, void* context);
