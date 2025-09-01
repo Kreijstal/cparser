@@ -3,33 +3,92 @@
 #include <string.h>
 #include "pascal_parser.h"
 
+// Forward declaration
+static void print_ast_indented(ast_t* ast, int depth);
+
+// Helper function to print ParseError with partial AST
+static void print_error_with_partial_ast(ParseError* error, int depth) {
+    if (error == NULL) return;
+
+    for (int i = 0; i < depth; i++) printf("  ");
+    printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
+
+    if (error->partial_ast != NULL) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("Partial AST:\n");
+        print_ast_indented(error->partial_ast, depth + 1);
+    }
+
+    if (error->cause != NULL) {
+        for (int i = 0; i < depth; i++) printf("  ");
+        printf("Caused by:\n");
+        print_error_with_partial_ast(error->cause, depth + 1);
+    }
+}
+
+// Helper function to print AST with indentation
+static void print_ast_indented(ast_t* ast, int depth) {
+    if (ast == NULL || ast == ast_nil) return;
+    for (int i = 0; i < depth; i++) printf("  ");
+    printf("(%s", pascal_tag_to_string(ast->typ));
+    if (ast->sym) printf(" %s", ast->sym->name);
+
+    ast_t* child = ast->child;
+    if (child) {
+        printf("\n");
+        print_ast_indented(child, depth + 1);
+    }
+    printf(")");
+
+    if (ast->next) {
+        printf("\n");
+        print_ast_indented(ast->next, depth);
+    }
+}
+
+
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s \"<pascal_code>\"\n", argv[0]);
+    bool print_ast = false;
+    char *expr_str = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--print-ast") == 0) {
+            print_ast = true;
+        } else {
+            expr_str = argv[i];
+        }
+    }
+
+    if (expr_str == NULL) {
+        fprintf(stderr, "Usage: %s [--print-ast] \"<expression>\"\n", argv[0]);
         return 1;
     }
 
-    char *code = argv[1];
+    combinator_t *parser = new_combinator();
+    init_pascal_expression_parser(&parser);
+
     input_t *in = new_input();
-    in->buffer = code;
-    in->length = strlen(code);
-
+    in->buffer = expr_str;
+    in->length = strlen(expr_str);
     ast_nil = new_ast();
+    ast_nil->typ = PASCAL_T_NONE;
 
-    combinator_t* parser = p_program();
     ParseResult result = parse(in, parser);
 
     if (result.is_success) {
-        // Since we removed the generic printer, we can't print the AST here.
-        // A local visitor-based printer would be needed.
-        printf("Successfully parsed the input.\n");
+        if (in->start < in->length) {
+            fprintf(stderr, "Error: Parser did not consume entire input. Trailing characters: '%s'\n", in->buffer + in->start);
+            free_ast(result.value.ast);
+            return 1;
+        }
+        if (print_ast) {
+            print_pascal_ast(result.value.ast);
+        }
         free_ast(result.value.ast);
     } else {
-        fprintf(stderr, "Parsing Error at line %d, col %d: %s\n",
-                result.value.error->line,
-                result.value.error->col,
-                result.value.error->message);
+        print_error_with_partial_ast(result.value.error, 0);
         free_error(result.value.error);
+        return 1;
     }
 
     free_combinator(parser);

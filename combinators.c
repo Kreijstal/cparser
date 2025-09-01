@@ -363,8 +363,7 @@ static ParseResult left_fn(input_t * in, void * args) {
     ParseResult r2 = parse(in, pargs->p2);
     if (!r2.is_success) {
         restore_input_state(in, &state);
-        free_ast(r1.value.ast);
-        return r2;
+        return wrap_failure_with_ast(in, "left combinator failed on second parser", r2, r1.value.ast);
     }
     free_ast(r2.value.ast);
     return r1;

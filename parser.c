@@ -418,7 +418,9 @@ static ParseResult expr_fn(input_t * in, void * args) {
                    tag_t op_tag = op->tag;
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
-                   if (!rhs_res.is_success) { free_ast(lhs); return rhs_res; }
+                   if (!rhs_res.is_success) {
+                       return wrap_failure_with_ast(in, "Failed to parse right-hand side of infix operator", rhs_res, lhs);
+                   }
                    lhs = ast2(op_tag, lhs, rhs_res.value.ast);
                    found_op = true;
                    break;
@@ -438,6 +440,13 @@ static ParseResult lazy_fn(input_t * in, void * args) {
         exception("Lazy parser not initialized.");
     }
     return parse(in, *largs->parser_ptr);
+}
+
+static ParseResult eoi_fn(input_t * in, void * args) {
+    if (in->start == in->length) {
+        return make_success(ast_nil);
+    }
+    return make_failure(in, strdup("Expected end of input."));
 }
 
 //=============================================================================
@@ -469,6 +478,13 @@ combinator_t * string(tag_t tag) {
     comb->type = P_STRING;
     comb->fn = string_fn;
     comb->args = args;
+    return comb;
+}
+combinator_t * eoi() {
+    combinator_t * comb = new_combinator();
+    comb->type = P_EOI;
+    comb->fn = eoi_fn;
+    comb->args = NULL;
     return comb;
 }
 

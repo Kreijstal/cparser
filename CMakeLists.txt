@@ -63,4 +63,11 @@ if(BUILD_INTEGRATION_TESTS)
     )
     target_link_libraries(pascal_parser_lib PUBLIC parser_lib)
     target_include_directories(pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})
+
+    add_executable(pascal_parser_cli examples/pascal_parser/pascal_main.c)
+    target_link_libraries(pascal_parser_cli pascal_parser_lib)
+
+    add_executable(pascal_tests examples/pascal_parser/pascal_tests.c)
+    target_link_libraries(pascal_tests pascal_parser_lib)
+    add_test(NAME pascal_tests COMMAND pascal_tests)
 endif()

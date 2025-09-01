@@ -73,7 +73,8 @@ typedef enum {
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
     COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP,
-    COMB_LAZY
+    COMB_LAZY,
+    P_EOI
 } parser_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
