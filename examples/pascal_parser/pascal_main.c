@@ -5,24 +5,17 @@
 
 // Forward declaration
 static void print_ast_indented(ast_t* ast, int depth);
+static void print_error_with_partial_ast(ParseError* error);
 
 // Helper function to print ParseError with partial AST
-static void print_error_with_partial_ast(ParseError* error, int depth) {
+static void print_error_with_partial_ast(ParseError* error) {
     if (error == NULL) return;
 
-    for (int i = 0; i < depth; i++) printf("  ");
     printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
 
     if (error->partial_ast != NULL) {
-        for (int i = 0; i < depth; i++) printf("  ");
         printf("Partial AST:\n");
-        print_ast_indented(error->partial_ast, depth + 1);
-    }
-
-    if (error->cause != NULL) {
-        for (int i = 0; i < depth; i++) printf("  ");
-        printf("Caused by:\n");
-        print_error_with_partial_ast(error->cause, depth + 1);
+        print_ast_indented(error->partial_ast, 1);
     }
 }
 
@@ -86,7 +79,7 @@ int main(int argc, char *argv[]) {
         }
         free_ast(result.value.ast);
     } else {
-        print_error_with_partial_ast(result.value.error, 0);
+        print_error_with_partial_ast(result.value.error);
         free_error(result.value.error);
         return 1;
     }

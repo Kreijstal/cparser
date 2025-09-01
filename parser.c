@@ -419,7 +419,12 @@ static ParseResult expr_fn(input_t * in, void * args) {
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
                    if (!rhs_res.is_success) {
-                       return wrap_failure_with_ast(in, "Failed to parse right-hand side of infix operator", rhs_res, lhs);
+                       ast_t* rhs_partial_ast = rhs_res.value.error ? rhs_res.value.error->partial_ast : NULL;
+                       if (rhs_res.value.error) {
+                           rhs_res.value.error->partial_ast = NULL;
+                       }
+                       ast_t* new_partial_ast = ast2(op_tag, lhs, rhs_partial_ast);
+                       return wrap_failure_with_ast(in, "Failed to parse right-hand side of infix operator", rhs_res, new_partial_ast);
                    }
                    lhs = ast2(op_tag, lhs, rhs_res.value.ast);
                    found_op = true;
