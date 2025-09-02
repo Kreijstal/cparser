@@ -838,13 +838,16 @@ void init_pascal_procedure_parser(combinator_t** p) {
     );
 }
 
-// Pascal Complete Program Parser - for full Pascal programs
+// Pascal Complete Program Parser - for full Pascal programs  
 void init_pascal_complete_program_parser(combinator_t** p) {
-    // Create statement parser for the main program block
-    combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
-    *stmt_parser = new_combinator();
-    (*stmt_parser)->extra_to_free = stmt_parser;
-    init_pascal_statement_parser(stmt_parser);
+    // Simple main block parser that handles any content between begin and end
+    combinator_t* main_block_content = until(token(match("end")), PASCAL_T_NONE);
+    combinator_t* main_block = seq(new_combinator(), PASCAL_T_MAIN_BLOCK,
+        token(match("begin")),                       // begin keyword
+        main_block_content,                          // any content until "end"
+        token(match("end")),                         // end keyword
+        NULL
+    );
     
     // Program parameter list: (identifier, identifier, ...)
     combinator_t* program_param = token(cident(PASCAL_T_IDENTIFIER));
@@ -854,20 +857,11 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         sep_by(program_param, token(match(",")))
     ));
     
-    // Program header: program ProgramName(params);
-    combinator_t* program_header = seq(new_combinator(), PASCAL_T_PROGRAM_HEADER,
-        token(match("program")),                     // program keyword
-        token(cident(PASCAL_T_IDENTIFIER)),          // program name
-        program_param_list,                          // optional parameter list
-        token(match(";")),                           // semicolon
-        NULL
-    );
-    
     // Variable declaration: identifier : type;
     combinator_t* var_decl = seq(new_combinator(), PASCAL_T_VAR_DECL,
         token(cident(PASCAL_T_IDENTIFIER)),          // variable name
         token(match(":")),                           // colon
-        token(cident(PASCAL_T_IDENTIFIER)),          // type name (simplified)
+        token(cident(PASCAL_T_IDENTIFIER)),          // type name
         token(match(";")),                           // semicolon
         NULL
     );
@@ -879,18 +873,15 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Main program block: use statement parser's begin-end block + period
-    combinator_t* main_block = seq(new_combinator(), PASCAL_T_MAIN_BLOCK,
-        lazy(stmt_parser),                           // begin...end block
-        token(match(".")),                           // final period
-        NULL
-    );
-    
-    // Complete program: program_header [var_section] main_block
+    // Complete program: program Name(params); [var section] begin end.
     seq(*p, PASCAL_T_PROGRAM_DECL,
-        program_header,                              // program declaration
+        token(match("program")),                     // program keyword
+        token(cident(PASCAL_T_IDENTIFIER)),          // program name  
+        program_param_list,                          // optional parameter list
+        token(match(";")),                           // semicolon
         optional(var_section),                       // optional var section
-        main_block,                                  // main program block
+        main_block,                                  // simple empty main block
+        token(match(".")),                           // final period
         NULL
     );
 }
