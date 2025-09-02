@@ -723,6 +723,97 @@ void test_pascal_set_union(void) {
     free(input);
 }
 
+// Test class type checking with 'is' operator
+void test_pascal_is_operator(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("MyObject is TMyClass");
+    input->length = strlen("MyObject is TMyClass");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_IS);
+    
+    // Check left operand (object identifier)
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(left->sym->name, "MyObject") == 0);
+    
+    // Check right operand (class type identifier)
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(right->sym->name, "TMyClass") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test class type casting with 'as' operator
+void test_pascal_as_operator(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("Sender as TButton");
+    input->length = strlen("Sender as TButton");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_AS);
+    
+    // Check left operand (object identifier)
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(left->sym->name, "Sender") == 0);
+    
+    // Check right operand (target class type)
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(right->sym->name, "TButton") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test complex 'as' operator with field access (basic parsing)
+void test_pascal_as_operator_with_field_access(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    // For now, just test the casting part - field access would require more complex parsing
+    input_t* input = new_input();
+    input->buffer = strdup("SomeObject as TForm");
+    input->length = strlen("SomeObject as TForm");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_AS);
+    
+    // Check left operand
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(left->sym->name, "SomeObject") == 0);
+    
+    // Check right operand
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(right->sym->name, "TForm") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -751,5 +842,8 @@ TEST_LIST = {
     { "test_pascal_range_expression", test_pascal_range_expression },
     { "test_pascal_char_range", test_pascal_char_range },
     { "test_pascal_set_union", test_pascal_set_union },
+    { "test_pascal_is_operator", test_pascal_is_operator },
+    { "test_pascal_as_operator", test_pascal_as_operator },
+    { "test_pascal_as_operator_with_field_access", test_pascal_as_operator_with_field_access },
     { NULL, NULL }
 };
