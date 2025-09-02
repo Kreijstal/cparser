@@ -57,17 +57,8 @@ void print_pascal_ast(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    *p = new_combinator();
-
-    combinator_t* arg_list = optional(sep_by(lazy(p), token(match(","))));
-    combinator_t* func_call = seq(new_combinator(), PASCAL_T_FUNC_CALL,
-        cident(PASCAL_T_IDENTIFIER),
-        between(token(match("(")), token(match(")")), arg_list)
-    );
-
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
         token(integer(PASCAL_T_INTEGER)),
-        token(func_call),
         token(cident(PASCAL_T_IDENTIFIER)),
         between(token(match("(")), token(match(")")), lazy(p)),
         NULL
