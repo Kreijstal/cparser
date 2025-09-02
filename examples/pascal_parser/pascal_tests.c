@@ -704,7 +704,7 @@ void test_pascal_set_union(void) {
     input->buffer = strdup("[1, 2] + [3, 4]");
     input->length = strlen("[1, 2] + [3, 4]");
 
-    ParseResult res = parse(input, p);
+    ParseResult res = parse_pascal_expression(input, p);
 
     TEST_ASSERT(res.is_success);
     TEST_ASSERT(res.value.ast->typ == PASCAL_T_SET_UNION);

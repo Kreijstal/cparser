@@ -14,7 +14,72 @@ combinator_t* token(combinator_t* p) {
     return right(ws, left(p, many(satisfy(is_whitespace_char, PASCAL_T_NONE))));
 }
 
-// Custom parser for real numbers (e.g., 3.14, 2.0)
+// Custom parser for Pascal built-in type names
+static ParseResult type_name_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    const char* type_names[] = {
+        "integer", "real", "boolean", "char", "string", 
+        "byte", "word", "longint", NULL
+    };
+    
+    for (int i = 0; type_names[i] != NULL; i++) {
+        save_input_state(in, &state);
+        int len = strlen(type_names[i]);
+        bool matches = true;
+        
+        for (int j = 0; j < len; j++) {
+            char c = read1(in);
+            if (tolower(c) != type_names[i][j]) {
+                matches = false;
+                break;
+            }
+        }
+        
+        if (matches) {
+            // Check that next character is not alphanumeric (word boundary)
+            char next_char = read1(in);
+            if (next_char != EOF && (isalnum(next_char) || next_char == '_')) {
+                matches = false;
+            } else {
+                if (next_char != EOF) in->start--; // Back up if not EOF
+            }
+        }
+        
+        if (matches) {
+            // Create symbol with the actual matched text (preserving original case)
+            restore_input_state(in, &state);
+            char* matched_text = malloc(len + 1);
+            for (int j = 0; j < len; j++) {
+                matched_text[j] = read1(in);
+            }
+            matched_text[len] = '\0';
+            
+            ast_t* ast = new_ast();
+            ast->typ = pargs->tag;
+            ast->sym = sym_lookup(matched_text);
+            ast->child = NULL;
+            ast->next = NULL;
+            free(matched_text);
+            set_ast_position(ast, in);
+            return make_success(ast);
+        }
+    }
+    
+    restore_input_state(in, &state);
+    return make_failure(in, strdup("Expected built-in type name"));
+}
+
+combinator_t* type_name(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = type_name_fn;
+    return comb;
+}
 static ParseResult real_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
@@ -401,6 +466,26 @@ void print_pascal_ast(ast_t* ast) {
     printf("\n");
 }
 
+// Post-process AST to handle semantic operations like set union
+static void post_process_set_operations(ast_t* ast) {
+    if (ast == NULL || ast == ast_nil) return;
+    
+    // Process children first (depth-first)
+    post_process_set_operations(ast->child);
+    post_process_set_operations(ast->next);
+    
+    // Check if this is an ADD operation with two SET operands
+    if (ast->typ == PASCAL_T_ADD && ast->child && ast->child->next) {
+        ast_t* left = ast->child;
+        ast_t* right = ast->child->next;
+        
+        if (left->typ == PASCAL_T_SET && right->typ == PASCAL_T_SET) {
+            // Convert ADD to SET_UNION
+            ast->typ = PASCAL_T_SET_UNION;
+        }
+    }
+}
+
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
     // Function call parser: identifier followed by optional argument list
@@ -416,21 +501,33 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
     
-    // Type cast parser: TypeName(expression)
+    // Type cast parser: TypeName(expression) - only for built-in types
     combinator_t* typecast = seq(new_combinator(), PASCAL_T_TYPECAST,
-        token(cident(PASCAL_T_IDENTIFIER)), // type name
+        token(type_name(PASCAL_T_IDENTIFIER)), // type name - only built-in types
         between(token(match("(")), token(match(")")), lazy(p)), // expression
         NULL
     );
     
+    // Boolean literal parsers
+    combinator_t* boolean_true = seq(new_combinator(), PASCAL_T_BOOLEAN,
+        match_ci("true"),
+        NULL
+    );
+    combinator_t* boolean_false = seq(new_combinator(), PASCAL_T_BOOLEAN,
+        match_ci("false"),  
+        NULL
+    );
+
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
         token(real_number(PASCAL_T_REAL)),        // Real numbers (3.14) - try first
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(string(PASCAL_T_STRING)),           // Strings ("hello")
         token(set_constructor(PASCAL_T_SET)),     // Set constructors [1, 2, 3]
-        func_call,                                // Function calls func(x) - try before typecast
-        typecast,                                 // Type casts Integer(x)
+        token(boolean_true),                      // Boolean true
+        token(boolean_false),                     // Boolean false
+        typecast,                                 // Type casts Integer(x) - try before func_call
+        func_call,                                // Function calls func(x)
         token(cident(PASCAL_T_IDENTIFIER)),       // Identifiers (variables)
         between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
         NULL
@@ -479,9 +576,18 @@ void init_pascal_expression_parser(combinator_t** p) {
     
     // Precedence 7: Unary operators (highest precedence)
     expr_insert(*p, 7, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
-    expr_altern(*p, 7, PASCAL_T_POS, token(match("+")));
-    expr_altern(*p, 7, PASCAL_T_NOT, token(match("not")));
-    expr_altern(*p, 7, PASCAL_T_ADDR, token(match("@")));
+    expr_insert(*p, 7, PASCAL_T_POS, EXPR_PREFIX, ASSOC_NONE, token(match("+")));
+    expr_insert(*p, 7, PASCAL_T_NOT, EXPR_PREFIX, ASSOC_NONE, token(match("not")));
+    expr_insert(*p, 7, PASCAL_T_ADDR, EXPR_PREFIX, ASSOC_NONE, token(match("@")));
+}
+
+// --- Utility Functions ---
+ParseResult parse_pascal_expression(input_t* input, combinator_t* parser) {
+    ParseResult result = parse(input, parser);
+    if (result.is_success) {
+        post_process_set_operations(result.value.ast);
+    }
+    return result;
 }
 
 // --- Pascal Statement Parser Implementation ---

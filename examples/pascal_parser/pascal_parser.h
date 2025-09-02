@@ -69,4 +69,7 @@ void init_pascal_program_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
 
+// --- Utility Functions ---
+ParseResult parse_pascal_expression(input_t* input, combinator_t* parser);
+
 #endif // PASCAL_PARSER_H
