@@ -301,126 +301,20 @@ static combinator_t* set_constructor(tag_t tag) {
     return comb;
 }
 
-// Custom tokenizers for multi-character operators
-static ParseResult ne_op_fn(input_t* in, void* args) {
-    InputState state;
-    save_input_state(in, &state);
-    
-    if (read1(in) == '<' && read1(in) == '>') {
-        ast_t* ast = new_ast();
-        ast->typ = 0;
-        ast->sym = NULL;
-        ast->child = NULL;
-        ast->next = NULL;
-        return make_success(ast);
-    }
-    
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Expected '<>'"));
-}
-
-static ParseResult le_op_fn(input_t* in, void* args) {
-    InputState state;
-    save_input_state(in, &state);
-    
-    if (read1(in) == '<' && read1(in) == '=') {
-        ast_t* ast = new_ast();
-        ast->typ = 0;
-        ast->sym = NULL;
-        ast->child = NULL;
-        ast->next = NULL;
-        return make_success(ast);
-    }
-    
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Expected '<='"));
-}
-
-static ParseResult ge_op_fn(input_t* in, void* args) {
-    InputState state;
-    save_input_state(in, &state);
-    
-    if (read1(in) == '>' && read1(in) == '=') {
-        ast_t* ast = new_ast();
-        ast->typ = 0;
-        ast->sym = NULL;
-        ast->child = NULL;
-        ast->next = NULL;
-        return make_success(ast);
-    }
-    
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Expected '>='"));
-}
-
-combinator_t* ne_op() {
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY;
-    comb->fn = ne_op_fn;
-    comb->args = NULL;
-    return comb;
-}
-
-combinator_t* le_op() {
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY;
-    comb->fn = le_op_fn;
-    comb->args = NULL;
-    return comb;
-}
-
-combinator_t* ge_op() {
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY;
-    comb->fn = ge_op_fn;
-    comb->args = NULL;
-    return comb;
-}
-static ParseResult relational_op_fn(input_t* in, void* args) {
-    InputState state;
-    save_input_state(in, &state);
-    
-    // Try operators in order from longest to shortest to avoid prefix conflicts
-    const char* operators[] = {"<=", ">=", "<>", "=", "<", ">", NULL};
-    pascal_tag_t tags[] = {PASCAL_T_LE, PASCAL_T_GE, PASCAL_T_NE, PASCAL_T_EQ, PASCAL_T_LT, PASCAL_T_GT};
-    
-    for (int i = 0; operators[i] != NULL; i++) {
-        save_input_state(in, &state);  // Reset to start position
-        
-        // Try to match this operator
-        bool matches = true;
-        const char* op = operators[i];
-        for (int j = 0; op[j] != '\0'; j++) {
-            char c = read1(in);
-            if (c != op[j]) {
-                matches = false;
-                break;
-            }
-        }
-        
-        if (matches) {
-            // Success! Create an AST node indicating which operator was matched
-            ast_t* ast = new_ast();
-            ast->typ = tags[i];
-            ast->sym = sym_lookup(operators[i]);
-            ast->child = NULL;
-            ast->next = NULL;
-            set_ast_position(ast, in);
-            return make_success(ast);
-        }
-    }
-    
-    // None matched
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Expected relational operator"));
-}
-
-static combinator_t* relational_operators() {
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY; // Reuse existing type for custom parser
-    comb->fn = relational_op_fn;
-    comb->args = NULL;
-    return comb;
+// Multi combinator approach for relational operators to handle prefix conflicts
+static combinator_t* relational_ops() {
+    return multi(new_combinator(), PASCAL_T_NONE,
+        token(match("<=")), // try longer matches first
+        token(match(">=")),
+        token(match("<>")),
+        token(match("=")),
+        token(match("<")),
+        token(match(">")),
+        token(match("in")),
+        token(match("is")),
+        token(match("as")),
+        NULL
+    );
 }
 
 // --- AST Printing ---
@@ -541,20 +435,18 @@ void init_pascal_expression_parser(combinator_t** p) {
     // Precedence 2: Boolean AND
     expr_insert(*p, 2, PASCAL_T_AND, EXPR_INFIX, ASSOC_LEFT, token(match("and")));
     
-    // Precedence 3: All relational operators at the same level
-    // Add single-character operators first
-    expr_insert(*p, 3, PASCAL_T_LT, EXPR_INFIX, ASSOC_LEFT, token(match("<")));
+    // Precedence 3: All relational operators - multi-char operators added last (tried first)
+    // Single character operators
+    expr_insert(*p, 3, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
+    expr_altern(*p, 3, PASCAL_T_LT, token(match("<")));
     expr_altern(*p, 3, PASCAL_T_GT, token(match(">")));
-    expr_altern(*p, 3, PASCAL_T_EQ, token(match("=")));
-    
-    // Then add multi-character operators - these should be tried first
-    expr_altern(*p, 3, PASCAL_T_GE, token(ge_op()));
-    expr_altern(*p, 3, PASCAL_T_LE, token(le_op()));
-    expr_altern(*p, 3, PASCAL_T_NE, token(ne_op()));
-    
     expr_altern(*p, 3, PASCAL_T_IN, token(match("in")));
     expr_altern(*p, 3, PASCAL_T_IS, token(match("is")));
     expr_altern(*p, 3, PASCAL_T_AS, token(match("as")));
+    // Multi-character operators (added last = tried first in expr parser)
+    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));
+    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
+    expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
     
     // Precedence 4: Range operator (..)  
     expr_insert(*p, 4, PASCAL_T_RANGE, EXPR_INFIX, ASSOC_LEFT, token(match("..")));
