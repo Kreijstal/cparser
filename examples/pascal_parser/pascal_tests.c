@@ -554,6 +554,175 @@ void test_pascal_type_casting(void) {
     free(input);
 }
 
+// Test set constructor parsing
+void test_pascal_set_constructor(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("[1, 2, 3]");
+    input->length = strlen("[1, 2, 3]");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_SET);
+    
+    // Check first element
+    ast_t* elem1 = res.value.ast->child;
+    TEST_ASSERT(elem1->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(elem1->sym->name, "1") == 0);
+    
+    // Check second element
+    ast_t* elem2 = elem1->next;
+    TEST_ASSERT(elem2->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(elem2->sym->name, "2") == 0);
+    
+    // Check third element
+    ast_t* elem3 = elem2->next;
+    TEST_ASSERT(elem3->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(elem3->sym->name, "3") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test empty set constructor
+void test_pascal_empty_set(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("[]");
+    input->length = strlen("[]");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_SET);
+    TEST_ASSERT(res.value.ast->child == NULL); // Empty set
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test character set constructor
+void test_pascal_char_set(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("['a', 'b', 'c']");
+    input->length = strlen("['a', 'b', 'c']");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_SET);
+    
+    // Check first element
+    ast_t* elem1 = res.value.ast->child;
+    TEST_ASSERT(elem1->typ == PASCAL_T_CHAR);
+    TEST_ASSERT(strcmp(elem1->sym->name, "a") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test range expression
+void test_pascal_range_expression(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("1..10");
+    input->length = strlen("1..10");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_RANGE);
+    
+    // Check left operand
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(left->sym->name, "1") == 0);
+    
+    // Check right operand
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(right->sym->name, "10") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test character range expression
+void test_pascal_char_range(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("'a'..'z'");
+    input->length = strlen("'a'..'z'");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_RANGE);
+    
+    // Check left operand
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_CHAR);
+    TEST_ASSERT(strcmp(left->sym->name, "a") == 0);
+    
+    // Check right operand
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_CHAR);
+    TEST_ASSERT(strcmp(right->sym->name, "z") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test set union operation
+void test_pascal_set_union(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("[1, 2] + [3, 4]");
+    input->length = strlen("[1, 2] + [3, 4]");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_SET_UNION);
+    
+    // Check left operand is a set
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_SET);
+    
+    // Check right operand is a set
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_SET);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -576,5 +745,11 @@ TEST_LIST = {
     { "test_pascal_comprehensive_expression", test_pascal_comprehensive_expression },
     { "test_pascal_precedence", test_pascal_precedence },
     { "test_pascal_type_casting", test_pascal_type_casting },
+    { "test_pascal_set_constructor", test_pascal_set_constructor },
+    { "test_pascal_empty_set", test_pascal_empty_set },
+    { "test_pascal_char_set", test_pascal_char_set },
+    { "test_pascal_range_expression", test_pascal_range_expression },
+    { "test_pascal_char_range", test_pascal_char_range },
+    { "test_pascal_set_union", test_pascal_set_union },
     { NULL, NULL }
 };

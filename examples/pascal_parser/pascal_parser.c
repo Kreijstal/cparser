@@ -115,6 +115,192 @@ static ParseResult char_fn(input_t* in, void* args) {
     return make_success(ast);
 }
 
+static combinator_t* char_literal(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = char_fn;
+    comb->args = args;
+    return comb;
+}
+
+// Custom parser for range expressions (e.g., 'a'..'z', 1..10)
+static ParseResult range_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // This will be called as part of an infix expression parser
+    // We just need to consume the ".." token
+    if (read1(in) != '.' || read1(in) != '.') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '..'"));
+    }
+    
+    // Create a placeholder AST node - the actual range will be built by the expression parser
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup("..");
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+static combinator_t* range_operator(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = range_fn;
+    comb->args = args;
+    return comb;
+}
+
+// Custom parser for set constructors (e.g., [1, 2, 3], ['a'..'z'])
+static ParseResult set_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Must start with '['
+    if (read1(in) != '[') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '['"));
+    }
+    
+    ast_t* set_node = new_ast();
+    set_node->typ = pargs->tag;
+    set_node->sym = NULL;
+    set_node->child = NULL;
+    set_node->next = NULL;
+    set_ast_position(set_node, in);
+    
+    // Skip whitespace
+    char c;
+    while (isspace(c = read1(in)));
+    if (c != EOF) in->start--;
+    
+    // Handle empty set
+    c = read1(in);
+    if (c == ']') {
+        return make_success(set_node);
+    }
+    if (c != EOF) in->start--; // Back up
+    
+    // Parse set elements (temporarily create a sub-parser for this)
+    // For now, we'll handle simple cases - this is a complex recursive parse
+    // We'll parse comma-separated expressions until we hit ']'
+    ast_t* first_element = NULL;
+    ast_t* current_element = NULL;
+    
+    while (true) {
+        // Skip whitespace
+        while (isspace(c = read1(in)));
+        if (c != EOF) in->start--;
+        
+        // Try to parse a simple element (number, char, or identifier)
+        InputState elem_state;
+        save_input_state(in, &elem_state);
+        
+        ast_t* element = NULL;
+        
+        // Try character literal first
+        if (in->buffer[in->start] == '\'') {
+            ParseResult char_result = char_fn(in, &(prim_args){PASCAL_T_CHAR});
+            if (char_result.is_success) {
+                element = char_result.value.ast;
+            }
+        }
+        
+        // Try integer
+        if (!element && isdigit(in->buffer[in->start])) {
+            int start_pos = in->start;
+            while (isdigit(c = read1(in)));
+            if (c != EOF) in->start--;
+            
+            int len = in->start - start_pos;
+            char* text = (char*)safe_malloc(len + 1);
+            strncpy(text, in->buffer + start_pos, len);
+            text[len] = '\0';
+            
+            element = new_ast();
+            element->typ = PASCAL_T_INTEGER;
+            element->sym = sym_lookup(text);
+            free(text);
+            element->child = NULL;
+            element->next = NULL;
+            set_ast_position(element, in);
+        }
+        
+        // Try identifier
+        if (!element && (isalpha(in->buffer[in->start]) || in->buffer[in->start] == '_')) {
+            int start_pos = in->start;
+            while (isalnum(c = read1(in)) || c == '_');
+            if (c != EOF) in->start--;
+            
+            int len = in->start - start_pos;
+            char* text = (char*)safe_malloc(len + 1);
+            strncpy(text, in->buffer + start_pos, len);
+            text[len] = '\0';
+            
+            element = new_ast();
+            element->typ = PASCAL_T_IDENTIFIER;
+            element->sym = sym_lookup(text);
+            free(text);
+            element->child = NULL;
+            element->next = NULL;
+            set_ast_position(element, in);
+        }
+        
+        if (!element) {
+            free_ast(set_node);
+            restore_input_state(in, &state);
+            return make_failure(in, strdup("Expected set element"));
+        }
+        
+        // Add element to set
+        if (!first_element) {
+            first_element = element;
+            current_element = element;
+            set_node->child = element;
+        } else {
+            current_element->next = element;
+            current_element = element;
+        }
+        
+        // Skip whitespace
+        while (isspace(c = read1(in)));
+        if (c != EOF) in->start--;
+        
+        // Check for comma or closing bracket
+        c = read1(in);
+        if (c == ']') {
+            break;
+        } else if (c == ',') {
+            continue; // Parse next element
+        } else {
+            free_ast(set_node);
+            restore_input_state(in, &state);
+            return make_failure(in, strdup("Expected ',' or ']'"));
+        }
+    }
+    
+    return make_success(set_node);
+}
+
+static combinator_t* set_constructor(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = set_fn;
+    comb->args = args;
+    return comb;
+}
+
 // Custom combinator for relational operators that handles multi-character tokens properly
 static combinator_t* relational_ops() {
     return multi(new_combinator(), PASCAL_T_NONE,
@@ -229,6 +415,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(string(PASCAL_T_STRING)),           // Strings ("hello")
+        token(set_constructor(PASCAL_T_SET)),     // Set constructors [1, 2, 3]
         typecast,                                 // Type casts Integer(x)
         func_call,                                // Function calls func(x)
         token(cident(PASCAL_T_IDENTIFIER)),       // Identifiers (variables)
@@ -249,15 +436,19 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_insert(*p, 2, PASCAL_T_AND, EXPR_INFIX, ASSOC_LEFT, token(match("and")));
     
     // Precedence 3: Relational operators (=, <>, <, >, <=, >=, in, is, as)
-    expr_insert(*p, 3, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
-    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));
-    expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
-    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
+    // Note: Order matters for multi-character operators - longer ones first to avoid conflicts
+    expr_insert(*p, 3, PASCAL_T_LE, EXPR_INFIX, ASSOC_LEFT, token(match("<=")));  // <= before <
+    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));  // >= before >
+    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));  // <> before < and >
+    expr_altern(*p, 3, PASCAL_T_EQ, token(match("=")));
     expr_altern(*p, 3, PASCAL_T_LT, token(match("<")));
     expr_altern(*p, 3, PASCAL_T_GT, token(match(">")));
     expr_altern(*p, 3, PASCAL_T_IN, token(match("in")));
     expr_altern(*p, 3, PASCAL_T_IS, token(match("is")));
     expr_altern(*p, 3, PASCAL_T_AS, token(match("as")));
+    
+    // Precedence 3.5: Range operator (..)
+    expr_insert(*p, 3, PASCAL_T_RANGE, EXPR_INFIX, ASSOC_LEFT, token(match("..")));
     
     // Precedence 4: Addition and Subtraction (includes string concatenation)
     expr_insert(*p, 4, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
