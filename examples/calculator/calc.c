@@ -13,6 +13,9 @@ typedef enum {
 // --- Forward declarations for local functions ---
 void print_calculator_ast(ast_t* ast);
 void count_nodes_visitor(ast_t* node, void* context);
+static void print_error_with_partial_ast(ParseError* error);
+static void print_ast_indented(ast_t* ast, int depth);
+void init_calculator_parser(combinator_t** p);
 
 // --- Helper Functions ---
 static bool is_whitespace_char(char c) {
@@ -50,7 +53,7 @@ long eval(ast_t *ast) {
     }
 }
 
-// --- AST Printing using Visitor Pattern ---
+// --- AST Printing ---
 static const char* calc_tag_to_string(tag_t tag) {
     switch (tag) {
         case CALC_T_NONE: return "NONE";
@@ -64,36 +67,62 @@ static const char* calc_tag_to_string(tag_t tag) {
     }
 }
 
-typedef struct { int indent; } print_visitor_context;
-
-void ast_print_visitor(ast_t* node, void* context) {
-    print_visitor_context* ctx = (print_visitor_context*)context;
-    for (int i = 0; i < ctx->indent; i++) printf("  ");
-    printf("(%s", calc_tag_to_string(node->typ));
-    if (node->sym) printf(" %s", node->sym->name);
-    if (node->child) {
-        printf("\n");
-        ctx->indent++;
-        parser_walk_ast(node->child, ast_print_visitor, ctx);
-        ctx->indent--;
-    }
-    printf(")");
-    if (node->next) {
-        printf("\n");
-        parser_walk_ast(node->next, ast_print_visitor, ctx);
-    }
-}
-
 void print_calculator_ast(ast_t* ast) {
-    print_visitor_context context = { .indent = 0 };
-    parser_walk_ast(ast, ast_print_visitor, &context);
+    print_ast_indented(ast, 0);
     printf("\n");
 }
+
+// --- Error Printing with Partial AST ---
+static void print_error_with_partial_ast(ParseError* error) {
+    if (error == NULL) return;
+
+    printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
+
+    if (error->partial_ast != NULL) {
+        printf("Partial AST:\n");
+        print_ast_indented(error->partial_ast, 1);
+    }
+}
+
+static void print_ast_indented(ast_t* ast, int depth) {
+    if (ast == NULL || ast == ast_nil) return;
+    for (int i = 0; i < depth; i++) printf("  ");
+    printf("(%s", calc_tag_to_string(ast->typ));
+    if (ast->sym) printf(" %s", ast->sym->name);
+
+    ast_t* child = ast->child;
+    if (child) {
+        printf("\n");
+        print_ast_indented(child, depth + 1);
+    }
+    printf(")");
+
+    if (ast->next) {
+        printf("\n");
+        print_ast_indented(ast->next, depth);
+    }
+}
+
 
 // --- Visitor for counting nodes ---
 void count_nodes_visitor(ast_t* node, void* context) {
     int* counter = (int*)context;
     (*counter)++;
+}
+
+// --- Parser Definition ---
+void init_calculator_parser(combinator_t** p) {
+    combinator_t *factor = multi(new_combinator(), CALC_T_NONE,
+        token(integer(CALC_T_INT)),
+        between(token(match("(")), token(match(")")), lazy(p)),
+        NULL
+    );
+    expr(*p, factor);
+    expr_insert(*p, 0, CALC_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
+    expr_altern(*p, 0, CALC_T_SUB, token(match("-")));
+    expr_insert(*p, 1, CALC_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
+    expr_altern(*p, 1, CALC_T_DIV, token(match("/")));
+    expr_insert(*p, 2, CALC_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
 }
 
 // --- Main ---
@@ -117,19 +146,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Parser Definition
     combinator_t *expr_parser = new_combinator();
-    combinator_t *factor = multi(new_combinator(), CALC_T_NONE,
-        token(integer(CALC_T_INT)),
-        between(token(match("(")), token(match(")")), lazy(&expr_parser)),
-        NULL
-    );
-    expr(expr_parser, factor);
-    expr_insert(expr_parser, 0, CALC_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
-    expr_altern(expr_parser, 0, CALC_T_SUB, token(match("-")));
-    expr_insert(expr_parser, 1, CALC_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
-    expr_altern(expr_parser, 1, CALC_T_DIV, token(match("/")));
-    expr_insert(expr_parser, 2, CALC_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    init_calculator_parser(&expr_parser);
 
     // Parsing
     input_t *in = new_input();
@@ -158,8 +176,7 @@ int main(int argc, char *argv[]) {
         printf("%ld\n", final_result);
         free_ast(result.value.ast);
     } else {
-        fprintf(stderr, "Parsing Error at line %d, col %d: %s\n",
-                result.value.error->line, result.value.error->col, result.value.error->message);
+        print_error_with_partial_ast(result.value.error);
         free_error(result.value.error);
         return 1;
     }
