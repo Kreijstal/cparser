@@ -360,6 +360,19 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TYPECAST: return "TYPECAST";
         case PASCAL_T_FUNC_CALL: return "FUNC_CALL";
         case PASCAL_T_ARG_LIST: return "ARG_LIST";
+        case PASCAL_T_ASSIGNMENT: return "ASSIGNMENT";
+        case PASCAL_T_STATEMENT: return "STATEMENT";
+        case PASCAL_T_STATEMENT_LIST: return "STATEMENT_LIST";
+        case PASCAL_T_IF_STMT: return "IF_STMT";
+        case PASCAL_T_THEN: return "THEN";
+        case PASCAL_T_ELSE: return "ELSE";
+        case PASCAL_T_BEGIN_BLOCK: return "BEGIN_BLOCK";
+        case PASCAL_T_END_BLOCK: return "END_BLOCK";
+        case PASCAL_T_FOR_STMT: return "FOR_STMT";
+        case PASCAL_T_WHILE_STMT: return "WHILE_STMT";
+        case PASCAL_T_DO: return "DO";
+        case PASCAL_T_TO: return "TO";
+        case PASCAL_T_DOWNTO: return "DOWNTO";
         default: return "UNKNOWN";
     }
 }
@@ -416,8 +429,8 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(string(PASCAL_T_STRING)),           // Strings ("hello")
         token(set_constructor(PASCAL_T_SET)),     // Set constructors [1, 2, 3]
+        func_call,                                // Function calls func(x) - try before typecast
         typecast,                                 // Type casts Integer(x)
-        func_call,                                // Function calls func(x)
         token(cident(PASCAL_T_IDENTIFIER)),       // Identifiers (variables)
         between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
         NULL
@@ -469,4 +482,102 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_altern(*p, 7, PASCAL_T_POS, token(match("+")));
     expr_altern(*p, 7, PASCAL_T_NOT, token(match("not")));
     expr_altern(*p, 7, PASCAL_T_ADDR, token(match("@")));
+}
+
+// --- Pascal Statement Parser Implementation ---
+void init_pascal_statement_parser(combinator_t** p) {
+    // First create the expression parser to use within statements
+    combinator_t** expr_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *expr_parser = new_combinator();
+    (*expr_parser)->extra_to_free = expr_parser;
+    init_pascal_expression_parser(expr_parser);
+    
+    // Create the main statement parser pointer for recursive references
+    combinator_t** stmt_parser = p;
+    
+    // Assignment statement: identifier := expression (no semicolon here)
+    combinator_t* assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
+        token(cident(PASCAL_T_IDENTIFIER)),    // variable name
+        token(match(":=")),                    // assignment operator
+        lazy(expr_parser),                     // expression
+        NULL
+    );
+    
+    // Simple expression statement: expression (no semicolon here)
+    combinator_t* expr_stmt = seq(new_combinator(), PASCAL_T_STATEMENT,
+        lazy(expr_parser),                     // expression
+        NULL
+    );
+    
+    // Begin-end block: begin statement_list end
+    combinator_t* stmt_list = sep_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* begin_end_block = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        token(match("begin")),                 // begin keyword
+        stmt_list,                             // statement list  
+        token(match("end")),                   // end keyword
+        NULL
+    );
+    
+    // If statement: if expression then statement [else statement]
+    combinator_t* if_stmt = seq(new_combinator(), PASCAL_T_IF_STMT,
+        token(match("if")),                    // if keyword
+        lazy(expr_parser),                     // condition
+        token(match("then")),                  // then keyword
+        lazy(stmt_parser),                     // then statement
+        optional(seq(new_combinator(), PASCAL_T_ELSE,    // optional else part
+            token(match("else")),
+            lazy(stmt_parser),
+            NULL
+        )),
+        NULL
+    );
+    
+    // For statement: for identifier := expression (to|downto) expression do statement
+    combinator_t* for_direction = multi(new_combinator(), PASCAL_T_NONE,
+        token(match("to")),
+        token(match("downto")),
+        NULL
+    );
+    combinator_t* for_stmt = seq(new_combinator(), PASCAL_T_FOR_STMT,
+        token(match("for")),                   // for keyword
+        token(cident(PASCAL_T_IDENTIFIER)),    // loop variable
+        token(match(":=")),                    // assignment
+        lazy(expr_parser),                     // start expression
+        for_direction,                         // to or downto
+        lazy(expr_parser),                     // end expression
+        token(match("do")),                    // do keyword
+        lazy(stmt_parser),                     // loop body statement
+        NULL
+    );
+    
+    // While statement: while expression do statement
+    combinator_t* while_stmt = seq(new_combinator(), PASCAL_T_WHILE_STMT,
+        token(match("while")),                 // while keyword
+        lazy(expr_parser),                     // condition
+        token(match("do")),                    // do keyword
+        lazy(stmt_parser),                     // body statement
+        NULL
+    );
+    
+    // Main statement parser: try different types of statements
+    multi(*stmt_parser, PASCAL_T_NONE,
+        assignment,                            // assignment statements
+        if_stmt,                              // if statements
+        for_stmt,                             // for statements
+        while_stmt,                           // while statements
+        begin_end_block,                      // compound statements
+        expr_stmt,                            // expression statements
+        NULL
+    );
+    
+    // For stand-alone statements (outside begin-end), also create a terminated version
+    combinator_t** terminated_stmt = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *terminated_stmt = new_combinator();
+    (*terminated_stmt)->extra_to_free = terminated_stmt;
+    
+    seq(*terminated_stmt, PASCAL_T_NONE,
+        lazy(stmt_parser),                     // any statement
+        token(match(";")),                     // followed by semicolon
+        NULL
+    );
 }

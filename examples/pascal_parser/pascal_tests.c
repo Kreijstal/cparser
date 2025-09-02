@@ -814,6 +814,199 @@ void test_pascal_as_operator_with_field_access(void) {
     free(input);
 }
 
+// --- Pascal Statement Tests ---
+
+void test_pascal_assignment_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("x := 42;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_ASSIGNMENT);
+    
+    // Check identifier
+    ast_t* identifier = res.value.ast->child;
+    TEST_ASSERT(identifier->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(identifier->sym->name, "x") == 0);
+    
+    // Check assignment operator (skipped in AST)
+    
+    // Check expression value
+    ast_t* value = identifier->next;
+    TEST_ASSERT(value->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(value->sym->name, "42") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_expression_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("writeln('Hello');");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_STATEMENT);
+    
+    // Check function call
+    ast_t* func_call = res.value.ast->child;
+    TEST_ASSERT(func_call->typ == PASCAL_T_FUNC_CALL);
+    
+    // Check function name
+    ast_t* func_name = func_call->child;
+    TEST_ASSERT(func_name->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(func_name->sym->name, "writeln") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_if_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("if x > 0 then y := 1;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_IF_STMT);
+    
+    // Check condition (x > 0)
+    ast_t* condition = res.value.ast->child;
+    TEST_ASSERT(condition->typ == PASCAL_T_GT);
+    
+    // Check then statement
+    ast_t* then_stmt = condition->next;
+    TEST_ASSERT(then_stmt->typ == PASCAL_T_ASSIGNMENT);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_if_else_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("if x > 0 then y := 1 else y := -1;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_IF_STMT);
+    
+    // Check condition
+    ast_t* condition = res.value.ast->child;
+    TEST_ASSERT(condition->typ == PASCAL_T_GT);
+    
+    // Check then statement
+    ast_t* then_stmt = condition->next;
+    TEST_ASSERT(then_stmt->typ == PASCAL_T_ASSIGNMENT);
+    
+    // Check else clause
+    ast_t* else_clause = then_stmt->next;
+    TEST_ASSERT(else_clause->typ == PASCAL_T_ELSE);
+    
+    // Check else statement
+    ast_t* else_stmt = else_clause->child;
+    TEST_ASSERT(else_stmt->typ == PASCAL_T_ASSIGNMENT);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_begin_end_block(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("begin x := 1; y := 2 end");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_BEGIN_BLOCK);
+    
+    // The child should be the statement list
+    ast_t* stmt_list = res.value.ast->child;
+    TEST_ASSERT(stmt_list != NULL);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_for_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("for i := 1 to 10 do x := x + i;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_FOR_STMT);
+    
+    // Check loop variable
+    ast_t* loop_var = res.value.ast->child;
+    TEST_ASSERT(loop_var->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(loop_var->sym->name, "i") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_while_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("while x > 0 do x := x - 1;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_WHILE_STMT);
+    
+    // Check condition
+    ast_t* condition = res.value.ast->child;
+    TEST_ASSERT(condition->typ == PASCAL_T_GT);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -845,5 +1038,13 @@ TEST_LIST = {
     { "test_pascal_is_operator", test_pascal_is_operator },
     { "test_pascal_as_operator", test_pascal_as_operator },
     { "test_pascal_as_operator_with_field_access", test_pascal_as_operator_with_field_access },
+    // Statement tests
+    { "test_pascal_assignment_statement", test_pascal_assignment_statement },
+    { "test_pascal_expression_statement", test_pascal_expression_statement },
+    { "test_pascal_if_statement", test_pascal_if_statement },
+    { "test_pascal_if_else_statement", test_pascal_if_else_statement },
+    { "test_pascal_begin_end_block", test_pascal_begin_end_block },
+    { "test_pascal_for_statement", test_pascal_for_statement },
+    { "test_pascal_while_statement", test_pascal_while_statement },
     { NULL, NULL }
 };
