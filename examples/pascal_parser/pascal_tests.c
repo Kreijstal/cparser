@@ -1038,6 +1038,115 @@ void test_pascal_while_statement(void) {
     free(input);
 }
 
+void test_pascal_simple_asm_block(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);  // Use program parser for terminated statements
+
+    input_t* input = new_input();
+    input->buffer = strdup("asm mov ax, 5 end;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    // Get the actual statement
+    ast_t* stmt = res.value.ast;
+    if (stmt->typ == PASCAL_T_NONE) {
+        stmt = stmt->child;
+    }
+    TEST_ASSERT(stmt->typ == PASCAL_T_ASM_BLOCK);
+    
+    // Check the ASM body content
+    ast_t* asm_body = stmt->child;
+    TEST_ASSERT(asm_body->typ == PASCAL_T_NONE);
+    TEST_ASSERT(strcmp(asm_body->sym->name, "mov ax, 5 ") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_multiline_asm_block(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);  // Use program parser for terminated statements
+
+    input_t* input = new_input();
+    input->buffer = strdup("asm\n  mov ax, bx\n  add ax, 10\n  int 21h\nend;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    // Get the actual statement
+    ast_t* stmt = res.value.ast;
+    if (stmt->typ == PASCAL_T_NONE) {
+        stmt = stmt->child;
+    }
+    TEST_ASSERT(stmt->typ == PASCAL_T_ASM_BLOCK);
+    
+    // Check the ASM body content - it should contain newlines and instructions
+    ast_t* asm_body = stmt->child;
+    TEST_ASSERT(asm_body->typ == PASCAL_T_NONE);
+    TEST_ASSERT(strstr(asm_body->sym->name, "mov ax, bx") != NULL);
+    TEST_ASSERT(strstr(asm_body->sym->name, "add ax, 10") != NULL);
+    TEST_ASSERT(strstr(asm_body->sym->name, "int 21h") != NULL);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_empty_asm_block(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);  // Use program parser for terminated statements
+
+    input_t* input = new_input();
+    input->buffer = strdup("asm end;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    // Get the actual statement
+    ast_t* stmt = res.value.ast;
+    if (stmt->typ == PASCAL_T_NONE) {
+        stmt = stmt->child;
+    }
+    TEST_ASSERT(stmt->typ == PASCAL_T_ASM_BLOCK);
+    
+    // Check the ASM body content - should be empty except for space
+    ast_t* asm_body = stmt->child;
+    TEST_ASSERT(asm_body->typ == PASCAL_T_NONE);
+    TEST_ASSERT(strcmp(asm_body->sym->name, "") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_unterminated_asm_block(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);  // Use program parser for terminated statements
+
+    input_t* input = new_input();
+    input->buffer = strdup("asm mov ax, 5");  // Missing 'end'
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(!res.is_success);
+    // Could be "Expected ';'" from program parser or "Unterminated ASM block" from ASM parser
+    TEST_ASSERT(res.value.error->message != NULL);
+
+    free_error(res.value.error);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1077,5 +1186,9 @@ TEST_LIST = {
     { "test_pascal_begin_end_block", test_pascal_begin_end_block },
     { "test_pascal_for_statement", test_pascal_for_statement },
     { "test_pascal_while_statement", test_pascal_while_statement },
+    { "test_pascal_simple_asm_block", test_pascal_simple_asm_block },
+    { "test_pascal_multiline_asm_block", test_pascal_multiline_asm_block },
+    { "test_pascal_empty_asm_block", test_pascal_empty_asm_block },
+    { "test_pascal_unterminated_asm_block", test_pascal_unterminated_asm_block },
     { NULL, NULL }
 };

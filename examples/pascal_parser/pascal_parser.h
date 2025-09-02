@@ -59,7 +59,8 @@ typedef enum {
     PASCAL_T_WHILE_STMT,
     PASCAL_T_DO,
     PASCAL_T_TO,
-    PASCAL_T_DOWNTO
+    PASCAL_T_DOWNTO,
+    PASCAL_T_ASM_BLOCK
 } pascal_tag_t;
 
 // --- Function Declarations ---

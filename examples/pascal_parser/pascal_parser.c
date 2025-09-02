@@ -438,6 +438,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_DO: return "DO";
         case PASCAL_T_TO: return "TO";
         case PASCAL_T_DOWNTO: return "DOWNTO";
+        case PASCAL_T_ASM_BLOCK: return "ASM_BLOCK";
         default: return "UNKNOWN";
     }
 }
@@ -581,6 +582,64 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_insert(*p, 7, PASCAL_T_ADDR, EXPR_PREFIX, ASSOC_NONE, token(match("@")));
 }
 
+// ASM block body parser - captures everything until 'end'
+static ParseResult p_asm_body_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    int start_offset = in->start;
+    
+    // Look for 'end' keyword to terminate the ASM block
+    while (in->start + 3 <= in->length) {
+        // Check if we have 'end' followed by non-alphanumeric
+        if (in->buffer[in->start] == 'e' && 
+            in->buffer[in->start + 1] == 'n' && 
+            in->buffer[in->start + 2] == 'd' &&
+            (in->start + 3 >= in->length || 
+             (!isalnum(in->buffer[in->start + 3]) && in->buffer[in->start + 3] != '_'))) {
+            break;
+        }
+        
+        // Advance position and handle line counting
+        char c = read1(in);
+        if (c == EOF) {
+            return make_failure(in, strdup("Unterminated ASM block - missing 'end'"));
+        }
+    }
+    
+    // Check if we found 'end'
+    if (in->start + 3 > in->length) {
+        return make_failure(in, strdup("Unterminated ASM block - missing 'end'"));
+    }
+    
+    // Extract the ASM body content
+    int body_length = in->start - start_offset;
+    char* asm_content = malloc(body_length + 1);
+    if (!asm_content) {
+        return make_failure(in, strdup("Memory allocation failed for ASM content"));
+    }
+    
+    strncpy(asm_content, in->buffer + start_offset, body_length);
+    asm_content[body_length] = '\0';
+    
+    // Create AST node with ASM content
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(asm_content);
+    ast->child = NULL;
+    ast->next = NULL;
+    free(asm_content);
+    set_ast_position(ast, in);
+    return make_success(ast);
+}
+
+combinator_t* asm_body(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = p_asm_body_fn;
+    return comb;
+}
+
 // --- Utility Functions ---
 ParseResult parse_pascal_expression(input_t* input, combinator_t* parser) {
     ParseResult result = parse(input, parser);
@@ -665,6 +724,14 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
+    // ASM block: asm ... end
+    combinator_t* asm_stmt = seq(new_combinator(), PASCAL_T_ASM_BLOCK,
+        token(match("asm")),                   // asm keyword
+        asm_body(PASCAL_T_NONE),               // asm body content
+        token(match("end")),                   // end keyword  
+        NULL
+    );
+    
     // Main statement parser: try different types of statements
     multi(*stmt_parser, PASCAL_T_NONE,
         assignment,                            // assignment statements
@@ -672,6 +739,7 @@ void init_pascal_statement_parser(combinator_t** p) {
         for_stmt,                             // for statements
         while_stmt,                           // while statements
         begin_end_block,                      // compound statements
+        asm_stmt,                             // inline assembly blocks
         expr_stmt,                            // expression statements
         NULL
     );
