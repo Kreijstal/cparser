@@ -52,7 +52,7 @@ void test_pascal_function_call(void) {
     init_pascal_expression_parser(&p);
 
     input_t* input = new_input();
-    input->buffer = strdup("my_func");  // Just test identifier parsing for now
+    input->buffer = strdup("my_func");  // Just test identifier parsing
     input->length = strlen("my_func");
 
     ParseResult res = parse(input, p);
