@@ -66,7 +66,15 @@ typedef enum {
     PASCAL_T_DO,
     PASCAL_T_TO,
     PASCAL_T_DOWNTO,
-    PASCAL_T_ASM_BLOCK
+    PASCAL_T_ASM_BLOCK,
+    // Program structure types
+    PASCAL_T_PROGRAM_DECL,
+    PASCAL_T_PROGRAM_HEADER,
+    PASCAL_T_PROGRAM_PARAMS,
+    PASCAL_T_VAR_SECTION,
+    PASCAL_T_VAR_DECL,
+    PASCAL_T_TYPE_SPEC,
+    PASCAL_T_MAIN_BLOCK
 } pascal_tag_t;
 
 // --- Function Declarations ---
@@ -74,6 +82,7 @@ void init_pascal_expression_parser(combinator_t** p);
 void init_pascal_statement_parser(combinator_t** p);
 void init_pascal_program_parser(combinator_t** p);
 void init_pascal_procedure_parser(combinator_t** p);
+void init_pascal_complete_program_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
 

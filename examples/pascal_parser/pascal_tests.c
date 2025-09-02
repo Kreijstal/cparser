@@ -1273,6 +1273,77 @@ void test_pascal_function_multiple_params(void) {
     free(input);
 }
 
+void test_pascal_program_declaration(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("program Test; begin end.");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_PROGRAM_DECL);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_program_with_vars(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("program Test; var x : integer; begin end.");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_PROGRAM_DECL);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_fizzbuzz_program(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* fizzbuzz = "program FizzBuzz(output);\n"
+                    "var\n"
+                    "   i : integer;\n"
+                    "begin\n"
+                    "   for i := 1 to 100 do\n"
+                    "      if i mod 15 = 0 then\n"
+                    "         writeln('FizzBuzz')\n"
+                    "      else if i mod 3 = 0 then\n"
+                    "         writeln('Fizz')\n"
+                    "      else if i mod 5 = 0 then\n"
+                    "         writeln('Buzz')\n"
+                    "      else\n"
+                    "         writeln(i)\n"
+                    "end.\n";
+    input->buffer = strdup(fizzbuzz);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_PROGRAM_DECL);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1322,5 +1393,9 @@ TEST_LIST = {
     { "test_pascal_simple_function", test_pascal_simple_function },
     { "test_pascal_function_no_params", test_pascal_function_no_params },
     { "test_pascal_function_multiple_params", test_pascal_function_multiple_params },
+    // Complete program tests
+    { "test_pascal_program_declaration", test_pascal_program_declaration },
+    { "test_pascal_program_with_vars", test_pascal_program_with_vars },
+    { "test_pascal_fizzbuzz_program", test_pascal_fizzbuzz_program },
     { NULL, NULL }
 };
