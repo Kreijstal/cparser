@@ -569,14 +569,19 @@ void init_pascal_statement_parser(combinator_t** p) {
         expr_stmt,                            // expression statements
         NULL
     );
+}
+
+// Pascal Program/Terminated Statement Parser - for standalone statements with semicolons
+void init_pascal_program_parser(combinator_t** p) {
+    // Create the base statement parser
+    combinator_t** base_stmt = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *base_stmt = new_combinator();
+    (*base_stmt)->extra_to_free = base_stmt;
+    init_pascal_statement_parser(base_stmt);
     
-    // For stand-alone statements (outside begin-end), also create a terminated version
-    combinator_t** terminated_stmt = (combinator_t**)safe_malloc(sizeof(combinator_t*));
-    *terminated_stmt = new_combinator();
-    (*terminated_stmt)->extra_to_free = terminated_stmt;
-    
-    seq(*terminated_stmt, PASCAL_T_NONE,
-        lazy(stmt_parser),                     // any statement
+    // Terminated statement: statement followed by semicolon
+    seq(*p, PASCAL_T_NONE,
+        lazy(base_stmt),                       // any statement
         token(match(";")),                     // followed by semicolon
         NULL
     );

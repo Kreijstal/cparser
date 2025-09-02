@@ -65,6 +65,7 @@ typedef enum {
 // --- Function Declarations ---
 void init_pascal_expression_parser(combinator_t** p);
 void init_pascal_statement_parser(combinator_t** p);
+void init_pascal_program_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
 
