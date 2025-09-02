@@ -14,6 +14,123 @@ static combinator_t* token(combinator_t* p) {
     return right(ws, left(p, many(satisfy(is_whitespace_char, PASCAL_T_NONE))));
 }
 
+// Custom parser for real numbers (e.g., 3.14, 2.0)
+static ParseResult real_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    int start_pos = in->start;
+    
+    // Parse integer part
+    char c = read1(in);
+    if (!isdigit(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected digit"));
+    }
+    
+    while (isdigit(c = read1(in)));
+    if (c != EOF) in->start--; // Back up one if not EOF
+    
+    // Must have decimal point
+    if (read1(in) != '.') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected decimal point"));
+    }
+    
+    // Parse fractional part (at least one digit required)
+    c = read1(in);
+    if (!isdigit(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected digit after decimal point"));
+    }
+    
+    while (isdigit(c = read1(in)));
+    if (c != EOF) in->start--; // Back up one if not EOF
+    
+    // Create AST node with the real number value
+    int len = in->start - start_pos;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_pos, len);
+    text[len] = '\0';
+    
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    free(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+static combinator_t* real_number(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = real_fn;
+    comb->args = args;
+    return comb;
+}
+
+// Custom parser for character literals (e.g., 'A', 'x')
+static ParseResult char_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Must start with single quote
+    if (read1(in) != '\'') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected single quote"));
+    }
+    
+    // Must have at least one character
+    char char_value = read1(in);
+    if (char_value == EOF) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Unterminated character literal"));
+    }
+    
+    // Must end with single quote  
+    if (read1(in) != '\'') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected closing single quote"));
+    }
+    
+    // Create AST node with the character value
+    char text[2];
+    text[0] = char_value;
+    text[1] = '\0';
+    
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+// Custom combinator for relational operators that handles multi-character tokens properly
+static combinator_t* relational_ops() {
+    return multi(new_combinator(), PASCAL_T_NONE,
+        token(match("<=")),  // Try longer matches first
+        token(match(">=")),
+        token(match("<>")),
+        token(match("=")),
+        token(match("<")),
+        token(match(">")),
+        token(match("in")),
+        token(match("is")),
+        token(match("as")),
+        NULL
+    );
+}
+
 // --- AST Printing ---
 const char* pascal_tag_to_string(tag_t tag) {
     switch (tag) {
@@ -22,6 +139,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_REAL: return "REAL";
         case PASCAL_T_IDENTIFIER: return "IDENTIFIER";
         case PASCAL_T_STRING: return "STRING";
+        case PASCAL_T_CHAR: return "CHAR";
         case PASCAL_T_BOOLEAN: return "BOOLEAN";
         case PASCAL_T_ADD: return "ADD";
         case PASCAL_T_SUB: return "SUB";
@@ -30,12 +148,30 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_INTDIV: return "INTDIV";
         case PASCAL_T_MOD: return "MOD";
         case PASCAL_T_NEG: return "NEG";
+        case PASCAL_T_POS: return "POS";
         case PASCAL_T_EQ: return "EQ";
         case PASCAL_T_NE: return "NE";
         case PASCAL_T_LT: return "LT";
         case PASCAL_T_GT: return "GT";
         case PASCAL_T_LE: return "LE";
         case PASCAL_T_GE: return "GE";
+        case PASCAL_T_AND: return "AND";
+        case PASCAL_T_OR: return "OR";
+        case PASCAL_T_NOT: return "NOT";
+        case PASCAL_T_XOR: return "XOR";
+        case PASCAL_T_SHL: return "SHL";
+        case PASCAL_T_SHR: return "SHR";
+        case PASCAL_T_ADDR: return "ADDR";
+        case PASCAL_T_RANGE: return "RANGE";
+        case PASCAL_T_SET: return "SET";
+        case PASCAL_T_IN: return "IN";
+        case PASCAL_T_SET_UNION: return "SET_UNION";
+        case PASCAL_T_SET_INTERSECT: return "SET_INTERSECT";
+        case PASCAL_T_SET_DIFF: return "SET_DIFF";
+        case PASCAL_T_SET_SYM_DIFF: return "SET_SYM_DIFF";
+        case PASCAL_T_IS: return "IS";
+        case PASCAL_T_AS: return "AS";
+        case PASCAL_T_TYPECAST: return "TYPECAST";
         case PASCAL_T_FUNC_CALL: return "FUNC_CALL";
         case PASCAL_T_ARG_LIST: return "ARG_LIST";
         default: return "UNKNOWN";
@@ -81,28 +217,64 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
     
+    // Type cast parser: TypeName(expression)
+    combinator_t* typecast = seq(new_combinator(), PASCAL_T_TYPECAST,
+        token(cident(PASCAL_T_IDENTIFIER)), // type name
+        between(token(match("(")), token(match(")")), lazy(p)), // expression
+        NULL
+    );
+    
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
-        token(integer(PASCAL_T_INTEGER)),
-        token(string(PASCAL_T_STRING)),
-        func_call,
-        token(cident(PASCAL_T_IDENTIFIER)),
-        between(token(match("(")), token(match(")")), lazy(p)),
+        token(real_number(PASCAL_T_REAL)),        // Real numbers (3.14) - try first
+        token(integer(PASCAL_T_INTEGER)),         // Integers (123)
+        token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
+        token(string(PASCAL_T_STRING)),           // Strings ("hello")
+        typecast,                                 // Type casts Integer(x)
+        func_call,                                // Function calls func(x)
+        token(cident(PASCAL_T_IDENTIFIER)),       // Identifiers (variables)
+        between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
         NULL
     );
 
     expr(*p, factor);
     
-    // Precedence 0: Addition and Subtraction (includes string concatenation)
-    expr_insert(*p, 0, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
-    expr_altern(*p, 0, PASCAL_T_SUB, token(match("-")));
+    // Precedence levels (lower number = lower precedence)
+    // Precedence 0: Boolean OR
+    expr_insert(*p, 0, PASCAL_T_OR, EXPR_INFIX, ASSOC_LEFT, token(match("or")));
     
-    // Precedence 1: Multiplication, Division, and Modulo
-    expr_insert(*p, 1, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
-    expr_altern(*p, 1, PASCAL_T_DIV, token(match("/")));
-    expr_altern(*p, 1, PASCAL_T_INTDIV, token(match("div")));
-    expr_altern(*p, 1, PASCAL_T_MOD, token(match("mod")));
-    expr_altern(*p, 1, PASCAL_T_MOD, token(match("%")));
+    // Precedence 1: Boolean XOR  
+    expr_insert(*p, 1, PASCAL_T_XOR, EXPR_INFIX, ASSOC_LEFT, token(match("xor")));
     
-    // Precedence 2: Unary minus (highest precedence)
-    expr_insert(*p, 2, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    // Precedence 2: Boolean AND
+    expr_insert(*p, 2, PASCAL_T_AND, EXPR_INFIX, ASSOC_LEFT, token(match("and")));
+    
+    // Precedence 3: Relational operators (=, <>, <, >, <=, >=, in, is, as)
+    expr_insert(*p, 3, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
+    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));
+    expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
+    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
+    expr_altern(*p, 3, PASCAL_T_LT, token(match("<")));
+    expr_altern(*p, 3, PASCAL_T_GT, token(match(">")));
+    expr_altern(*p, 3, PASCAL_T_IN, token(match("in")));
+    expr_altern(*p, 3, PASCAL_T_IS, token(match("is")));
+    expr_altern(*p, 3, PASCAL_T_AS, token(match("as")));
+    
+    // Precedence 4: Addition and Subtraction (includes string concatenation)
+    expr_insert(*p, 4, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
+    expr_altern(*p, 4, PASCAL_T_SUB, token(match("-")));
+    
+    // Precedence 5: Multiplication, Division, Modulo, and Bitwise shifts
+    expr_insert(*p, 5, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
+    expr_altern(*p, 5, PASCAL_T_DIV, token(match("/")));
+    expr_altern(*p, 5, PASCAL_T_INTDIV, token(match("div")));
+    expr_altern(*p, 5, PASCAL_T_MOD, token(match("mod")));
+    expr_altern(*p, 5, PASCAL_T_MOD, token(match("%")));
+    expr_altern(*p, 5, PASCAL_T_SHL, token(match("shl")));
+    expr_altern(*p, 5, PASCAL_T_SHR, token(match("shr")));
+    
+    // Precedence 6: Unary operators (highest precedence)
+    expr_insert(*p, 6, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    expr_altern(*p, 6, PASCAL_T_POS, token(match("+")));
+    expr_altern(*p, 6, PASCAL_T_NOT, token(match("not")));
+    expr_altern(*p, 6, PASCAL_T_ADDR, token(match("@")));
 }
