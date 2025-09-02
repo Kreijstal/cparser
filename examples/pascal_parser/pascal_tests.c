@@ -265,6 +265,34 @@ void test_pascal_complex_expression(void) {
     free(input);
 }
 
+void test_pascal_div_operator(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("10 div 3");
+    input->length = strlen("10 div 3");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_INTDIV);
+    
+    // Check operands
+    ast_t* left = res.value.ast->child;
+    TEST_ASSERT(left->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(left->sym->name, "10") == 0);
+    
+    ast_t* right = left->next;
+    TEST_ASSERT(right->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(right->sym->name, "3") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -276,5 +304,6 @@ TEST_LIST = {
     { "test_pascal_mod_operator_percent", test_pascal_mod_operator_percent },
     { "test_pascal_string_concatenation", test_pascal_string_concatenation },
     { "test_pascal_complex_expression", test_pascal_complex_expression },
+    { "test_pascal_div_operator", test_pascal_div_operator },
     { NULL, NULL }
 };

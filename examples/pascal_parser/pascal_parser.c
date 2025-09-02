@@ -84,10 +84,6 @@ void init_pascal_expression_parser(combinator_t** p) {
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
         token(integer(PASCAL_T_INTEGER)),
         token(string(PASCAL_T_STRING)),
-        token(multi(new_combinator(), PASCAL_T_BOOLEAN,
-            match("true"),
-            match("false"),
-            NULL)),
         func_call,
         token(cident(PASCAL_T_IDENTIFIER)),
         between(token(match("(")), token(match(")")), lazy(p)),
@@ -96,25 +92,17 @@ void init_pascal_expression_parser(combinator_t** p) {
 
     expr(*p, factor);
     
-    // Precedence 0: Comparison operators (lowest precedence)
-    expr_insert(*p, 0, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
-    expr_altern(*p, 0, PASCAL_T_NE, token(match("<>")));
-    expr_altern(*p, 0, PASCAL_T_LT, token(match("<")));
-    expr_altern(*p, 0, PASCAL_T_GT, token(match(">")));
-    expr_altern(*p, 0, PASCAL_T_LE, token(match("<=")));
-    expr_altern(*p, 0, PASCAL_T_GE, token(match(">=")));
+    // Precedence 0: Addition and Subtraction (includes string concatenation)
+    expr_insert(*p, 0, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
+    expr_altern(*p, 0, PASCAL_T_SUB, token(match("-")));
     
-    // Precedence 1: Addition and Subtraction (includes string concatenation)
-    expr_insert(*p, 1, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
-    expr_altern(*p, 1, PASCAL_T_SUB, token(match("-")));
+    // Precedence 1: Multiplication, Division, and Modulo
+    expr_insert(*p, 1, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
+    expr_altern(*p, 1, PASCAL_T_DIV, token(match("/")));
+    expr_altern(*p, 1, PASCAL_T_INTDIV, token(match("div")));
+    expr_altern(*p, 1, PASCAL_T_MOD, token(match("mod")));
+    expr_altern(*p, 1, PASCAL_T_MOD, token(match("%")));
     
-    // Precedence 2: Multiplication, Division, and Modulo
-    expr_insert(*p, 2, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
-    expr_altern(*p, 2, PASCAL_T_DIV, token(match("/")));
-    expr_altern(*p, 2, PASCAL_T_INTDIV, token(match("div")));
-    expr_altern(*p, 2, PASCAL_T_MOD, token(match("mod")));
-    expr_altern(*p, 2, PASCAL_T_MOD, token(match("%")));
-    
-    // Precedence 3: Unary minus (highest precedence)
-    expr_insert(*p, 3, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    // Precedence 2: Unary minus (highest precedence)
+    expr_insert(*p, 2, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
 }
