@@ -839,12 +839,88 @@ void init_pascal_procedure_parser(combinator_t** p) {
 }
 
 // Pascal Complete Program Parser - for full Pascal programs  
+// Custom parser for main block content that parses statements properly
+static ParseResult main_block_content_fn(input_t* in, void* args) {
+    // First, capture content until "end" (like the original hack)
+    int start_offset = in->start;
+    int content_start = in->start;
+    int content_end = -1;
+    
+    // Find the "end" keyword (simple implementation)
+    while (in->start < in->length) {
+        if (in->start + 3 <= in->length &&
+            strncmp(in->buffer + in->start, "end", 3) == 0) {
+            // Check if it's a word boundary
+            if (in->start + 3 == in->length || !isalnum(in->buffer[in->start + 3])) {
+                content_end = in->start;
+                break;
+            }
+        }
+        in->start++;
+    }
+    
+    if (content_end == -1) {
+        return make_failure(in, strdup("Expected 'end' keyword"));
+    }
+    
+    // Extract the content between begin and end
+    int content_len = content_end - content_start;
+    if (content_len == 0) {
+        // Empty main block - return ast_nil
+        in->start = content_end; // Position at "end"
+        return make_success(ast_nil);
+    }
+    
+    // Create input for parsing the main block content
+    input_t* content_input = new_input();
+    content_input->buffer = strndup(in->buffer + content_start, content_len);
+    content_input->length = content_len;
+    content_input->line = in->line;
+    content_input->col = in->col;
+    
+    // Create statement parser to parse the content
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+    
+    // Parse as many statements as possible
+    combinator_t* stmt_list = sep_end_by(stmt_parser, token(match(";")));
+    ParseResult stmt_result = parse(content_input, stmt_list);
+    
+    // Position input at the end of content for the main parser to continue
+    in->start = content_end;
+    
+    // Clean up
+    free(content_input->buffer);
+    free(content_input);
+    free_combinator(stmt_list);
+    
+    if (stmt_result.is_success) {
+        return stmt_result;
+    } else {
+        // If statement parsing fails, fall back to capturing as raw text (original hack behavior)
+        ast_t* raw_ast = new_ast();
+        raw_ast->typ = PASCAL_T_NONE;
+        raw_ast->sym = sym_lookup(strndup(in->buffer + content_start, content_len));
+        free_error(stmt_result.value.error);
+        return make_success(raw_ast);
+    }
+}
+
+combinator_t* main_block_content(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = main_block_content_fn;
+    return comb;
+}
+
 void init_pascal_complete_program_parser(combinator_t** p) {
-    // Simple main block parser that handles any content between begin and end
-    combinator_t* main_block_content = until(token(match("end")), PASCAL_T_NONE);
+    // Enhanced main block parser that tries proper statement parsing first, falls back to hack
+    combinator_t* enhanced_main_block_content = main_block_content(PASCAL_T_NONE);
     combinator_t* main_block = seq(new_combinator(), PASCAL_T_MAIN_BLOCK,
         token(match("begin")),                       // begin keyword
-        main_block_content,                          // any content until "end"
+        enhanced_main_block_content,                 // properly parsed content (or fallback to raw text)
         token(match("end")),                         // end keyword
         NULL
     );
