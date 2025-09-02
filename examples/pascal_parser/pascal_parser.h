@@ -46,6 +46,12 @@ typedef enum {
     PASCAL_T_TYPECAST,
     PASCAL_T_FUNC_CALL,
     PASCAL_T_ARG_LIST,
+    // Procedure/Function Declaration types
+    PASCAL_T_PROCEDURE_DECL,
+    PASCAL_T_FUNCTION_DECL,
+    PASCAL_T_PARAM_LIST,
+    PASCAL_T_PARAM,
+    PASCAL_T_RETURN_TYPE,
     // Statement types
     PASCAL_T_ASSIGNMENT,
     PASCAL_T_STATEMENT,
@@ -67,6 +73,7 @@ typedef enum {
 void init_pascal_expression_parser(combinator_t** p);
 void init_pascal_statement_parser(combinator_t** p);
 void init_pascal_program_parser(combinator_t** p);
+void init_pascal_procedure_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
 

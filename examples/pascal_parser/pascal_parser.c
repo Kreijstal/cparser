@@ -425,6 +425,11 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TYPECAST: return "TYPECAST";
         case PASCAL_T_FUNC_CALL: return "FUNC_CALL";
         case PASCAL_T_ARG_LIST: return "ARG_LIST";
+        case PASCAL_T_PROCEDURE_DECL: return "PROCEDURE_DECL";
+        case PASCAL_T_FUNCTION_DECL: return "FUNCTION_DECL";
+        case PASCAL_T_PARAM_LIST: return "PARAM_LIST";
+        case PASCAL_T_PARAM: return "PARAM";
+        case PASCAL_T_RETURN_TYPE: return "RETURN_TYPE";
         case PASCAL_T_ASSIGNMENT: return "ASSIGNMENT";
         case PASCAL_T_STATEMENT: return "STATEMENT";
         case PASCAL_T_STATEMENT_LIST: return "STATEMENT_LIST";
@@ -757,6 +762,71 @@ void init_pascal_program_parser(combinator_t** p) {
     seq(*p, PASCAL_T_NONE,
         lazy(base_stmt),                       // any statement
         token(match(";")),                     // followed by semicolon
+        NULL
+    );
+}
+
+// Pascal Procedure/Function Declaration Parser
+void init_pascal_procedure_parser(combinator_t** p) {
+    // Create expression parser for default values and type references
+    combinator_t** expr_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *expr_parser = new_combinator();
+    (*expr_parser)->extra_to_free = expr_parser;
+    init_pascal_expression_parser(expr_parser);
+    
+    // Create statement parser for procedure/function bodies
+    combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *stmt_parser = new_combinator();
+    (*stmt_parser)->extra_to_free = stmt_parser;
+    init_pascal_statement_parser(stmt_parser);
+    
+    // Parameter: identifier : type (simplified - just use identifier for type)
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        token(cident(PASCAL_T_IDENTIFIER)),      // parameter name
+        token(match(":")),                       // colon
+        token(cident(PASCAL_T_IDENTIFIER)),      // type name (simplified)
+        NULL
+    );
+    
+    // Parameter list: optional ( param ; param ; ... )
+    combinator_t* param_list = optional(between(
+        token(match("(")),
+        token(match(")")),
+        sep_by(param, token(match(";")))
+    ));
+    
+    // Return type: : type (for functions)  
+    combinator_t* return_type = seq(new_combinator(), PASCAL_T_RETURN_TYPE,
+        token(match(":")),                       // colon
+        token(cident(PASCAL_T_IDENTIFIER)),      // return type (simplified)
+        NULL
+    );
+    
+    // Procedure declaration: procedure name [(params)] ; body
+    combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(match("procedure")),               // procedure keyword
+        token(cident(PASCAL_T_IDENTIFIER)),      // procedure name
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // procedure body
+        NULL
+    );
+    
+    // Function declaration: function name [(params)] : return_type ; body
+    combinator_t* function_decl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+        token(match("function")),                // function keyword
+        token(cident(PASCAL_T_IDENTIFIER)),      // function name
+        param_list,                              // optional parameter list
+        return_type,                             // return type
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // function body
+        NULL
+    );
+    
+    // Main procedure parser: try function or procedure declaration
+    multi(*p, PASCAL_T_NONE,
+        function_decl,                           // function declarations first
+        procedure_decl,                          // procedure declarations second
         NULL
     );
 }
