@@ -361,7 +361,7 @@ combinator_t* ne_op() {
     return comb;
 }
 
-static combinator_t* le_op() {
+combinator_t* le_op() {
     combinator_t* comb = new_combinator();
     comb->type = P_SATISFY;
     comb->fn = le_op_fn;
@@ -369,7 +369,7 @@ static combinator_t* le_op() {
     return comb;
 }
 
-static combinator_t* ge_op() {
+combinator_t* ge_op() {
     combinator_t* comb = new_combinator();
     comb->type = P_SATISFY;
     comb->fn = ge_op_fn;
@@ -542,17 +542,15 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_insert(*p, 2, PASCAL_T_AND, EXPR_INFIX, ASSOC_LEFT, token(match("and")));
     
     // Precedence 3: All relational operators at the same level
-    // Use custom multi-character tokenizers to avoid conflicts
-    expr_insert(*p, 3, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
-    
-    // Multi-character operators with custom parsers
-    expr_altern(*p, 3, PASCAL_T_NE, token(ne_op()));
-    expr_altern(*p, 3, PASCAL_T_LE, token(le_op()));
-    expr_altern(*p, 3, PASCAL_T_GE, token(ge_op()));
-    
-    // Single-character operators  
-    expr_altern(*p, 3, PASCAL_T_LT, token(match("<")));
+    // Add single-character operators first
+    expr_insert(*p, 3, PASCAL_T_LT, EXPR_INFIX, ASSOC_LEFT, token(match("<")));
     expr_altern(*p, 3, PASCAL_T_GT, token(match(">")));
+    expr_altern(*p, 3, PASCAL_T_EQ, token(match("=")));
+    
+    // Then add multi-character operators - these should be tried first
+    expr_altern(*p, 3, PASCAL_T_GE, token(ge_op()));
+    expr_altern(*p, 3, PASCAL_T_LE, token(le_op()));
+    expr_altern(*p, 3, PASCAL_T_NE, token(ne_op()));
     
     expr_altern(*p, 3, PASCAL_T_IN, token(match("in")));
     expr_altern(*p, 3, PASCAL_T_IS, token(match("is")));
