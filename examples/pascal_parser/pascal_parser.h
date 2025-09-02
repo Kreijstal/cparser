@@ -45,12 +45,31 @@ typedef enum {
     PASCAL_T_AS,
     PASCAL_T_TYPECAST,
     PASCAL_T_FUNC_CALL,
-    PASCAL_T_ARG_LIST
+    PASCAL_T_ARG_LIST,
+    // Statement types
+    PASCAL_T_ASSIGNMENT,
+    PASCAL_T_STATEMENT,
+    PASCAL_T_STATEMENT_LIST,
+    PASCAL_T_IF_STMT,
+    PASCAL_T_THEN,
+    PASCAL_T_ELSE,
+    PASCAL_T_BEGIN_BLOCK,
+    PASCAL_T_END_BLOCK,
+    PASCAL_T_FOR_STMT,
+    PASCAL_T_WHILE_STMT,
+    PASCAL_T_DO,
+    PASCAL_T_TO,
+    PASCAL_T_DOWNTO
 } pascal_tag_t;
 
 // --- Function Declarations ---
 void init_pascal_expression_parser(combinator_t** p);
+void init_pascal_statement_parser(combinator_t** p);
+void init_pascal_program_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
+
+// --- Utility Functions ---
+ParseResult parse_pascal_expression(input_t* input, combinator_t* parser);
 
 #endif // PASCAL_PARSER_H
