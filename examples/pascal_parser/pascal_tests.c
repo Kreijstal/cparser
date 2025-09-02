@@ -1302,7 +1302,7 @@ void test_pascal_program_declaration(void) {
     TEST_CHECK(main_block->typ == PASCAL_T_MAIN_BLOCK);
 
     // var i : integer;
-    ast_t* var_section = program_params->next;
+    ast_t* var_section = main_block->next;  // Fixed variable reference
     TEST_ASSERT(var_section->typ == PASCAL_T_VAR_SECTION);
     ast_t* var_decl = var_section->child;
     TEST_ASSERT(var_decl->typ == PASCAL_T_VAR_DECL);
@@ -1311,8 +1311,8 @@ void test_pascal_program_declaration(void) {
     TEST_ASSERT(var_decl->child->next->typ == PASCAL_T_IDENTIFIER);
     TEST_ASSERT(strcmp(var_decl->child->next->sym->name, "integer") == 0);
 
-    // main block
-    ast_t* main_block = var_section->next;
+    // main block (already defined above)
+    // ast_t* main_block = var_section->next;  // Removed duplicate
     TEST_ASSERT(main_block->typ == PASCAL_T_MAIN_BLOCK);
 
     // for i := 1 to 100 do
