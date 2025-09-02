@@ -908,22 +908,20 @@ static ParseResult main_block_content_fn(input_t* in, void* args) {
     
     // Position input at the end of content for the main parser to continue
     in->start = content_end;
+
+    if (stmt_result.is_success && content_input->start < content_input->length) {
+        free_ast(stmt_result.value.ast);
+        char* err_msg;
+        asprintf(&err_msg, "Syntax error at line %d, col %d", content_input->line, content_input->col);
+        stmt_result = make_failure(content_input, err_msg);
+    }
     
     // Clean up
     free(content_input->buffer);
     free(content_input);
     free_combinator(stmt_list);
     
-    if (stmt_result.is_success) {
-        return stmt_result;
-    } else {
-        // If statement parsing fails, fall back to capturing as raw text (original hack behavior)
-        ast_t* raw_ast = new_ast();
-        raw_ast->typ = PASCAL_T_NONE;
-        raw_ast->sym = sym_lookup(strndup(in->buffer + content_start, content_len));
-        free_error(stmt_result.value.error);
-        return make_success(raw_ast);
-    }
+    return stmt_result;
 }
 
 combinator_t* main_block_content(tag_t tag) {

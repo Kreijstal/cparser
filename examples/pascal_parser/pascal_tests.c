@@ -1283,8 +1283,141 @@ void test_pascal_program_declaration(void) {
 
     ParseResult res = parse(input, p);
 
+    if(res.is_success) {
+        print_pascal_ast(res.value.ast);
+    }
+
     TEST_ASSERT(res.is_success);
-    TEST_ASSERT(res.value.ast->typ == PASCAL_T_PROGRAM_DECL);
+    ast_t* program_decl = res.value.ast;
+    TEST_ASSERT(program_decl->typ == PASCAL_T_PROGRAM_DECL);
+
+    // program FizzBuzz(output);
+    ast_t* program_name = program_decl->child;
+    TEST_ASSERT(program_name->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(program_name->sym->name, "FizzBuzz") == 0);
+
+    ast_t* program_params = program_name->next;
+    TEST_ASSERT(program_params->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(program_params->child->sym->name, "output") == 0);
+
+    // var i : integer;
+    ast_t* var_section = program_params->next;
+    TEST_ASSERT(var_section->typ == PASCAL_T_VAR_SECTION);
+    ast_t* var_decl = var_section->child;
+    TEST_ASSERT(var_decl->typ == PASCAL_T_VAR_DECL);
+    TEST_ASSERT(var_decl->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(var_decl->child->sym->name, "i") == 0);
+    TEST_ASSERT(var_decl->child->next->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(var_decl->child->next->sym->name, "integer") == 0);
+
+    // main block
+    ast_t* main_block = var_section->next;
+    TEST_ASSERT(main_block->typ == PASCAL_T_MAIN_BLOCK);
+
+    // for i := 1 to 100 do
+    ast_t* for_stmt = main_block->child;
+    TEST_ASSERT(for_stmt->typ == PASCAL_T_FOR_STMT);
+    ast_t* loop_var = for_stmt->child;
+    TEST_ASSERT(loop_var->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(loop_var->sym->name, "i") == 0);
+    ast_t* start_val = loop_var->next;
+    TEST_ASSERT(start_val->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(start_val->sym->name, "1") == 0);
+    ast_t* end_val = start_val->next;
+    TEST_ASSERT(end_val->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(end_val->sym->name, "100") == 0);
+
+    // body of for loop
+    ast_t* if_stmt1 = end_val->next;
+    TEST_ASSERT(if_stmt1->typ == PASCAL_T_IF_STMT);
+
+    // if i mod 15 = 0 then writeln('FizzBuzz')
+    ast_t* cond1 = if_stmt1->child;
+    TEST_ASSERT(cond1->typ == PASCAL_T_EQ);
+    ast_t* mod1 = cond1->child;
+    TEST_ASSERT(mod1->typ == PASCAL_T_MOD);
+    TEST_ASSERT(mod1->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(mod1->child->sym->name, "i") == 0);
+    TEST_ASSERT(mod1->child->next->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(mod1->child->next->sym->name, "15") == 0);
+    ast_t* zero1 = mod1->next;
+    TEST_ASSERT(zero1->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(zero1->sym->name, "0") == 0);
+
+    ast_t* then1 = cond1->next;
+    TEST_ASSERT(then1->typ == PASCAL_T_STATEMENT);
+    ast_t* writeln1 = then1->child;
+    TEST_ASSERT(writeln1->typ == PASCAL_T_FUNC_CALL);
+    TEST_ASSERT(writeln1->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(writeln1->child->sym->name, "writeln") == 0);
+    TEST_ASSERT(writeln1->child->next->typ == PASCAL_T_STRING);
+    TEST_ASSERT(strcmp(writeln1->child->next->sym->name, "FizzBuzz") == 0);
+
+    // else if i mod 3 = 0 then writeln('Fizz')
+    ast_t* else1 = then1->next;
+    TEST_ASSERT(else1->typ == PASCAL_T_ELSE);
+    ast_t* if_stmt2 = else1->child;
+    TEST_ASSERT(if_stmt2->typ == PASCAL_T_IF_STMT);
+
+    ast_t* cond2 = if_stmt2->child;
+    TEST_ASSERT(cond2->typ == PASCAL_T_EQ);
+    ast_t* mod2 = cond2->child;
+    TEST_ASSERT(mod2->typ == PASCAL_T_MOD);
+    TEST_ASSERT(mod2->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(mod2->child->sym->name, "i") == 0);
+    TEST_ASSERT(mod2->child->next->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(mod2->child->next->sym->name, "3") == 0);
+    ast_t* zero2 = mod2->next;
+    TEST_ASSERT(zero2->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(zero2->sym->name, "0") == 0);
+
+    ast_t* then2 = cond2->next;
+    TEST_ASSERT(then2->typ == PASCAL_T_STATEMENT);
+    ast_t* writeln2 = then2->child;
+    TEST_ASSERT(writeln2->typ == PASCAL_T_FUNC_CALL);
+    TEST_ASSERT(writeln2->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(writeln2->child->sym->name, "writeln") == 0);
+    TEST_ASSERT(writeln2->child->next->typ == PASCAL_T_STRING);
+    TEST_ASSERT(strcmp(writeln2->child->next->sym->name, "Fizz") == 0);
+
+    // else if i mod 5 = 0 then writeln('Buzz')
+    ast_t* else2 = then2->next;
+    TEST_ASSERT(else2->typ == PASCAL_T_ELSE);
+    ast_t* if_stmt3 = else2->child;
+    TEST_ASSERT(if_stmt3->typ == PASCAL_T_IF_STMT);
+
+    ast_t* cond3 = if_stmt3->child;
+    TEST_ASSERT(cond3->typ == PASCAL_T_EQ);
+    ast_t* mod3 = cond3->child;
+    TEST_ASSERT(mod3->typ == PASCAL_T_MOD);
+    TEST_ASSERT(mod3->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(mod3->child->sym->name, "i") == 0);
+    TEST_ASSERT(mod3->child->next->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(mod3->child->next->sym->name, "5") == 0);
+    ast_t* zero3 = mod3->next;
+    TEST_ASSERT(zero3->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(zero3->sym->name, "0") == 0);
+
+    ast_t* then3 = cond3->next;
+    TEST_ASSERT(then3->typ == PASCAL_T_STATEMENT);
+    ast_t* writeln3 = then3->child;
+    TEST_ASSERT(writeln3->typ == PASCAL_T_FUNC_CALL);
+    TEST_ASSERT(writeln3->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(writeln3->child->sym->name, "writeln") == 0);
+    TEST_ASSERT(writeln3->child->next->typ == PASCAL_T_STRING);
+    TEST_ASSERT(strcmp(writeln3->child->next->sym->name, "Buzz") == 0);
+
+    // else writeln(i)
+    ast_t* else3 = then3->next;
+    TEST_ASSERT(else3->typ == PASCAL_T_ELSE);
+    ast_t* stmt4 = else3->child;
+    TEST_ASSERT(stmt4->typ == PASCAL_T_STATEMENT);
+    ast_t* writeln4 = stmt4->child;
+    TEST_ASSERT(writeln4->typ == PASCAL_T_FUNC_CALL);
+    TEST_ASSERT(writeln4->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(writeln4->child->sym->name, "writeln") == 0);
+    TEST_ASSERT(writeln4->child->next->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(writeln4->child->next->sym->name, "i") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
@@ -1344,6 +1477,35 @@ void test_pascal_fizzbuzz_program(void) {
     free(input);
 }
 
+void test_pascal_complex_syntax_error(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* error_program = "program ErrorTest;\n"
+                          "var\n"
+                          "  x: integer;\n"
+                          "begin\n"
+                          "  x := 10;\n"
+                          "  if x > 5 then\n"
+                          "    begin\n"
+                          "      writeln('x is greater than 5')\n"
+                          "    \n" // Missing 'end'
+                          "end.\n";
+    input->buffer = strdup(error_program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(!res.is_success);
+    TEST_ASSERT(res.value.error != NULL);
+
+    free_error(res.value.error);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1397,5 +1559,6 @@ TEST_LIST = {
     { "test_pascal_program_declaration", test_pascal_program_declaration },
     { "test_pascal_program_with_vars", test_pascal_program_with_vars },
     { "test_pascal_fizzbuzz_program", test_pascal_fizzbuzz_program },
+    { "test_pascal_complex_syntax_error", test_pascal_complex_syntax_error },
     { NULL, NULL }
 };
