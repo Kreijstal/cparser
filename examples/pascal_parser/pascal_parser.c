@@ -382,7 +382,80 @@ static combinator_t* relational_ops() {
     );
 }
 
-// --- AST Printing ---
+// Pascal string literal parser - supports both single 'text' and double "text" quotes
+static ParseResult pascal_string_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state; 
+    save_input_state(in, &state);
+    
+    char quote_char = read1(in);
+    if (quote_char != '"' && quote_char != '\'') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '\"' or '\\''"));
+    }
+    
+    int capacity = 64;
+    char* str_val = (char*)safe_malloc(capacity);
+    int len = 0;
+    char c;
+    
+    while ((c = read1(in)) != quote_char) {
+        if (c == EOF) {
+            free(str_val);
+            return make_failure(in, strdup("Unterminated string"));
+        }
+        
+        // Handle escape sequences for double quotes
+        if (quote_char == '"' && c == '\\') {
+            c = read1(in);
+            if (c == EOF) {
+                free(str_val);
+                return make_failure(in, strdup("Unterminated string"));
+            }
+            switch (c) {
+                case 'n': c = '\n'; break;
+                case 't': c = '\t'; break;
+                case '"': c = '"'; break;
+                case '\\': c = '\\'; break;
+            }
+        }
+        
+        // Expand buffer if needed
+        if (len + 1 >= capacity) {
+            capacity *= 2;
+            char* new_str_val = realloc(str_val, capacity);
+            if (!new_str_val) {
+                free(str_val);
+                exception("realloc failed");
+            }
+            str_val = new_str_val;
+        }
+        
+        str_val[len++] = c;
+    }
+    
+    str_val[len] = '\0';
+    
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(str_val);
+    ast->child = NULL;
+    ast->next = NULL;
+    free(str_val);
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+combinator_t* pascal_string(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_STRING; // Reuse the same type
+    comb->fn = pascal_string_fn;
+    comb->args = args;
+    return comb;
+}
 const char* pascal_tag_to_string(tag_t tag) {
     switch (tag) {
         case PASCAL_T_NONE: return "NONE";
@@ -535,7 +608,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(real_number(PASCAL_T_REAL)),        // Real numbers (3.14) - try first
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
-        token(string(PASCAL_T_STRING)),           // Strings ("hello")
+        token(pascal_string(PASCAL_T_STRING)),    // Strings ("hello" or 'hello')
         token(set_constructor(PASCAL_T_SET)),     // Set constructors [1, 2, 3]
         token(boolean_true),                      // Boolean true
         token(boolean_false),                     // Boolean false
@@ -594,62 +667,9 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_insert(*p, 7, PASCAL_T_ADDR, EXPR_PREFIX, ASSOC_NONE, token(match("@")));
 }
 
-// ASM block body parser - captures everything until 'end'
-static ParseResult p_asm_body_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
-    int start_offset = in->start;
-    
-    // Look for 'end' keyword to terminate the ASM block
-    while (in->start + 3 <= in->length) {
-        // Check if we have 'end' followed by non-alphanumeric
-        if (in->buffer[in->start] == 'e' && 
-            in->buffer[in->start + 1] == 'n' && 
-            in->buffer[in->start + 2] == 'd' &&
-            (in->start + 3 >= in->length || 
-             (!isalnum(in->buffer[in->start + 3]) && in->buffer[in->start + 3] != '_'))) {
-            break;
-        }
-        
-        // Advance position and handle line counting
-        char c = read1(in);
-        if (c == EOF) {
-            return make_failure(in, strdup("Unterminated ASM block - missing 'end'"));
-        }
-    }
-    
-    // Check if we found 'end'
-    if (in->start + 3 > in->length) {
-        return make_failure(in, strdup("Unterminated ASM block - missing 'end'"));
-    }
-    
-    // Extract the ASM body content
-    int body_length = in->start - start_offset;
-    char* asm_content = malloc(body_length + 1);
-    if (!asm_content) {
-        return make_failure(in, strdup("Memory allocation failed for ASM content"));
-    }
-    
-    strncpy(asm_content, in->buffer + start_offset, body_length);
-    asm_content[body_length] = '\0';
-    
-    // Create AST node with ASM content
-    ast_t* ast = new_ast();
-    ast->typ = pargs->tag;
-    ast->sym = sym_lookup(asm_content);
-    ast->child = NULL;
-    ast->next = NULL;
-    free(asm_content);
-    set_ast_position(ast, in);
-    return make_success(ast);
-}
-
+// ASM block body parser - uses proper until() combinator instead of manual scanning
 combinator_t* asm_body(tag_t tag) {
-    combinator_t* comb = new_combinator();
-    prim_args* args = safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    comb->args = args;
-    comb->fn = p_asm_body_fn;
-    return comb;
+    return until(match("end"), tag);  // Use raw match instead of token to preserve whitespace
 }
 
 // --- Utility Functions ---
