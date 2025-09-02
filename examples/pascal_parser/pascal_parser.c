@@ -764,15 +764,15 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // Main statement parser: try different types of statements
+    // Main statement parser: try different types of statements (order matters!)
     multi(*stmt_parser, PASCAL_T_NONE,
-        assignment,                            // assignment statements
+        begin_end_block,                      // compound statements (must come before expr_stmt)
+        asm_stmt,                             // inline assembly blocks
         if_stmt,                              // if statements
         for_stmt,                             // for statements
         while_stmt,                           // while statements
-        begin_end_block,                      // compound statements
-        asm_stmt,                             // inline assembly blocks
-        expr_stmt,                            // expression statements
+        assignment,                            // assignment statements
+        expr_stmt,                            // expression statements (must be last)
         NULL
     );
 }
@@ -967,14 +967,74 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Complete program: program Name(params); [var section] begin end.
+    // Create procedure/function parsers for use in complete program
+    // Need to create a modified procedure parser that supports var parameters
+    combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *stmt_parser = new_combinator();
+    (*stmt_parser)->extra_to_free = stmt_parser;
+    init_pascal_statement_parser(stmt_parser);
+    
+    // Enhanced parameter: [var] identifier : type (support for var parameters)
+    combinator_t* var_keyword = optional(token(match("var")));
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        var_keyword,                                 // optional var keyword
+        token(cident(PASCAL_T_IDENTIFIER)),          // parameter name
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // type name (simplified)
+        NULL
+    );
+    
+    // Parameter list: optional ( param ; param ; ... )
+    combinator_t* param_list = optional(between(
+        token(match("(")),
+        token(match(")")),
+        sep_by(param, token(match(";")))
+    ));
+    
+    // Return type: : type (for functions)
+    combinator_t* return_type = seq(new_combinator(), PASCAL_T_RETURN_TYPE,
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // return type (simplified)
+        NULL
+    );
+    
+    // Procedure declaration: procedure name [(params)] ; body
+    combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(match("procedure")),                   // procedure keyword
+        token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // semicolon
+        lazy(stmt_parser),                           // procedure body
+        NULL
+    );
+    
+    // Function declaration: function name [(params)] : return_type ; body  
+    combinator_t* function_decl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+        token(match("function")),                    // function keyword
+        token(cident(PASCAL_T_IDENTIFIER)),          // function name
+        param_list,                                  // optional parameter list
+        return_type,                                 // return type
+        token(match(";")),                           // semicolon
+        lazy(stmt_parser),                           // function body
+        NULL
+    );
+    
+    // Procedure or function declaration
+    combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
+        function_decl,                               // function declarations first
+        procedure_decl,                              // procedure declarations second
+        NULL
+    );
+    
+    // Complete program: program Name(params); [var section] [procedures/functions] begin end.
     seq(*p, PASCAL_T_PROGRAM_DECL,
         token(match("program")),                     // program keyword
         token(cident(PASCAL_T_IDENTIFIER)),          // program name  
         program_param_list,                          // optional parameter list
         token(match(";")),                           // semicolon
         optional(var_section),                       // optional var section
-        main_block,                                  // simple empty main block
+        many(proc_or_func),                          // zero or more procedure/function declarations
+        main_block,                                  // main program block
         token(match(".")),                           // final period
         NULL
     );
