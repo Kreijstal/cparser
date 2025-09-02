@@ -21,12 +21,23 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_INTEGER: return "INTEGER";
         case PASCAL_T_REAL: return "REAL";
         case PASCAL_T_IDENTIFIER: return "IDENTIFIER";
+        case PASCAL_T_STRING: return "STRING";
+        case PASCAL_T_BOOLEAN: return "BOOLEAN";
         case PASCAL_T_ADD: return "ADD";
         case PASCAL_T_SUB: return "SUB";
         case PASCAL_T_MUL: return "MUL";
         case PASCAL_T_DIV: return "DIV";
+        case PASCAL_T_INTDIV: return "INTDIV";
+        case PASCAL_T_MOD: return "MOD";
         case PASCAL_T_NEG: return "NEG";
+        case PASCAL_T_EQ: return "EQ";
+        case PASCAL_T_NE: return "NE";
+        case PASCAL_T_LT: return "LT";
+        case PASCAL_T_GT: return "GT";
+        case PASCAL_T_LE: return "LE";
+        case PASCAL_T_GE: return "GE";
         case PASCAL_T_FUNC_CALL: return "FUNC_CALL";
+        case PASCAL_T_ARG_LIST: return "ARG_LIST";
         default: return "UNKNOWN";
     }
 }
@@ -57,17 +68,53 @@ void print_pascal_ast(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
+    // Function call parser: identifier followed by optional argument list
+    combinator_t* arg_list = between(
+        token(match("(")),
+        token(match(")")),
+        optional(sep_by(lazy(p), token(match(","))))
+    );
+    
+    combinator_t* func_call = seq(new_combinator(), PASCAL_T_FUNC_CALL,
+        token(cident(PASCAL_T_IDENTIFIER)),
+        arg_list,
+        NULL
+    );
+    
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
         token(integer(PASCAL_T_INTEGER)),
+        token(string(PASCAL_T_STRING)),
+        token(multi(new_combinator(), PASCAL_T_BOOLEAN,
+            match("true"),
+            match("false"),
+            NULL)),
+        func_call,
         token(cident(PASCAL_T_IDENTIFIER)),
         between(token(match("(")), token(match(")")), lazy(p)),
         NULL
     );
 
     expr(*p, factor);
-    expr_insert(*p, 0, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
-    expr_altern(*p, 0, PASCAL_T_SUB, token(match("-")));
-    expr_insert(*p, 1, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
-    expr_altern(*p, 1, PASCAL_T_DIV, token(match("/")));
-    expr_insert(*p, 2, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    
+    // Precedence 0: Comparison operators (lowest precedence)
+    expr_insert(*p, 0, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
+    expr_altern(*p, 0, PASCAL_T_NE, token(match("<>")));
+    expr_altern(*p, 0, PASCAL_T_LT, token(match("<")));
+    expr_altern(*p, 0, PASCAL_T_GT, token(match(">")));
+    expr_altern(*p, 0, PASCAL_T_LE, token(match("<=")));
+    expr_altern(*p, 0, PASCAL_T_GE, token(match(">=")));
+    
+    // Precedence 1: Addition and Subtraction (includes string concatenation)
+    expr_insert(*p, 1, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
+    expr_altern(*p, 1, PASCAL_T_SUB, token(match("-")));
+    
+    // Precedence 2: Multiplication, Division, and Modulo
+    expr_insert(*p, 2, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
+    expr_altern(*p, 2, PASCAL_T_DIV, token(match("/")));
+    expr_altern(*p, 2, PASCAL_T_INTDIV, token(match("div")));
+    expr_altern(*p, 2, PASCAL_T_MOD, token(match("mod")));
+    expr_altern(*p, 2, PASCAL_T_MOD, token(match("%")));
+    
+    // Precedence 3: Unary minus (highest precedence)
+    expr_insert(*p, 3, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
 }
