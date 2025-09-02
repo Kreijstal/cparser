@@ -302,19 +302,51 @@ static combinator_t* set_constructor(tag_t tag) {
 }
 
 // Custom combinator for relational operators that handles multi-character tokens properly
-static combinator_t* relational_ops() {
-    return multi(new_combinator(), PASCAL_T_NONE,
-        token(match("<=")),  // Try longer matches first
-        token(match(">=")),
-        token(match("<>")),
-        token(match("=")),
-        token(match("<")),
-        token(match(">")),
-        token(match("in")),
-        token(match("is")),
-        token(match("as")),
-        NULL
-    );
+static ParseResult relational_op_fn(input_t* in, void* args) {
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Try operators in order from longest to shortest to avoid prefix conflicts
+    const char* operators[] = {"<=", ">=", "<>", "=", "<", ">", NULL};
+    pascal_tag_t tags[] = {PASCAL_T_LE, PASCAL_T_GE, PASCAL_T_NE, PASCAL_T_EQ, PASCAL_T_LT, PASCAL_T_GT};
+    
+    for (int i = 0; operators[i] != NULL; i++) {
+        save_input_state(in, &state);  // Reset to start position
+        
+        // Try to match this operator
+        bool matches = true;
+        const char* op = operators[i];
+        for (int j = 0; op[j] != '\0'; j++) {
+            char c = read1(in);
+            if (c != op[j]) {
+                matches = false;
+                break;
+            }
+        }
+        
+        if (matches) {
+            // Success! Create an AST node indicating which operator was matched
+            ast_t* ast = new_ast();
+            ast->typ = tags[i];
+            ast->sym = sym_lookup(operators[i]);
+            ast->child = NULL;
+            ast->next = NULL;
+            set_ast_position(ast, in);
+            return make_success(ast);
+        }
+    }
+    
+    // None matched
+    restore_input_state(in, &state);
+    return make_failure(in, strdup("Expected relational operator"));
+}
+
+static combinator_t* relational_operators() {
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = relational_op_fn;
+    comb->args = NULL;
+    return comb;
 }
 
 // --- AST Printing ---
@@ -425,8 +457,8 @@ void init_pascal_expression_parser(combinator_t** p) {
 
     expr(*p, factor);
     
-    // Precedence levels (lower number = lower precedence)
-    // Precedence 0: Boolean OR
+    // Precedence levels (lower number = lower precedence, must be consecutive starting from 0)
+    // Precedence 0: Boolean OR (lowest precedence)
     expr_insert(*p, 0, PASCAL_T_OR, EXPR_INFIX, ASSOC_LEFT, token(match("or")));
     
     // Precedence 1: Boolean XOR  
@@ -435,37 +467,41 @@ void init_pascal_expression_parser(combinator_t** p) {
     // Precedence 2: Boolean AND
     expr_insert(*p, 2, PASCAL_T_AND, EXPR_INFIX, ASSOC_LEFT, token(match("and")));
     
-    // Precedence 3: Relational operators (=, <>, <, >, <=, >=, in, is, as)
-    // Note: Order matters for multi-character operators - longer ones first to avoid conflicts
-    expr_insert(*p, 3, PASCAL_T_LE, EXPR_INFIX, ASSOC_LEFT, token(match("<=")));  // <= before <
-    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));  // >= before >
-    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));  // <> before < and >
-    expr_altern(*p, 3, PASCAL_T_EQ, token(match("=")));
-    expr_altern(*p, 3, PASCAL_T_LT, token(match("<")));
-    expr_altern(*p, 3, PASCAL_T_GT, token(match(">")));
+    // Precedence 3: All relational operators at the same level
+    // The key insight: expr_altern adds to the FRONT of the list, so they're tried in reverse order
+    // So we add single-char operators first, then multi-char ones via expr_altern
+    expr_insert(*p, 3, PASCAL_T_LT, EXPR_INFIX, ASSOC_LEFT, token(match("<")));
+    expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));  // This will be tried BEFORE <
+    
+    expr_insert(*p, 3, PASCAL_T_GT, EXPR_INFIX, ASSOC_LEFT, token(match(">")));
+    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));  // This will be tried BEFORE >
+    
+    expr_insert(*p, 3, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
+    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));  // This will be tried BEFORE =
+    
     expr_altern(*p, 3, PASCAL_T_IN, token(match("in")));
     expr_altern(*p, 3, PASCAL_T_IS, token(match("is")));
     expr_altern(*p, 3, PASCAL_T_AS, token(match("as")));
     
-    // Precedence 3.5: Range operator (..)
-    expr_insert(*p, 3, PASCAL_T_RANGE, EXPR_INFIX, ASSOC_LEFT, token(match("..")));
+    // Precedence 5: Range operator (..)  
+    expr_insert(*p, 5, PASCAL_T_RANGE, EXPR_INFIX, ASSOC_LEFT, token(match("..")));
     
-    // Precedence 4: Addition and Subtraction (includes string concatenation)
-    expr_insert(*p, 4, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
-    expr_altern(*p, 4, PASCAL_T_SUB, token(match("-")));
+    // Precedence 6: Addition and Subtraction (includes string concatenation and set operations)
+    expr_insert(*p, 6, PASCAL_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
+    expr_altern(*p, 6, PASCAL_T_SUB, token(match("-")));
     
-    // Precedence 5: Multiplication, Division, Modulo, and Bitwise shifts
-    expr_insert(*p, 5, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
-    expr_altern(*p, 5, PASCAL_T_DIV, token(match("/")));
-    expr_altern(*p, 5, PASCAL_T_INTDIV, token(match("div")));
-    expr_altern(*p, 5, PASCAL_T_MOD, token(match("mod")));
-    expr_altern(*p, 5, PASCAL_T_MOD, token(match("%")));
-    expr_altern(*p, 5, PASCAL_T_SHL, token(match("shl")));
-    expr_altern(*p, 5, PASCAL_T_SHR, token(match("shr")));
+    // Precedence 7: Multiplication, Division, Modulo, and Bitwise shifts
+    expr_insert(*p, 7, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
+    expr_altern(*p, 7, PASCAL_T_DIV, token(match("/")));
+    expr_altern(*p, 7, PASCAL_T_INTDIV, token(match("div")));
+    expr_altern(*p, 7, PASCAL_T_MOD, token(match("mod")));
+    expr_altern(*p, 7, PASCAL_T_MOD, token(match("%")));
+    expr_altern(*p, 7, PASCAL_T_SHL, token(match("shl")));
+    expr_altern(*p, 7, PASCAL_T_SHR, token(match("shr")));
     
-    // Precedence 6: Unary operators (highest precedence)
-    expr_insert(*p, 6, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
-    expr_altern(*p, 6, PASCAL_T_POS, token(match("+")));
-    expr_altern(*p, 6, PASCAL_T_NOT, token(match("not")));
-    expr_altern(*p, 6, PASCAL_T_ADDR, token(match("@")));
+    // Precedence 8: Unary operators (highest precedence)
+    expr_insert(*p, 8, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    expr_altern(*p, 8, PASCAL_T_POS, token(match("+")));
+    expr_altern(*p, 8, PASCAL_T_NOT, token(match("not")));
+    expr_altern(*p, 8, PASCAL_T_ADDR, token(match("@")));
 }
