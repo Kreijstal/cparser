@@ -14,7 +14,8 @@ typedef enum {
     PASCAL_T_SUB,
     PASCAL_T_MUL,
     PASCAL_T_DIV,
-    PASCAL_T_NEG
+    PASCAL_T_NEG,
+    PASCAL_T_FUNC_CALL
 } pascal_tag_t;
 
 // --- Function Declarations ---

@@ -240,6 +240,20 @@ combinator_t * new_combinator() {
     return comb;
 }
 
+static ParseResult match_ci_fn(input_t * in, void * args) {
+    char * str = ((match_args *) args)->str;
+    InputState state; save_input_state(in, &state);
+    for (int i = 0, len = strlen(str); i < len; i++) {
+        char c = read1(in);
+        if (tolower(c) != tolower(str[i])) {
+            restore_input_state(in, &state);
+            char* err_msg; asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
+            return make_failure(in, err_msg);
+        }
+    }
+    return make_success(ensure_ast_nil_initialized());
+}
+
 static ParseResult match_fn(input_t * in, void * args) {
     char * str = ((match_args *) args)->str;
     InputState state; save_input_state(in, &state);
@@ -442,7 +456,12 @@ static ParseResult expr_fn(input_t * in, void * args) {
 static ParseResult lazy_fn(input_t * in, void * args) {
     lazy_args* largs = (lazy_args*)args;
     if (largs == NULL || largs->parser_ptr == NULL || *largs->parser_ptr == NULL) {
+        fprintf(stderr, "Lazy parser not initialized or pointer is NULL.\n");
         exception("Lazy parser not initialized.");
+    }
+    if ((*largs->parser_ptr)->fn == NULL) {
+        fprintf(stderr, "Lazy parser's fn is NULL for parser at %p\n", *largs->parser_ptr);
+        exception("Lazy parser's fn is NULL.");
     }
     return parse(in, *largs->parser_ptr);
 }
@@ -463,6 +482,12 @@ combinator_t * match(char * str) {
     args->str = str;
     combinator_t * comb = new_combinator();
     comb->type = P_MATCH; comb->fn = match_fn; comb->args = args; return comb;
+}
+combinator_t * match_ci(char * str) {
+    match_args * args = (match_args*)safe_malloc(sizeof(match_args));
+    args->str = str;
+    combinator_t * comb = new_combinator();
+    comb->type = P_CI_KEYWORD; comb->fn = match_ci_fn; comb->args = args; return comb;
 }
 combinator_t * integer(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
@@ -666,8 +691,6 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
     if (comb->args != NULL) {
         switch (comb->type) {
             case P_CI_KEYWORD:
-                free(comb->args);
-                break;
             case P_MATCH:
                 free((match_args*)comb->args);
                 break;

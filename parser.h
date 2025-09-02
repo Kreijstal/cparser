@@ -117,6 +117,7 @@ ParseResult parse(input_t * in, combinator_t * comb);
 
 // --- Primitive Parser Constructors ---
 combinator_t * match(char * str);
+combinator_t * match_ci(char * str);
 combinator_t * match_raw(char * str);
 combinator_t * integer(tag_t tag);
 combinator_t * cident(tag_t tag);
