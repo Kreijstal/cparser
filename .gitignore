@@ -12,4 +12,7 @@ Testing/
 /tests
 /json_parser_cli
 /json_tests
+/calc_tests
+/pascal_tests
+/pascal_parser_cli
 build/
