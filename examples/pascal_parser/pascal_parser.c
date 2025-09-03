@@ -1147,19 +1147,19 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // Fixed statement list parser that handles trailing semicolons
-    // Use sep_by with optional trailing semicolon instead of sep_end_by with lazy()
-    combinator_t* stmt_list_no_trail = sep_by(lazy(stmt_parser), token(match(";")));
-    combinator_t* optional_trailing_semicolon = optional(token(match(";")));
-    combinator_t* stmt_list = seq(new_combinator(), PASCAL_T_NONE,
-        stmt_list_no_trail,                    // statements separated by semicolons
-        optional_trailing_semicolon,          // optional trailing semicolon
+    // For function bodies, use a simpler approach that definitely handles trailing semicolons
+    // Parse statements terminated by semicolons, allowing trailing semicolon
+    combinator_t* stmt_with_semicolon = seq(new_combinator(), PASCAL_T_NONE,
+        lazy(stmt_parser),                     // the statement itself
+        token(match(";")),                     // required semicolon after statement
         NULL
     );
     
+    combinator_t* stmt_list = many(stmt_with_semicolon);  // zero or more statements with semicolons
+    
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
-        stmt_list,                             // statement list with optional trailing semicolon
+        stmt_list,                             // statements each terminated by semicolon
         token(match_ci("end")),                // end keyword
         NULL
     );
