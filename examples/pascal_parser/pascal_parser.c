@@ -1076,11 +1076,12 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Begin-end block: begin [statement_list] end  
-    combinator_t* stmt_list = sep_end_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* stmt_list = optional(sep_by(lazy(stmt_parser), token(match(";"))));
     combinator_t* begin_end_block = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
-        token(match("begin")),                 // begin keyword
-        stmt_list,                             // statement list (empty or non-empty)
-        token(match("end")),                   // end keyword
+        token(match_ci("begin")),              // begin keyword (case-insensitive like main program)
+        stmt_list,                             // statement list (can be empty)
+        optional(token(match(";"))),           // optional trailing semicolon
+        token(match_ci("end")),                // end keyword (case-insensitive like main program)
         NULL
     );
     
