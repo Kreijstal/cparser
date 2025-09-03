@@ -16,3 +16,9 @@ Testing/
 /pascal_tests
 /pascal_parser_cli
 build/
+
+# Compiled binaries
+examples/*/test_*
+*.exe
+*.so
+*.dll

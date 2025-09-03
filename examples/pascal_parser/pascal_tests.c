@@ -863,22 +863,66 @@ void test_pascal_expression_statement(void) {
 
     ParseResult res = parse(input, p);
 
-    TEST_ASSERT(res.is_success);
+    TEST_CHECK(res.is_success);
+    if (!res.is_success) {
+        if (res.value.error) {
+            printf("Parse error: %s at line %d, col %d\n", 
+                   res.value.error->message, res.value.error->line, res.value.error->col);
+            free_error(res.value.error);
+        }
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
+    
     // Get the actual statement
     ast_t* stmt = res.value.ast;
     if (stmt->typ == PASCAL_T_NONE) {
         stmt = stmt->child;
     }
-    TEST_ASSERT(stmt->typ == PASCAL_T_STATEMENT);
+    
+    TEST_CHECK(stmt && stmt->typ == PASCAL_T_STATEMENT);
+    if (!stmt || stmt->typ != PASCAL_T_STATEMENT) {
+        free_ast(res.value.ast);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
     
     // Check function call
     ast_t* func_call = stmt->child;
-    TEST_ASSERT(func_call->typ == PASCAL_T_FUNC_CALL);
+    TEST_CHECK(func_call && func_call->typ == PASCAL_T_FUNC_CALL);
+    if (!func_call || func_call->typ != PASCAL_T_FUNC_CALL) {
+        free_ast(res.value.ast);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
     
     // Check function name
     ast_t* func_name = func_call->child;
-    TEST_ASSERT(func_name->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(func_name->sym->name, "writeln") == 0);
+    TEST_CHECK(func_name && func_name->typ == PASCAL_T_IDENTIFIER);
+    if (!func_name || func_name->typ != PASCAL_T_IDENTIFIER) {
+        free_ast(res.value.ast);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_name_node = func_name;
+    if (func_name->child && func_name->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_name_node = func_name->child;
+    }
+    
+    TEST_CHECK(actual_name_node->sym && 
+               actual_name_node->sym->name && 
+               strcmp(actual_name_node->sym->name, "writeln") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
