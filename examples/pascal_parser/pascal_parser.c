@@ -1115,11 +1115,21 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Standard BEGIN-END block for main statement parser (uses full recursive parsing)
-    // Use sep_by with optional trailing semicolon to properly handle Pascal semicolon rules
-    combinator_t* stmt_list_sep_by = sep_by(lazy(stmt_parser), token(match(";")));
-    combinator_t* stmt_list = seq(new_combinator(), PASCAL_T_NONE,
-        stmt_list_sep_by,                      // statements separated by semicolons
-        optional(token(match(";"))),           // optional trailing semicolon
+    // Create custom statement list parser to properly handle Pascal semicolon rules
+    // Pascal semicolons are separators, but there can be an optional trailing semicolon
+    combinator_t* stmt_list = multi(new_combinator(), PASCAL_T_NONE,
+        // Option 1: Single statement with optional trailing semicolon
+        seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),
+            NULL
+        ),
+        // Option 2: Multiple statements separated by semicolons, with optional trailing semicolon  
+        seq(new_combinator(), PASCAL_T_NONE,
+            sep_by(lazy(stmt_parser), token(match(";"))),
+            optional(token(match(";"))),
+            NULL
+        ),
         NULL
     );
     
