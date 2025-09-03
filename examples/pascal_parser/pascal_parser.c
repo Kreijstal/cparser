@@ -1560,12 +1560,11 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    // Procedure or function declaration/definition - try definitions first (longer), then declarations
+    // Procedure or function definitions - only include definitions with bodies for complete programs
+    // Function/procedure declarations (headers only) are not used in complete programs
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
         function_definition,                         // function definitions (with bodies)
         procedure_definition,                        // procedure definitions (with bodies)
-        function_declaration,                        // function declarations (headers only)
-        procedure_declaration,                       // procedure declarations (headers only)  
         NULL
     );
     
