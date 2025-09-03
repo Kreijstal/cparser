@@ -1465,10 +1465,11 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Function body for complete programs: no extra terminating semicolon needed
+    // Function body for complete programs: includes terminating semicolon
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local var section
-        lazy(stmt_parser),                           // begin-end block handled by statement parser (includes semicolon)
+        lazy(stmt_parser),                           // begin-end block handled by statement parser
+        token(match(";")),                           // terminating semicolon after function body
         NULL
     );
     
