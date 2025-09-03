@@ -45,6 +45,7 @@ typedef enum {
     PASCAL_T_AS,
     PASCAL_T_TYPECAST,
     PASCAL_T_FUNC_CALL,
+    PASCAL_T_ARRAY_ACCESS,  // Array access: table[i,j]
     PASCAL_T_ARG_LIST,
     // Procedure/Function Declaration types
     PASCAL_T_PROCEDURE_DECL,

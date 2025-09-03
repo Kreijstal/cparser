@@ -850,6 +850,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_AS: return "AS";
         case PASCAL_T_TYPECAST: return "TYPECAST";
         case PASCAL_T_FUNC_CALL: return "FUNC_CALL";
+        case PASCAL_T_ARRAY_ACCESS: return "ARRAY_ACCESS";
         case PASCAL_T_ARG_LIST: return "ARG_LIST";
         case PASCAL_T_PROCEDURE_DECL: return "PROCEDURE_DECL";
         case PASCAL_T_FUNCTION_DECL: return "FUNCTION_DECL";
@@ -956,6 +957,19 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
     
+    // Array access parser: identifier[index1, index2, ...]
+    combinator_t* index_list = between(
+        token(match("[")),
+        token(match("]")),
+        sep_by(lazy(p), token(match(",")))
+    );
+    
+    combinator_t* array_access = seq(new_combinator(), PASCAL_T_ARRAY_ACCESS,
+        token(cident(PASCAL_T_IDENTIFIER)),
+        index_list,
+        NULL
+    );
+    
     // Type cast parser: TypeName(expression) - only for built-in types
     combinator_t* typecast = seq(new_combinator(), PASCAL_T_TYPECAST,
         token(type_name(PASCAL_T_IDENTIFIER)), // type name - only built-in types
@@ -982,6 +996,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(boolean_true),                      // Boolean true
         token(boolean_false),                     // Boolean false
         typecast,                                 // Type casts Integer(x) - try before func_call
+        array_access,                             // Array access table[i,j] - try before func_call
         func_call,                                // Function calls func(x)
         token(cident(PASCAL_T_IDENTIFIER)),       // Identifiers (variables)
         between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
