@@ -208,6 +208,118 @@ combinator_t* range_type(tag_t tag) {
     return comb;
 }
 
+// Array type parser: ARRAY[range1,range2,...] OF element_type
+static ParseResult array_type_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Parse "ARRAY" keyword (case insensitive)
+    combinator_t* array_keyword = token(match_ci("array"));
+    ParseResult array_res = parse(in, array_keyword);
+    if (!array_res.is_success) {
+        free_combinator(array_keyword);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected 'array'"));
+    }
+    free_ast(array_res.value.ast);
+    free_combinator(array_keyword);
+    
+    // Parse [
+    combinator_t* open_bracket = token(match("["));
+    ParseResult open_res = parse(in, open_bracket);
+    if (!open_res.is_success) {
+        free_combinator(open_bracket);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '[' after 'array'"));
+    }
+    free_ast(open_res.value.ast);
+    free_combinator(open_bracket);
+    
+    // Parse ranges/indices (simplified - just accept any identifiers/ranges for now)
+    combinator_t* array_index = multi(new_combinator(), PASCAL_T_NONE,
+        range_type(PASCAL_T_RANGE_TYPE),
+        token(cident(PASCAL_T_IDENTIFIER)),
+        NULL
+    );
+    combinator_t* index_list = sep_by(array_index, token(match(",")));
+    ParseResult indices_res = parse(in, index_list);
+    ast_t* indices_ast = NULL;
+    if (indices_res.is_success) {
+        indices_ast = indices_res.value.ast;
+    } else {
+        free_combinator(index_list);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected array indices"));
+    }
+    free_combinator(index_list);
+    
+    // Parse ]
+    combinator_t* close_bracket = token(match("]"));
+    ParseResult close_res = parse(in, close_bracket);
+    if (!close_res.is_success) {
+        free_ast(indices_ast);
+        free_combinator(close_bracket);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected ']'"));
+    }
+    free_ast(close_res.value.ast);
+    free_combinator(close_bracket);
+    
+    // Parse OF
+    combinator_t* of_keyword = token(match_ci("of"));
+    ParseResult of_res = parse(in, of_keyword);
+    if (!of_res.is_success) {
+        free_ast(indices_ast);
+        free_combinator(of_keyword);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected 'OF' after array indices"));
+    }
+    free_ast(of_res.value.ast);
+    free_combinator(of_keyword);
+    
+    // Parse element type (simplified)
+    combinator_t* element_type = token(cident(PASCAL_T_IDENTIFIER));
+    ParseResult elem_res = parse(in, element_type);
+    ast_t* element_ast = NULL;
+    if (elem_res.is_success) {
+        element_ast = elem_res.value.ast;
+    } else {
+        free_ast(indices_ast);
+        free_combinator(element_type);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected element type after 'OF'"));
+    }
+    free_combinator(element_type);
+    
+    // Build AST
+    ast_t* array_ast = new_ast();
+    array_ast->typ = pargs->tag;
+    array_ast->sym = NULL;
+    array_ast->child = indices_ast;
+    if (indices_ast) {
+        // Link element type as the last child
+        ast_t* current = indices_ast;
+        while (current->next) current = current->next;
+        current->next = element_ast;
+    } else {
+        array_ast->child = element_ast;
+    }
+    array_ast->next = NULL;
+    
+    set_ast_position(array_ast, in);
+    return make_success(array_ast);
+}
+
+combinator_t* array_type(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = array_type_fn;
+    return comb;
+}
+
 static ParseResult type_name_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
@@ -723,6 +835,13 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TYPE_SECTION: return "TYPE_SECTION";
         case PASCAL_T_TYPE_DECL: return "TYPE_DECL";
         case PASCAL_T_RANGE_TYPE: return "RANGE_TYPE";
+        case PASCAL_T_ARRAY_TYPE: return "ARRAY_TYPE";
+        // Uses clause types
+        case PASCAL_T_USES_SECTION: return "USES_SECTION";
+        case PASCAL_T_USES_UNIT: return "USES_UNIT";
+        // Const section types
+        case PASCAL_T_CONST_SECTION: return "CONST_SECTION";
+        case PASCAL_T_CONST_DECL: return "CONST_DECL";
         default: return "UNKNOWN";
     }
 }
@@ -1136,9 +1255,9 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Enhanced main block parser that tries proper statement parsing first, falls back to hack
     combinator_t* enhanced_main_block_content = main_block_content(PASCAL_T_NONE);
     combinator_t* main_block = seq(new_combinator(), PASCAL_T_MAIN_BLOCK,
-        token(match("begin")),                       // begin keyword
+        token(match_ci("begin")),                       // begin keyword
         enhanced_main_block_content,                 // properly parsed content (or fallback to raw text)
-        token(match("end")),                         // end keyword
+        token(match_ci("end")),                         // end keyword
         NULL
     );
     
@@ -1153,6 +1272,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Enhanced Variable declaration: var1, var2, var3 : type;
     combinator_t* var_identifier_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* type_spec = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
+        array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
         range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1
         type_name(PASCAL_T_IDENTIFIER),                 // built-in types
         token(cident(PASCAL_T_IDENTIFIER)),             // custom types
@@ -1169,7 +1289,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Var section: var var_decl var_decl ...
     combinator_t* var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
-        token(match("var")),                         // var keyword
+        token(match_ci("var")),                         // var keyword
         many(var_decl),                              // multiple variable declarations
         NULL
     );
@@ -1185,8 +1305,55 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Type section: type type_decl type_decl ...
     combinator_t* type_section = seq(new_combinator(), PASCAL_T_TYPE_SECTION,
-        token(match("type")),                        // type keyword
+        token(match_ci("type")),                        // type keyword
         many(type_decl),                             // multiple type declarations
+        NULL
+    );
+    
+    // Uses section: uses unit1, unit2, unit3;
+    combinator_t* uses_unit = token(cident(PASCAL_T_USES_UNIT));
+    combinator_t* uses_section = seq(new_combinator(), PASCAL_T_USES_SECTION,
+        token(match_ci("uses")),                        // uses keyword  
+        sep_by(uses_unit, token(match(","))),        // unit names separated by commas
+        token(match(";")),                           // semicolon
+        NULL
+    );
+    
+    // Const section: const name : type = value; ...
+    // For now, we'll create a simplified const parser that accepts basic values
+    // plus a fallback for complex expressions
+    combinator_t* simple_const_value = multi(new_combinator(), PASCAL_T_NONE,
+        integer(PASCAL_T_INTEGER),
+        string(PASCAL_T_STRING), 
+        cident(PASCAL_T_IDENTIFIER),
+        NULL
+    );
+    
+    // Fallback: consume everything until semicolon for complex array literals
+    combinator_t* complex_const_value = until(match(";"), PASCAL_T_STRING);
+    
+    combinator_t* const_value = multi(new_combinator(), PASCAL_T_NONE,
+        simple_const_value,
+        complex_const_value,  // fallback for complex literals  
+        NULL
+    );
+    
+    combinator_t* const_decl = seq(new_combinator(), PASCAL_T_CONST_DECL,
+        token(cident(PASCAL_T_IDENTIFIER)),          // constant name
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(match(":")),                       // colon
+            token(cident(PASCAL_T_IDENTIFIER)),      // type (simplified)
+            NULL
+        )),
+        token(match("=")),                           // equals
+        const_value,                                 // constant value (simplified for now)
+        token(match(";")),                           // semicolon
+        NULL
+    );
+    
+    combinator_t* const_section = seq(new_combinator(), PASCAL_T_CONST_SECTION,
+        token(match_ci("const")),                       // const keyword
+        many(const_decl),                            // multiple const declarations
         NULL
     );
     
@@ -1249,13 +1416,15 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Complete program: program Name(params); [type section] [var section] [procedures/functions] begin end.
+    // Complete program: program Name(params); [uses clause] [type section] [const section] [var section] [procedures/functions] begin end.
     seq(*p, PASCAL_T_PROGRAM_DECL,
-        token(match("program")),                     // program keyword
+        token(match_ci("program")),                     // program keyword
         token(cident(PASCAL_T_IDENTIFIER)),          // program name  
         program_param_list,                          // optional parameter list
         token(match(";")),                           // semicolon
+        optional(uses_section),                      // optional uses section
         optional(type_section),                      // optional type section
+        optional(const_section),                     // optional const section
         optional(var_section),                       // optional var section
         many(proc_or_func),                          // zero or more procedure/function declarations
         main_block,                                  // main program block
