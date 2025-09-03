@@ -1537,7 +1537,6 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // now enabled - functions can have local VAR sections
         *direct_stmt_parser,                         // use statement parser directly (not lazy)
-        token(match(";")),                           // terminating semicolon after function body
         NULL
     );
     
@@ -1584,7 +1583,8 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         param_list,                                  // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon after return type (like standalone functions)
-        program_function_body,                       // function body with terminating semicolon for programs
+        program_function_body,                       // function body without terminating semicolon
+        token(match(";")),                           // terminating semicolon after function definition
         NULL
     );
     
@@ -1594,7 +1594,8 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after parameters
-        program_function_body,                       // procedure body with terminating semicolon for programs
+        program_function_body,                       // procedure body without terminating semicolon
+        token(match(";")),                           // terminating semicolon after procedure definition
         NULL
     );
 
@@ -1617,7 +1618,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         optional(const_section),                     // optional const section
         optional(var_section),                       // optional var section
         many(proc_or_func),                          // zero or more procedure/function declarations
-        main_block,                                  // main program block
+        optional(main_block),                        // optional main program block
         token(match(".")),                           // final period
         NULL
     );
