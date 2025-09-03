@@ -1400,12 +1400,12 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Function declaration: function name [(params)] : return_type ; body  
     combinator_t* function_decl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(match("function")),                    // function keyword
+        token(match_ci("function")),                 // function keyword
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // function body
+        lazy(stmt_parser),                           // function body (temporarily simple)
         NULL
     );
     
