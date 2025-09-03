@@ -956,8 +956,10 @@ static combinator_t* builtin_identifier(const char* name) {
     args->name = strdup(name); // Make a copy since the original might be const
     
     // Create a custom function that matches case-insensitively but creates an identifier AST
+    parser->type = P_CI_KEYWORD;  // Use existing type for proper cleanup
     parser->fn = builtin_ident_fn;
     parser->args = args;
+    parser->extra_to_free = args->name;  // Ensure the duplicated string gets freed
     return parser;
 }
 
@@ -995,6 +997,7 @@ static ParseResult builtin_ident_fn(input_t* in, void* args) {
     ast->child = NULL;
     ast->next = NULL;
     set_ast_position(ast, in);
+    
     return make_success(ast);
 }
 

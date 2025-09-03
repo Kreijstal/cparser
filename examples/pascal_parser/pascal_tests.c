@@ -1028,6 +1028,12 @@ void test_pascal_expression_statement(void) {
     if (func_name->child && func_name->child->typ == PASCAL_T_IDENTIFIER) {
         // Use the child identifier for built-in functions
         actual_name_node = func_name->child;
+        
+        // For built-in functions, the symbol might be in the grandchild
+        if (!actual_name_node->sym && actual_name_node->child && 
+            actual_name_node->child->typ == PASCAL_T_IDENTIFIER) {
+            actual_name_node = actual_name_node->child;
+        }
     }
     
     TEST_CHECK(actual_name_node->sym && 
@@ -1592,7 +1598,18 @@ void test_pascal_fizzbuzz_program(void) {
     ast_t* writeln1 = then1->child;
     TEST_ASSERT(writeln1->typ == PASCAL_T_FUNC_CALL);
     TEST_ASSERT(writeln1->child->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(writeln1->child->sym->name, "writeln") == 0);
+    
+    // Handle hierarchical AST structure for built-in functions
+    ast_t* writeln_name = writeln1->child;
+    if (!writeln_name->sym && writeln_name->child && writeln_name->child->typ == PASCAL_T_IDENTIFIER) {
+        if (!writeln_name->child->sym && writeln_name->child->child && 
+            writeln_name->child->child->typ == PASCAL_T_IDENTIFIER) {
+            writeln_name = writeln_name->child->child;
+        } else {
+            writeln_name = writeln_name->child;
+        }
+    }
+    TEST_ASSERT(writeln_name->sym && strcmp(writeln_name->sym->name, "writeln") == 0);
     TEST_ASSERT(writeln1->child->next->typ == PASCAL_T_STRING);
     TEST_ASSERT(strcmp(writeln1->child->next->sym->name, "FizzBuzz") == 0);
 
