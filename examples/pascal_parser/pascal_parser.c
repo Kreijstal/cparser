@@ -50,47 +50,6 @@ combinator_t* pascal_whitespace() {
     return many(ws_or_comment);
 }
 
-// Built-in function identifier parser - creates proper AST nodes with symbols
-static ParseResult builtin_identifier_fn(input_t* in, void* args) {
-    char* name = (char*)args;
-    InputState state;
-    save_input_state(in, &state);
-    
-    // Try to match the built-in function name (case-insensitive)
-    for (int i = 0, len = strlen(name); i < len; i++) {
-        char c = read1(in);
-        if (tolower(c) != tolower(name[i])) {
-            restore_input_state(in, &state);
-            return make_failure(in, strdup("Expected built-in function name"));
-        }
-    }
-    
-    // Check that we're at a word boundary (not followed by alphanumeric or underscore)
-    if (in->start < in->length) {
-        char next_char = in->buffer[in->start];
-        if (isalnum(next_char) || next_char == '_') {
-            restore_input_state(in, &state);
-            return make_failure(in, strdup("Partial match for built-in function"));
-        }
-    }
-    
-    // Create AST node with the built-in function name as symbol
-    ast_t* ast = new_ast();
-    ast->typ = PASCAL_T_IDENTIFIER;
-    ast->sym = sym_lookup(name);
-    ast->child = NULL;
-    ast->next = NULL;
-    set_ast_position(ast, in);
-    return make_success(ast);
-}
-
-combinator_t* builtin_identifier(char* name) {
-    combinator_t* comb = new_combinator();
-    comb->fn = builtin_identifier_fn;
-    comb->args = strdup(name);  // Store the name
-    return comb;
-}
-
 // Renamed token parser with better Pascal-aware whitespace handling
 combinator_t* pascal_token(combinator_t* p) {
     combinator_t* ws = pascal_whitespace();
@@ -985,83 +944,82 @@ static void post_process_set_operations(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    // Built-in Pascal functions and procedures - comprehensive list (no extra IDENTIFIER wrapper)
-    combinator_t* builtin_func = multi(new_combinator(), PASCAL_T_NONE,
-        // Built-in functions that return values - longer names first to avoid partial matching
-        token(builtin_identifier("inttostr")),      // inttostr(integer) -> string - before any 'int' matches
-        token(builtin_identifier("strtoint")),      // strtoint(string) -> integer - before any 'str' matches  
-        token(builtin_identifier("floattostr")),    // floattostr(real) -> string - before any 'float' matches
-        token(builtin_identifier("strtofloat")),    // strtofloat(string) -> real - before any 'str' matches
-        token(builtin_identifier("uppercase")),     // uppercase(string) -> string - before upcase
-        token(builtin_identifier("lowercase")),     // lowercase(char) -> char - before any 'low' matches
-        token(builtin_identifier("paramcount")),    // paramcount -> integer - before any 'param' matches
-        token(builtin_identifier("paramstr")),      // paramstr(index) -> string - before any 'param' matches
-        token(builtin_identifier("filesize")),      // filesize(file) -> integer - before any 'file' matches  
-        token(builtin_identifier("filepos")),       // filepos(file) -> integer - before any 'file' matches
-        token(builtin_identifier("length")),        // length(string) -> integer
-        token(builtin_identifier("ord")),           // ord(char) -> integer  
-        token(builtin_identifier("chr")),           // chr(integer) -> char
-        token(builtin_identifier("succ")),          // succ(ordinal) -> ordinal
-        token(builtin_identifier("pred")),          // pred(ordinal) -> ordinal
-        token(builtin_identifier("abs")),           // abs(number) -> number
-        token(builtin_identifier("sqr")),           // sqr(number) -> number
-        token(builtin_identifier("sqrt")),          // sqrt(number) -> real
-        token(builtin_identifier("sin")),           // sin(real) -> real
-        token(builtin_identifier("cos")),           // cos(real) -> real
-        token(builtin_identifier("arctan")),        // arctan(real) -> real
-        token(builtin_identifier("exp")),           // exp(real) -> real
-        token(builtin_identifier("ln")),            // ln(real) -> real
-        token(builtin_identifier("trunc")),         // trunc(real) -> integer
-        token(builtin_identifier("round")),         // round(real) -> integer
-        token(builtin_identifier("random")),        // random[(integer)] -> real/integer
-        token(builtin_identifier("copy")),          // copy(string, start, count) -> string
-        token(builtin_identifier("pos")),           // pos(substr, string) -> integer
-        token(builtin_identifier("upcase")),        // upcase(char) -> char
-        token(builtin_identifier("trim")),          // trim(string) -> string
-        token(builtin_identifier("sizeof")),        // sizeof(type/var) -> integer
-        token(builtin_identifier("high")),          // high(array/type) -> ordinal
-        token(builtin_identifier("low")),           // low(array/type) -> ordinal
-        token(builtin_identifier("odd")),           // odd(integer) -> boolean
-        token(builtin_identifier("eof")),           // eof[(file)] -> boolean
-        token(builtin_identifier("eoln")),          // eoln[(file)] -> boolean
+    // Built-in Pascal functions and procedures - comprehensive list
+    combinator_t* builtin_func = multi(new_combinator(), PASCAL_T_IDENTIFIER,
+        // Built-in functions that return values - longer names first to avoid partial matching  
+        token(match_ci("inttostr")),      // inttostr(integer) -> string - before any 'int' matches
+        token(match_ci("strtoint")),      // strtoint(string) -> integer - before any 'str' matches  
+        token(match_ci("floattostr")),    // floattostr(real) -> string - before any 'float' matches
+        token(match_ci("strtofloat")),    // strtofloat(string) -> real - before any 'str' matches
+        token(match_ci("uppercase")),     // uppercase(string) -> string - before upcase
+        token(match_ci("lowercase")),     // lowercase(char) -> char - before any 'low' matches
+        token(match_ci("paramcount")),    // paramcount -> integer - before any 'param' matches
+        token(match_ci("paramstr")),      // paramstr(index) -> string - before any 'param' matches
+        token(match_ci("filesize")),      // filesize(file) -> integer - before any 'file' matches  
+        token(match_ci("filepos")),       // filepos(file) -> integer - before any 'file' matches
+        token(match_ci("length")),        // length(string) -> integer
+        token(match_ci("ord")),           // ord(char) -> integer  
+        token(match_ci("chr")),           // chr(integer) -> char
+        token(match_ci("succ")),          // succ(ordinal) -> ordinal
+        token(match_ci("pred")),          // pred(ordinal) -> ordinal
+        token(match_ci("abs")),           // abs(number) -> number
+        token(match_ci("sqr")),           // sqr(number) -> number
+        token(match_ci("sqrt")),          // sqrt(number) -> real
+        token(match_ci("sin")),           // sin(real) -> real
+        token(match_ci("cos")),           // cos(real) -> real
+        token(match_ci("arctan")),        // arctan(real) -> real
+        token(match_ci("exp")),           // exp(real) -> real
+        token(match_ci("ln")),            // ln(real) -> real
+        token(match_ci("trunc")),         // trunc(real) -> integer
+        token(match_ci("round")),         // round(real) -> integer
+        token(match_ci("random")),        // random[(integer)] -> real/integer
+        token(match_ci("copy")),          // copy(string, start, count) -> string
+        token(match_ci("pos")),           // pos(substr, string) -> integer
+        token(match_ci("upcase")),        // upcase(char) -> char
+        token(match_ci("trim")),          // trim(string) -> string
+        token(match_ci("sizeof")),        // sizeof(type/var) -> integer
+        token(match_ci("high")),          // high(array/type) -> ordinal
+        token(match_ci("low")),           // low(array/type) -> ordinal
+        token(match_ci("odd")),           // odd(integer) -> boolean
+        token(match_ci("eof")),           // eof[(file)] -> boolean
+        token(match_ci("eoln")),          // eoln[(file)] -> boolean
         // Built-in procedures (no return value) - longer names first to avoid partial matching
-        // Built-in procedures (no return value) - longer names first to avoid partial matching
-        token(builtin_identifier("setlength")),     // setlength(string/array, length) - before any 'set' matches
-        token(builtin_identifier("randomize")),     // randomize - before any 'random' matches  
-        token(builtin_identifier("fillchar")),      // fillchar(var, size, value) - before any 'fill' matches
-        token(builtin_identifier("freemem")),       // freemem(pointer, size) - before any 'free' matches
-        token(builtin_identifier("getmem")),        // getmem(pointer, size) - before any 'get' matches
-        token(builtin_identifier("gotoxy")),        // gotoxy(x, y) - before any 'goto' matches
-        token(builtin_identifier("rewrite")),       // rewrite(file) - before any 're' matches
-        token(builtin_identifier("writeln")),       // writeln(args...) - must come before write
-        token(builtin_identifier("write")),         // write(args...)
-        token(builtin_identifier("readln")),        // readln(variables...) - must come before read
-        token(builtin_identifier("read")),          // read(variables...)
-        token(builtin_identifier("delete")),        // delete(string, start, count)
-        token(builtin_identifier("insert")),        // insert(source, dest, position)
-        token(builtin_identifier("dispose")),       // dispose(pointer)
-        token(builtin_identifier("continue")),      // continue - before any 'con' matches
-        token(builtin_identifier("create")),        // constructor - before any 'cre' matches
-        token(builtin_identifier("destroy")),       // destructor - before any 'des' matches
-        token(builtin_identifier("assign")),        // assign(file, filename) - before any 'ass' matches
-        token(builtin_identifier("rename")),        // rename(file, newname) - before any 'ren' matches
-        token(builtin_identifier("inc")),           // inc(variable [, increment])
-        token(builtin_identifier("dec")),           // dec(variable [, decrement]) 
-        token(builtin_identifier("clrscr")),        // clrscr
-        token(builtin_identifier("str")),           // str(number, string)
-        token(builtin_identifier("val")),           // val(string, number, code)
-        token(builtin_identifier("new")),           // new(pointer)
-        token(builtin_identifier("move")),          // move(source, dest, size)
-        token(builtin_identifier("halt")),          // halt[(exitcode)]
-        token(builtin_identifier("exit")),          // exit[(result)]
-        token(builtin_identifier("break")),         // break
-        token(builtin_identifier("reset")),         // reset(file)
-        token(builtin_identifier("close")),         // close(file)
-        token(builtin_identifier("seek")),          // seek(file, position)
-        token(builtin_identifier("flush")),         // flush[(file)]
-        token(builtin_identifier("erase")),         // erase(file)
+        token(match_ci("inc")),           // inc(variable [, increment])
+        token(match_ci("dec")),           // dec(variable [, decrement])
+        token(match_ci("writeln")),       // writeln(args...) - must come before write
+        token(match_ci("write")),         // write(args...)
+        token(match_ci("readln")),        // readln(variables...) - must come before read
+        token(match_ci("read")),          // read(variables...)
+        token(match_ci("randomize")),     // randomize
+        token(match_ci("clrscr")),        // clrscr
+        token(match_ci("gotoxy")),        // gotoxy(x, y)
+        token(match_ci("delete")),        // delete(string, start, count)
+        token(match_ci("insert")),        // insert(source, dest, position)
+        token(match_ci("str")),           // str(number, string)
+        token(match_ci("val")),           // val(string, number, code)
+        token(match_ci("new")),           // new(pointer)
+        token(match_ci("dispose")),       // dispose(pointer)
+        token(match_ci("getmem")),        // getmem(pointer, size)
+        token(match_ci("freemem")),       // freemem(pointer, size)
+        token(match_ci("fillchar")),      // fillchar(var, size, value)
+        token(match_ci("move")),          // move(source, dest, size)
+        token(match_ci("halt")),          // halt[(exitcode)]
+        token(match_ci("exit")),          // exit[(result)]
+        token(match_ci("break")),         // break
+        token(match_ci("continue")),      // continue
+        token(match_ci("assign")),        // assign(file, filename)
+        token(match_ci("reset")),         // reset(file)
+        token(match_ci("rewrite")),       // rewrite(file)
+        token(match_ci("close")),         // close(file)
+        token(match_ci("seek")),          // seek(file, position)
+        token(match_ci("flush")),         // flush[(file)]
+        token(match_ci("erase")),         // erase(file)
+        token(match_ci("rename")),        // rename(file, newname)
+        token(match_ci("setlength")),     // setlength(string/array, length)
         // Object Pascal built-ins
-        token(builtin_identifier("free")),          // object.free
+        token(match_ci("free")),          // object.free
+        token(match_ci("create")),        // constructor
+        token(match_ci("destroy")),       // destructor
         token(match_ci("inherited")),     // inherited call
         NULL
     );
