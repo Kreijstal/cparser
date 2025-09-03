@@ -74,7 +74,14 @@ typedef enum {
     PASCAL_T_VAR_SECTION,
     PASCAL_T_VAR_DECL,
     PASCAL_T_TYPE_SPEC,
-    PASCAL_T_MAIN_BLOCK
+    PASCAL_T_MAIN_BLOCK,
+    // Compiler directive types
+    PASCAL_T_COMPILER_DIRECTIVE,
+    PASCAL_T_COMMENT,
+    // Type definition types
+    PASCAL_T_TYPE_SECTION,
+    PASCAL_T_TYPE_DECL,
+    PASCAL_T_RANGE_TYPE
 } pascal_tag_t;
 
 // --- Function Declarations ---
@@ -85,6 +92,13 @@ void init_pascal_procedure_parser(combinator_t** p);
 void init_pascal_complete_program_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
+
+// --- New Enhanced Functions ---
+combinator_t* pascal_comment();
+combinator_t* pascal_whitespace();  
+combinator_t* pascal_token(combinator_t* p);
+combinator_t* compiler_directive(tag_t tag);
+combinator_t* range_type(tag_t tag);
 
 // --- Utility Functions ---
 ParseResult parse_pascal_expression(input_t* input, combinator_t* parser);

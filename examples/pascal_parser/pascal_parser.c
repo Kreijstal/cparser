@@ -9,12 +9,205 @@ static bool is_whitespace_char(char c) {
     return isspace((unsigned char)c);
 }
 
-combinator_t* token(combinator_t* p) {
-    combinator_t* ws = many(satisfy(is_whitespace_char, PASCAL_T_NONE));
-    return right(ws, left(p, many(satisfy(is_whitespace_char, PASCAL_T_NONE))));
+// Pascal-style comment parser: { comment content }
+static ParseResult pascal_comment_fn(input_t* in, void* args) {
+    InputState state;
+    save_input_state(in, &state);
+    
+    char c = read1(in);
+    if (c != '{') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '{'"));
+    }
+    
+    // Read until '}' 
+    while ((c = read1(in)) != EOF) {
+        if (c == '}') {
+            return make_success(ast_nil);
+        }
+    }
+    
+    restore_input_state(in, &state);
+    return make_failure(in, strdup("Unterminated comment"));
 }
 
-// Custom parser for Pascal built-in type names
+combinator_t* pascal_comment() {
+    combinator_t* comb = new_combinator();
+    comb->fn = pascal_comment_fn;
+    comb->args = NULL;
+    return comb;
+}
+
+// Enhanced whitespace parser that handles both whitespace and Pascal comments
+combinator_t* pascal_whitespace() {
+    combinator_t* ws_char = satisfy(is_whitespace_char, PASCAL_T_NONE);
+    combinator_t* comment = pascal_comment();
+    combinator_t* ws_or_comment = multi(new_combinator(), PASCAL_T_NONE,
+        ws_char,
+        comment,
+        NULL
+    );
+    return many(ws_or_comment);
+}
+
+// Renamed token parser with better Pascal-aware whitespace handling
+combinator_t* pascal_token(combinator_t* p) {
+    combinator_t* ws = pascal_whitespace();
+    return right(ws, left(p, pascal_whitespace()));
+}
+
+// Backward compatibility: keep old token() function name for existing code
+combinator_t* token(combinator_t* p) {
+    return pascal_token(p);
+}
+
+// Compiler directive parser: {$directive parameter}
+static ParseResult compiler_directive_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Must start with {$
+    char c1 = read1(in);
+    char c2 = read1(in);
+    if (c1 != '{' || c2 != '$') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '{$'"));
+    }
+    
+    // Read directive name and parameters until }
+    int start_pos = in->start;
+    char c;
+    while ((c = read1(in)) != EOF) {
+        if (c == '}') {
+            int len = in->start - start_pos - 1; // -1 for the '}'
+            if (len <= 0) {
+                restore_input_state(in, &state);
+                return make_failure(in, strdup("Empty compiler directive"));
+            }
+            
+            // Extract directive content
+            char* directive_text = strndup(in->buffer + start_pos, len);
+            
+            ast_t* ast = new_ast();
+            ast->typ = pargs->tag;
+            ast->sym = sym_lookup(directive_text);
+            ast->child = NULL;
+            ast->next = NULL;
+            free(directive_text);
+            set_ast_position(ast, in);
+            return make_success(ast);
+        }
+    }
+    
+    restore_input_state(in, &state);
+    return make_failure(in, strdup("Unterminated compiler directive"));
+}
+
+combinator_t* compiler_directive(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = compiler_directive_fn;
+    return comb;
+}
+
+// Range type parser: start..end (e.g., -1..1)
+static ParseResult range_type_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Parse start value (can be negative integer or identifier)
+    input_t* temp_input = new_input();
+    temp_input->buffer = in->buffer + in->start;
+    temp_input->length = in->length - in->start;
+    temp_input->line = in->line;
+    temp_input->col = in->col;
+    
+    // Try parsing integer (including negative)
+    combinator_t* start_parser = multi(new_combinator(), PASCAL_T_NONE,
+        integer(PASCAL_T_INTEGER),
+        seq(new_combinator(), PASCAL_T_INTEGER,
+            match("-"),
+            integer(PASCAL_T_INTEGER),
+            NULL),
+        cident(PASCAL_T_IDENTIFIER),
+        NULL);
+    
+    ParseResult start_result = parse(temp_input, start_parser);
+    if (!start_result.is_success) {
+        free_combinator(start_parser);
+        free(temp_input);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected range start value"));
+    }
+    
+    // Update main input position
+    in->start += temp_input->start;
+    
+    // Skip whitespace
+    while (in->start < in->length && isspace(in->buffer[in->start])) {
+        in->start++;
+    }
+    
+    // Expect ".."
+    if (in->start + 2 > in->length || 
+        in->buffer[in->start] != '.' || in->buffer[in->start + 1] != '.') {
+        free_ast(start_result.value.ast);
+        free_combinator(start_parser);
+        free(temp_input);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '..' in range type"));
+    }
+    in->start += 2;
+    
+    // Skip whitespace
+    while (in->start < in->length && isspace(in->buffer[in->start])) {
+        in->start++;
+    }
+    
+    // Parse end value
+    temp_input->buffer = in->buffer + in->start;
+    temp_input->length = in->length - in->start;
+    temp_input->start = 0;
+    
+    ParseResult end_result = parse(temp_input, start_parser);
+    if (!end_result.is_success) {
+        free_ast(start_result.value.ast);
+        free_combinator(start_parser);
+        free(temp_input);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected range end value"));
+    }
+    
+    // Update main input position
+    in->start += temp_input->start;
+    
+    // Create range AST
+    ast_t* range_ast = new_ast();
+    range_ast->typ = pargs->tag;
+    range_ast->child = start_result.value.ast;
+    start_result.value.ast->next = end_result.value.ast;
+    range_ast->sym = NULL;
+    range_ast->next = NULL;
+    
+    free_combinator(start_parser);
+    free(temp_input);
+    set_ast_position(range_ast, in);
+    return make_success(range_ast);
+}
+
+combinator_t* range_type(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = range_type_fn;
+    return comb;
+}
+
 static ParseResult type_name_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
@@ -524,6 +717,12 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_VAR_DECL: return "VAR_DECL";
         case PASCAL_T_TYPE_SPEC: return "TYPE_SPEC";
         case PASCAL_T_MAIN_BLOCK: return "MAIN_BLOCK";
+        // New enhanced parser types
+        case PASCAL_T_COMPILER_DIRECTIVE: return "COMPILER_DIRECTIVE";
+        case PASCAL_T_COMMENT: return "COMMENT";
+        case PASCAL_T_TYPE_SECTION: return "TYPE_SECTION";
+        case PASCAL_T_TYPE_DECL: return "TYPE_DECL";
+        case PASCAL_T_RANGE_TYPE: return "RANGE_TYPE";
         default: return "UNKNOWN";
     }
 }
@@ -951,12 +1150,20 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         sep_by(program_param, token(match(",")))
     ));
     
-    // Variable declaration: identifier : type;
+    // Enhanced Variable declaration: var1, var2, var3 : type;
+    combinator_t* var_identifier_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
+    combinator_t* type_spec = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
+        range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1
+        type_name(PASCAL_T_IDENTIFIER),                 // built-in types
+        token(cident(PASCAL_T_IDENTIFIER)),             // custom types
+        NULL
+    );
+    
     combinator_t* var_decl = seq(new_combinator(), PASCAL_T_VAR_DECL,
-        token(cident(PASCAL_T_IDENTIFIER)),          // variable name
-        token(match(":")),                           // colon
-        token(cident(PASCAL_T_IDENTIFIER)),          // type name
-        token(match(";")),                           // semicolon
+        var_identifier_list,                            // multiple variable names
+        token(match(":")),                              // colon  
+        type_spec,                                      // type specification
+        token(match(";")),                              // semicolon
         NULL
     );
     
@@ -964,6 +1171,22 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     combinator_t* var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
         token(match("var")),                         // var keyword
         many(var_decl),                              // multiple variable declarations
+        NULL
+    );
+    
+    // Type declaration: TypeName = TypeSpec;
+    combinator_t* type_decl = seq(new_combinator(), PASCAL_T_TYPE_DECL,
+        token(cident(PASCAL_T_IDENTIFIER)),          // type name
+        token(match("=")),                           // equals sign  
+        type_spec,                                   // type specification
+        token(match(";")),                           // semicolon
+        NULL
+    );
+    
+    // Type section: type type_decl type_decl ...
+    combinator_t* type_section = seq(new_combinator(), PASCAL_T_TYPE_SECTION,
+        token(match("type")),                        // type keyword
+        many(type_decl),                             // multiple type declarations
         NULL
     );
     
@@ -1026,12 +1249,13 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Complete program: program Name(params); [var section] [procedures/functions] begin end.
+    // Complete program: program Name(params); [type section] [var section] [procedures/functions] begin end.
     seq(*p, PASCAL_T_PROGRAM_DECL,
         token(match("program")),                     // program keyword
         token(cident(PASCAL_T_IDENTIFIER)),          // program name  
         program_param_list,                          // optional parameter list
         token(match(";")),                           // semicolon
+        optional(type_section),                      // optional type section
         optional(var_section),                       // optional var section
         many(proc_or_func),                          // zero or more procedure/function declarations
         main_block,                                  // main program block

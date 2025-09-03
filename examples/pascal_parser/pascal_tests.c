@@ -1386,10 +1386,17 @@ void test_pascal_fizzbuzz_program(void) {
     // var i : integer;
     ast_t* var_decl = var_section->child;
     TEST_ASSERT(var_decl->typ == PASCAL_T_VAR_DECL);
-    TEST_ASSERT(var_decl->child->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(var_decl->child->sym->name, "i") == 0);
-    TEST_ASSERT(var_decl->child->next->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(var_decl->child->next->sym->name, "integer") == 0);
+    
+    // First child should be the variable identifier list
+    ast_t* var_list = var_decl->child;
+    TEST_ASSERT(var_list->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(var_list->sym->name, "i") == 0);
+    
+    // Second child should be the type specification
+    ast_t* type_spec = var_list->next;
+    TEST_ASSERT(type_spec->typ == PASCAL_T_TYPE_SPEC);
+    TEST_ASSERT(type_spec->child->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(type_spec->child->sym->name, "integer") == 0);
 
     // main block
     ast_t* main_block = var_section->next;
@@ -1536,6 +1543,205 @@ void test_pascal_complex_syntax_error(void) {
     free(input);
 }
 
+void test_pascal_comments(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("{ This is a comment } 123");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(res.value.ast->sym->name, "123") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_compiler_directives(void) {
+    combinator_t* p = compiler_directive(PASCAL_T_COMPILER_DIRECTIVE);
+
+    input_t* input = new_input();
+    input->buffer = strdup("{$ifNDef CPU}");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_COMPILER_DIRECTIVE);
+    TEST_ASSERT(strcmp(res.value.ast->sym->name, "ifNDef CPU") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_range_type(void) {
+    combinator_t* p = range_type(PASCAL_T_RANGE_TYPE);
+
+    input_t* input = new_input();
+    input->buffer = strdup("-1..1");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_RANGE_TYPE);
+    
+    // Check start value
+    ast_t* start_val = res.value.ast->child;
+    TEST_ASSERT(start_val->typ == PASCAL_T_INTEGER);
+    
+    // Check end value
+    ast_t* end_val = start_val->next;
+    TEST_ASSERT(end_val->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(end_val->sym->name, "1") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_multiple_variables(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "var\n"
+                   "   I, Count, guess : Longint;\n"
+                   "   R : Real;\n"
+                   "begin\n"
+                   "end.\n";
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    ast_t* program_decl = res.value.ast;
+    TEST_ASSERT(program_decl->typ == PASCAL_T_PROGRAM_DECL);
+
+    // Find var section
+    ast_t* current = program_decl->child;
+    while (current && current->typ != PASCAL_T_VAR_SECTION) {
+        current = current->next;
+    }
+    TEST_ASSERT(current != NULL);
+    TEST_ASSERT(current->typ == PASCAL_T_VAR_SECTION);
+    
+    // First var declaration: I, Count, guess : Longint;
+    ast_t* var_decl1 = current->child;
+    TEST_ASSERT(var_decl1->typ == PASCAL_T_VAR_DECL);
+    
+    // Check first variable in list
+    ast_t* var1 = var_decl1->child;
+    TEST_ASSERT(var1->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(var1->sym->name, "I") == 0);
+    
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_type_section(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "type\n"
+                   "   signumCodomain = -1..1;\n"
+                   "begin\n"
+                   "end.\n";
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    ast_t* program_decl = res.value.ast;
+    TEST_ASSERT(program_decl->typ == PASCAL_T_PROGRAM_DECL);
+
+    // Find type section  
+    ast_t* current = program_decl->child;
+    while (current && current->typ != PASCAL_T_TYPE_SECTION) {
+        current = current->next;
+    }
+    TEST_ASSERT(current != NULL);
+    TEST_ASSERT(current->typ == PASCAL_T_TYPE_SECTION);
+    
+    // Type declaration: signumCodomain = -1..1;
+    ast_t* type_decl = current->child;
+    TEST_ASSERT(type_decl->typ == PASCAL_T_TYPE_DECL);
+    
+    // Check type name
+    ast_t* type_name = type_decl->child;
+    TEST_ASSERT(type_name->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(type_name->sym->name, "signumCodomain") == 0);
+    
+    // Check type specification (range type)
+    ast_t* type_spec = type_name->next;
+    TEST_ASSERT(type_spec->typ == PASCAL_T_TYPE_SPEC);
+    TEST_ASSERT(type_spec->child->typ == PASCAL_T_RANGE_TYPE);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_complex_random_program(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    // Start with a simpler version first - just the basic structure
+    char* program = "program Example49;\n"
+                   "{ Program to demonstrate the Random and Randomize functions. }\n"
+                   "var I,Count,guess : Longint;\n"
+                   "begin\n"
+                   "end.\n";
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("Parse failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+    }
+
+    // For now, just test basic parsing success - we'll verify structure if needed
+    TEST_ASSERT(res.is_success);
+    
+    if (res.is_success) {
+        ast_t* program_decl = res.value.ast;
+        TEST_ASSERT(program_decl->typ == PASCAL_T_PROGRAM_DECL);
+
+        // Check program name
+        ast_t* program_name = program_decl->child;
+        TEST_ASSERT(program_name->typ == PASCAL_T_IDENTIFIER);
+        TEST_ASSERT(strcmp(program_name->sym->name, "Example49") == 0);
+
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1590,5 +1796,12 @@ TEST_LIST = {
     { "test_pascal_program_with_vars", test_pascal_program_with_vars },
     { "test_pascal_fizzbuzz_program", test_pascal_fizzbuzz_program },
     { "test_pascal_complex_syntax_error", test_pascal_complex_syntax_error },
+    // Enhanced parser tests
+    { "test_pascal_comments", test_pascal_comments },
+    { "test_pascal_compiler_directives", test_pascal_compiler_directives },
+    { "test_pascal_range_type", test_pascal_range_type },
+    { "test_pascal_multiple_variables", test_pascal_multiple_variables },
+    { "test_pascal_type_section", test_pascal_type_section },
+    { "test_pascal_complex_random_program", test_pascal_complex_random_program },
     { NULL, NULL }
 };
