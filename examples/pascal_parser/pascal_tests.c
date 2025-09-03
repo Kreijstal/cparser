@@ -4488,6 +4488,324 @@ void test_pascal_result_assignment_simple(void) {
     free(input);
 }
 
+// Unit test to confirm word boundary issue with constructor vs const
+void test_pascal_constructor_word_boundary(void) {
+    printf("=== CONSTRUCTOR WORD BOUNDARY TEST ===\n");
+    
+    // Test 1: Try parsing "constructor" with complete program parser to see where it goes wrong
+    combinator_t* complete_parser = new_combinator();
+    init_pascal_complete_program_parser(&complete_parser);
+
+    input_t* input = new_input();
+    // Simple program that starts with constructor - this should fail if const parsing takes over
+    input->buffer = strdup("program Test; constructor TMyClass.Create; begin end; begin end.");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, complete_parser);
+    
+    if (res.is_success) {
+        printf("Unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Failed: %s (line %d, col %d)\n", 
+               res.value.error->message, res.value.error->line, res.value.error->col);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST shows where parser stopped:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+
+    free_combinator(complete_parser);
+    free(input->buffer);
+    free(input);
+    
+    // Test 2: Check if procedure parser can parse constructor
+    combinator_t* proc_func_parser = new_combinator();
+    init_pascal_procedure_parser(&proc_func_parser);
+
+    input = new_input();
+    input->buffer = strdup("constructor TMyClass.Create; begin end;");
+    input->length = strlen(input->buffer);
+
+    res = parse(input, proc_func_parser);
+    
+    if (res.is_success) {
+        printf("GOOD: procedure_parser correctly parsed constructor\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("ISSUE: procedure_parser failed to parse constructor: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+
+    free_combinator(proc_func_parser);
+    free(input->buffer);
+    free(input);
+}
+
+// Unit test to investigate why sample_class_program stops at CONST_SECTION
+void test_pascal_sample_class_investigation(void) {
+    printf("=== SAMPLE CLASS INVESTIGATION TEST ===\n");
+    
+    // Test just the problematic constructor line
+    combinator_t* complete_parser = new_combinator();
+    init_pascal_complete_program_parser(&complete_parser);
+
+    input_t* input = new_input();
+    // Minimal program that should trigger the same issue
+    char* program = "program Test;\n"
+                   "type\n"
+                   "  TMyClass = class\n" 
+                   "    constructor Create;\n"
+                   "  end;\n"
+                   "constructor TMyClass.Create;\n"  // This line should trigger the issue
+                   "begin\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+    
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, complete_parser);
+    
+    if (res.is_success) {
+        printf("Unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Failed as expected: %s (line %d, col %d)\n", 
+               res.value.error->message, res.value.error->line, res.value.error->col);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST shows where it stopped:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+
+    free_combinator(complete_parser);
+    free(input->buffer);
+    free(input);
+}
+
+// Unit test for method implementation parsing specifically  
+void test_pascal_method_implementation_parsing(void) {
+    printf("=== METHOD IMPLEMENTATION PARSING TEST ===\n");
+    
+    // Test parsing just the method implementation part
+    combinator_t* proc_parser = new_combinator();
+    init_pascal_procedure_parser(&proc_parser);
+
+    input_t* input = new_input();
+    input->buffer = strdup("constructor TMyClass.Create; begin FSomeField := -1 end;");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, proc_parser);
+    
+    if (res.is_success) {
+        printf("Method implementation succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Method implementation failed: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+
+    free_combinator(proc_parser);
+    free(input->buffer);
+    free(input);
+}
+
+// Unit test for debugging sample_class_program failure progression
+void test_pascal_sample_class_incremental_parsing(void) {
+    printf("=== SAMPLE CLASS INCREMENTAL PARSING TEST ===\n");
+    
+    combinator_t* complete_parser = new_combinator();
+    init_pascal_complete_program_parser(&complete_parser);
+
+    // Test 1: Program + class definition (this worked)
+    input_t* input = new_input();
+    char* program1 = "program SampleClass;\n"
+                    "type\n"
+                    "  TMyClass = class\n"
+                    "    constructor Create;\n"
+                    "  end;\n"
+                    "begin\n"
+                    "end.\n";
+    input->buffer = strdup(program1);
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, complete_parser);
+    printf("Test 1 - Program + class def: %s\n", res.is_success ? "SUCCESS" : "FAILED");
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    free(input->buffer);
+    free(input);
+
+    // Test 2: Add constructor implementation (this worked in my test)
+    input = new_input();
+    char* program2 = "program SampleClass;\n"
+                    "type\n"
+                    "  TMyClass = class\n"
+                    "    constructor Create;\n"
+                    "  end;\n"
+                    "constructor TMyClass.Create;\n"
+                    "begin\n"
+                    "  FSomeField := -1\n"
+                    "end;\n"
+                    "begin\n"
+                    "end.\n";
+    input->buffer = strdup(program2);
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, complete_parser);
+    printf("Test 2 - + constructor impl: %s\n", res.is_success ? "SUCCESS" : "FAILED");
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        printf("  Error: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    free(input->buffer);
+    free(input);
+
+    // Test 3: Add destructor implementation (likely fails here)
+    input = new_input();
+    char* program3 = "program SampleClass;\n"
+                    "type\n"
+                    "  TMyClass = class\n"
+                    "    constructor Create;\n"
+                    "    destructor Destroy;\n"
+                    "  end;\n"
+                    "constructor TMyClass.Create;\n"
+                    "begin\n"
+                    "  FSomeField := -1\n"
+                    "end;\n"
+                    "destructor TMyClass.Destroy;\n"
+                    "begin\n"
+                    "end;\n"
+                    "begin\n"
+                    "end.\n";
+    input->buffer = strdup(program3);
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, complete_parser);
+    printf("Test 3 - + destructor impl: %s\n", res.is_success ? "SUCCESS" : "FAILED");
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        printf("  Error: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    free(input->buffer);
+    free(input);
+
+    // Test 4: Test just destructor with procedure parser
+    printf("Test 4 - destructor with procedure parser: ");
+    combinator_t* proc_parser = new_combinator();
+    init_pascal_procedure_parser(&proc_parser);
+    
+    input = new_input();
+    input->buffer = strdup("destructor TMyClass.Destroy; begin end;");
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, proc_parser);
+    if (res.is_success) {
+        printf("SUCCESS\n");
+        free_ast(res.value.ast);
+    } else {
+        printf("FAILED: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    free_combinator(proc_parser);
+    free(input->buffer);
+    free(input);
+
+    // Test 5: Test C++ comments specifically
+    printf("Test 5 - C++ comment parsing: ");
+    combinator_t* comment_parser = new_combinator();
+    init_pascal_statement_parser(&comment_parser);
+    
+    input = new_input();
+    input->buffer = strdup("x := 1; // this is a comment\ny := 2;");
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, comment_parser);
+    if (res.is_success) {
+        printf("SUCCESS\n");
+        free_ast(res.value.ast);
+    } else {
+        printf("FAILED: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    // Test 6: Test with C++ comments in class body like original sample_class_program
+    printf("Test 6 - class with C++ comments: ");
+    input = new_input();
+    char* program_with_comments = "program Test;\n"
+                                 "type\n"
+                                 "  TMyClass = class\n"
+                                 "  private\n"
+                                 "    FSomeField: Integer; // by convention\n"  
+                                 "  public\n"
+                                 "    constructor Create;\n"
+                                 "  end;\n"
+                                 "constructor TMyClass.Create;\n"
+                                 "begin\n"
+                                 "  FSomeField := -1\n"
+                                 "end;\n"
+                                 "begin\n"
+                                 "end.\n";
+    input->buffer = strdup(program_with_comments);
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, complete_parser);
+    if (res.is_success) {
+        printf("SUCCESS\n");
+        free_ast(res.value.ast);
+    } else {
+        printf("FAILED: %s (line %d, col %d)\n", res.value.error->message, 
+               res.value.error->line, res.value.error->col);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+    // Test 7: Test with inherited keyword
+    printf("Test 7 - inherited statement: ");
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+    
+    input = new_input();
+    input->buffer = strdup("inherited Destroy;");
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, stmt_parser);
+    if (res.is_success) {
+        printf("SUCCESS\n");
+        free_ast(res.value.ast);
+    } else {
+        printf("FAILED: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    free_combinator(stmt_parser);
+    free(input->buffer);
+    free(input);
+
+    free_combinator(complete_parser);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -4613,5 +4931,9 @@ TEST_LIST = {
     { "test_pascal_compiler_directive_simple", test_pascal_compiler_directive_simple },
     { "test_pascal_raise_exception_simple", test_pascal_raise_exception_simple },
     { "test_pascal_result_assignment_simple", test_pascal_result_assignment_simple },
+    { "test_pascal_constructor_word_boundary", test_pascal_constructor_word_boundary },
+    { "test_pascal_sample_class_investigation", test_pascal_sample_class_investigation },
+    { "test_pascal_method_implementation_parsing", test_pascal_method_implementation_parsing },
+    { "test_pascal_sample_class_incremental_parsing", test_pascal_sample_class_incremental_parsing },
     { NULL, NULL }
 };

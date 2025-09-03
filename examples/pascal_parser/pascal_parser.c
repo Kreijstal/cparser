@@ -72,13 +72,24 @@ combinator_t* pascal_comment() {
         NULL);
 }
 
+// C++-style comment parser: // comment content until end of line
+combinator_t* cpp_comment() {
+    return seq(new_combinator(), PASCAL_T_NONE,
+        match("//"),
+        until(match("\n"), PASCAL_T_NONE),
+        optional(match("\n")),  // consume the newline if present
+        NULL);
+}
+
 // Enhanced whitespace parser that handles both whitespace and Pascal comments
 combinator_t* pascal_whitespace() {
     combinator_t* ws_char = satisfy(is_whitespace_char, PASCAL_T_NONE);
-    combinator_t* comment = pascal_comment();
+    combinator_t* pascal_comment_parser = pascal_comment();
+    combinator_t* cpp_comment_parser = cpp_comment();
     combinator_t* ws_or_comment = multi(new_combinator(), PASCAL_T_NONE,
         ws_char,
-        comment,
+        pascal_comment_parser,
+        cpp_comment_parser,
         NULL
     );
     return many(ws_or_comment);
@@ -290,7 +301,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
     save_input_state(in, &state);
     
     // Parse "ARRAY" keyword (case insensitive)
-    combinator_t* array_keyword = token(match_ci("array"));
+    combinator_t* array_keyword = token(keyword_ci("array"));
     ParseResult array_res = parse(in, array_keyword);
     if (!array_res.is_success) {
         free_combinator(array_keyword);
@@ -342,7 +353,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
     free_combinator(close_bracket);
     
     // Parse OF
-    combinator_t* of_keyword = token(match_ci("of"));
+    combinator_t* of_keyword = token(keyword_ci("of"));
     ParseResult of_res = parse(in, of_keyword);
     if (!of_res.is_success) {
         free_ast(indices_ast);
@@ -402,7 +413,7 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     save_input_state(in, &state);
     
     // Parse "class" keyword (case insensitive)
-    combinator_t* class_keyword = token(match_ci("class"));
+    combinator_t* class_keyword = token(keyword_ci("class"));
     ParseResult class_res = parse(in, class_keyword);
     if (!class_res.is_success) {
         free_combinator(class_keyword);
@@ -436,7 +447,7 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     
     // Constructor declaration: constructor Name;
     combinator_t* constructor_decl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
-        token(match_ci("constructor")),
+        token(keyword_ci("constructor")),
         method_name,
         param_list,
         token(match(";")),
@@ -445,18 +456,18 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     
     // Destructor declaration: destructor Name; override;  
     combinator_t* destructor_decl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
-        token(match_ci("destructor")),
+        token(keyword_ci("destructor")),
         method_name,
         param_list,
         token(match(";")),
-        optional(token(match_ci("override"))),
+        optional(token(keyword_ci("override"))),
         optional(token(match(";"))),
         NULL
     );
     
     // Procedure declaration: procedure Name;
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_METHOD_DECL,
-        token(match_ci("procedure")),
+        token(keyword_ci("procedure")),
         method_name,
         param_list,
         token(match(";")),
@@ -465,7 +476,7 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     
     // Function declaration: function Name: ReturnType;  
     combinator_t* function_decl = seq(new_combinator(), PASCAL_T_METHOD_DECL,
-        token(match_ci("function")),
+        token(keyword_ci("function")),
         method_name,
         param_list,
         token(match(":")),
@@ -476,17 +487,17 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     
     // Property declaration: property Name: Type read ReadField write WriteField;
     combinator_t* property_decl = seq(new_combinator(), PASCAL_T_PROPERTY_DECL,
-        token(match_ci("property")),
+        token(keyword_ci("property")),
         token(cident(PASCAL_T_IDENTIFIER)), // property name
         token(match(":")),
         token(cident(PASCAL_T_IDENTIFIER)), // property type
         optional(seq(new_combinator(), PASCAL_T_NONE,
-            token(match_ci("read")),
+            token(keyword_ci("read")),
             token(cident(PASCAL_T_IDENTIFIER)), // read field/method
             NULL
         )),
         optional(seq(new_combinator(), PASCAL_T_NONE,
-            token(match_ci("write")),
+            token(keyword_ci("write")),
             token(cident(PASCAL_T_IDENTIFIER)), // write field/method
             NULL
         )),
@@ -521,10 +532,10 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     
     // Access sections: private, public, protected, published
     combinator_t* access_keyword = multi(new_combinator(), PASCAL_T_ACCESS_MODIFIER,
-        token(match_ci("private")),
-        token(match_ci("public")),
-        token(match_ci("protected")),
-        token(match_ci("published")),
+        token(keyword_ci("private")),
+        token(keyword_ci("public")),
+        token(keyword_ci("protected")),
+        token(keyword_ci("published")),
         NULL
     );
     
@@ -554,7 +565,7 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     free_combinator(class_body_parser);
     
     // Parse "end" keyword  
-    combinator_t* end_keyword = token(match_ci("end"));
+    combinator_t* end_keyword = token(keyword_ci("end"));
     ParseResult end_res = parse(in, end_keyword);
     if (!end_res.is_success) {
         if (class_body) free_ast(class_body);
@@ -1307,8 +1318,8 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Begin-end block: begin [statement_list] end  
     // Handle empty begin-end blocks explicitly to avoid recursive parsing issues
     combinator_t* empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
-        token(match_ci("begin")),              // begin keyword  
-        token(match_ci("end")),                // end keyword (immediately after begin)
+        token(keyword_ci("begin")),              // begin keyword  
+        token(keyword_ci("end")),                // end keyword (immediately after begin)
         NULL
     );
     
@@ -1324,9 +1335,9 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
-        token(match_ci("begin")),              // begin keyword
+        token(keyword_ci("begin")),              // begin keyword
         stmt_list,                             // statements each terminated by semicolon
-        token(match_ci("end")),                // end keyword
+        token(keyword_ci("end")),                // end keyword
         NULL
     );
     
@@ -1339,12 +1350,12 @@ void init_pascal_statement_parser(combinator_t** p) {
     
     // If statement: if expression then statement [else statement]
     combinator_t* if_stmt = seq(new_combinator(), PASCAL_T_IF_STMT,
-        token(match_ci("if")),                     // if keyword (case-insensitive)
+        token(keyword_ci("if")),                     // if keyword (case-insensitive)
         lazy(expr_parser),                         // condition
-        token(match_ci("then")),                   // then keyword (case-insensitive)
+        token(keyword_ci("then")),                   // then keyword (case-insensitive)
         lazy(stmt_parser),                         // then statement
         optional(seq(new_combinator(), PASCAL_T_ELSE,    // optional else part
-            token(match_ci("else")),               // else keyword (case-insensitive)
+            token(keyword_ci("else")),               // else keyword (case-insensitive)
             lazy(stmt_parser),
             NULL
         )),
@@ -1353,27 +1364,27 @@ void init_pascal_statement_parser(combinator_t** p) {
     
     // For statement: for identifier := expression (to|downto) expression do statement
     combinator_t* for_direction = multi(new_combinator(), PASCAL_T_NONE,
-        token(match_ci("to")),                 // to keyword (case-insensitive)
-        token(match_ci("downto")),             // downto keyword (case-insensitive)
+        token(keyword_ci("to")),                 // to keyword (case-insensitive)
+        token(keyword_ci("downto")),             // downto keyword (case-insensitive)
         NULL
     );
     combinator_t* for_stmt = seq(new_combinator(), PASCAL_T_FOR_STMT,
-        token(match_ci("for")),                // for keyword (case-insensitive)
+        token(keyword_ci("for")),                // for keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),    // loop variable
         token(match(":=")),                    // assignment
         lazy(expr_parser),                     // start expression
         for_direction,                         // to or downto
         lazy(expr_parser),                     // end expression
-        token(match_ci("do")),                 // do keyword (case-insensitive)
+        token(keyword_ci("do")),                 // do keyword (case-insensitive)
         lazy(stmt_parser),                     // loop body statement
         NULL
     );
     
     // While statement: while expression do statement
     combinator_t* while_stmt = seq(new_combinator(), PASCAL_T_WHILE_STMT,
-        token(match_ci("while")),              // while keyword (case-insensitive)
+        token(keyword_ci("while")),              // while keyword (case-insensitive)
         lazy(expr_parser),                     // condition
-        token(match_ci("do")),                 // do keyword (case-insensitive)
+        token(keyword_ci("do")),                 // do keyword (case-insensitive)
         lazy(stmt_parser),                     // body statement
         NULL
     );
@@ -1761,7 +1772,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Procedure declaration: procedure name [(params)] ; body
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(keyword_ci("procedure")),                // procedure keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after parameters
@@ -1781,7 +1792,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Procedure declaration (header only): procedure name [(params)];
     combinator_t* procedure_declaration = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(keyword_ci("procedure")),                // procedure keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // terminating semicolon (no body)
@@ -1790,7 +1801,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
 
     // Function definition (with body): function name [(params)] : return_type ; body ;
     combinator_t* function_definition = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(match_ci("function")),                 // function keyword (case-insensitive)
+        token(keyword_ci("function")),                 // function keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
         return_type,                                 // return type
@@ -1802,7 +1813,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Procedure definition (with body): procedure name [(params)] ; body ;
     combinator_t* procedure_definition = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(keyword_ci("procedure")),                // procedure keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after parameters
@@ -1828,7 +1839,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Working procedure parser: procedure name [(params)] ; body ;
     combinator_t* working_procedure = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(keyword_ci("procedure")),                // procedure keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after signature
