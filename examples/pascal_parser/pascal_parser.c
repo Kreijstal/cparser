@@ -1076,12 +1076,27 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Begin-end block: begin [statement_list] end  
-    combinator_t* stmt_list = optional(sep_by(lazy(stmt_parser), token(match(";"))));
-    combinator_t* begin_end_block = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
-        token(match_ci("begin")),              // begin keyword (case-insensitive like main program)
-        stmt_list,                             // statement list (can be empty)
+    // Handle empty begin-end blocks explicitly to avoid recursive parsing issues
+    combinator_t* empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        token(match_ci("begin")),              // begin keyword  
+        token(match_ci("end")),                // end keyword (immediately after begin)
+        NULL
+    );
+    
+    // Non-empty begin-end blocks with statements
+    combinator_t* stmt_list = sep_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        token(match_ci("begin")),              // begin keyword
+        stmt_list,                             // statement list (at least one statement)
         optional(token(match(";"))),           // optional trailing semicolon
-        token(match_ci("end")),                // end keyword (case-insensitive like main program)
+        token(match_ci("end")),                // end keyword
+        NULL
+    );
+    
+    // Try empty block first, then non-empty
+    combinator_t* begin_end_block = multi(new_combinator(), PASCAL_T_NONE,
+        empty_begin_end,                       // try empty block first
+        non_empty_begin_end,                   // then try non-empty block
         NULL
     );
     
@@ -1450,8 +1465,16 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Simple function body that just handles VAR section + begin-end
-    combinator_t* function_body = seq(new_combinator(), PASCAL_T_NONE,
+    // Function body for complete programs: includes terminating semicolon
+    combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
+        optional(local_var_section),                 // optional local var section
+        lazy(stmt_parser),                           // begin-end block handled by statement parser
+        token(match(";")),                           // terminating semicolon after function body
+        NULL
+    );
+    
+    // Function body for standalone parsing (no terminating semicolon)
+    combinator_t* standalone_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local var section
         lazy(stmt_parser),                           // begin-end block handled by statement parser
         NULL
@@ -1462,19 +1485,19 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         token(match("procedure")),                   // procedure keyword (case-sensitive like working version)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
-        token(match(";")),                           // semicolon
-        function_body,                               // procedure body with local sections
+        token(match(";")),                           // semicolon after parameters
+        program_function_body,                       // procedure body with terminating semicolon for programs
         NULL
     );
     
-    // Function declaration: function name [(params)] : return_type ; body  
+    // Function declaration: function name [(params)] : return_type ; body
     combinator_t* function_decl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
         token(match("function")),                    // function keyword (case-sensitive like working version)
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
         return_type,                                 // return type
-        token(match(";")),                           // semicolon
-        function_body,                               // function body with local sections
+        token(match(";")),                           // semicolon after return type (like standalone functions)
+        program_function_body,                       // function body with terminating semicolon for programs
         NULL
     );
     
