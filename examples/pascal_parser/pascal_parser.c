@@ -1067,6 +1067,8 @@ const char* pascal_tag_to_string(tag_t tag) {
         // Const section types
         case PASCAL_T_CONST_SECTION: return "CONST_SECTION";
         case PASCAL_T_CONST_DECL: return "CONST_DECL";
+        // Field width specifier
+        case PASCAL_T_FIELD_WIDTH: return "FIELD_WIDTH";
         default: return "UNKNOWN";
     }
 }
@@ -1246,6 +1248,9 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_insert(*p, 7, PASCAL_T_POS, EXPR_PREFIX, ASSOC_NONE, token(match("+")));
     expr_insert(*p, 7, PASCAL_T_NOT, EXPR_PREFIX, ASSOC_NONE, token(match("not")));
     expr_insert(*p, 7, PASCAL_T_ADDR, EXPR_PREFIX, ASSOC_NONE, token(match("@")));
+    
+    // Field width operator for formatted output: expression:width (same precedence as unary)
+    expr_insert(*p, 7, PASCAL_T_FIELD_WIDTH, EXPR_INFIX, ASSOC_LEFT, token(match(":")));
     
     // Precedence 8: Member access (highest precedence) - but not if followed by another dot
     combinator_t* member_access_op = seq(new_combinator(), PASCAL_T_NONE,

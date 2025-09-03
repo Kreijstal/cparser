@@ -110,7 +110,9 @@ typedef enum {
     PASCAL_T_USES_UNIT,
     // Const section types
     PASCAL_T_CONST_SECTION,
-    PASCAL_T_CONST_DECL
+    PASCAL_T_CONST_DECL,
+    // Field width specifier for formatted output
+    PASCAL_T_FIELD_WIDTH
 } pascal_tag_t;
 
 // --- Function Declarations ---
