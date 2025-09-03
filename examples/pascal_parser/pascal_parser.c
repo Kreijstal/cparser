@@ -102,6 +102,13 @@ static const char* pascal_reserved_keywords[] = {
     "repeat", "until", "case", "of", "var", "const", "type", 
     "and", "or", "not", "xor", "div", "mod", "in", "nil", "true", "false",
     "array", "record", "set", "packed",
+    // Exception handling keywords
+    "try", "finally", "except", "raise", "on",
+    // Class and object-oriented keywords  
+    "class", "object", "private", "public", "protected", "published",
+    "property", "inherited", "self", "constructor", "destructor",
+    // Additional Pascal keywords
+    "function", "procedure", "program", "unit", "uses", "interface", "implementation",
     NULL
 };
 
@@ -879,6 +886,12 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TO: return "TO";
         case PASCAL_T_DOWNTO: return "DOWNTO";
         case PASCAL_T_ASM_BLOCK: return "ASM_BLOCK";
+        // Exception handling types
+        case PASCAL_T_TRY_BLOCK: return "TRY_BLOCK";
+        case PASCAL_T_FINALLY_BLOCK: return "FINALLY_BLOCK";
+        case PASCAL_T_EXCEPT_BLOCK: return "EXCEPT_BLOCK";
+        case PASCAL_T_RAISE_STMT: return "RAISE_STMT";
+        case PASCAL_T_ON_CLAUSE: return "ON_CLAUSE";
         case PASCAL_T_PROGRAM_DECL: return "PROGRAM_DECL";
         case PASCAL_T_PROGRAM_HEADER: return "PROGRAM_HEADER";
         case PASCAL_T_PROGRAM_PARAMS: return "PROGRAM_PARAMS";
@@ -1216,10 +1229,40 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
+    // Try-finally block: try statements finally statements end
+    combinator_t* try_finally = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
+        token(keyword_ci("try")),              // try keyword (case-insensitive)
+        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+        token(keyword_ci("finally")),          // finally keyword (case-insensitive) 
+        sep_by(lazy(stmt_parser), token(match(";"))), // statements in finally block
+        token(keyword_ci("end")),              // end keyword (case-insensitive)
+        NULL
+    );
+    
+    // Try-except block: try statements except statements end
+    combinator_t* try_except = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
+        token(keyword_ci("try")),              // try keyword (case-insensitive)
+        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+        token(keyword_ci("except")),           // except keyword (case-insensitive)
+        sep_by(lazy(stmt_parser), token(match(";"))), // statements in except block
+        token(keyword_ci("end")),              // end keyword (case-insensitive)
+        NULL
+    );
+    
+    // Raise statement: raise [expression]
+    combinator_t* raise_stmt = seq(new_combinator(), PASCAL_T_RAISE_STMT,
+        token(keyword_ci("raise")),            // raise keyword (case-insensitive)
+        optional(lazy(expr_parser)),           // optional exception expression
+        NULL
+    );
+    
     // Main statement parser: try different types of statements (order matters!)
     // Note: VAR sections are handled by the complete program parser context
     multi(*stmt_parser, PASCAL_T_NONE,
         begin_end_block,                      // compound statements (must come before expr_stmt)
+        try_finally,                          // try-finally blocks
+        try_except,                           // try-except blocks
+        raise_stmt,                           // raise statements
         asm_stmt,                             // inline assembly blocks
         if_stmt,                              // if statements
         for_stmt,                             // for statements
@@ -1534,15 +1577,30 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // This parser handles the most common function body patterns without full recursive complexity
     
     // Function body for standalone parsing (no terminating semicolon)
+    // Function body that can contain nested function/procedure declarations
+    combinator_t** nested_proc_or_func = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *nested_proc_or_func = new_combinator();
+    (*nested_proc_or_func)->extra_to_free = nested_proc_or_func;
+    
+    // Forward declaration for nested functions - these will refer to function_definition and procedure_definition below
+    combinator_t* nested_function_decl = lazy(nested_proc_or_func);
+    
+    combinator_t* nested_function_body = seq(new_combinator(), PASCAL_T_NONE,
+        optional(local_var_section),                 // optional local var section
+        many(nested_function_decl),                  // zero or more nested function/procedure declarations
+        lazy(stmt_parser),                           // begin-end block handled by statement parser
+        NULL
+    );
+
     combinator_t* standalone_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local var section
         lazy(stmt_parser),                           // begin-end block handled by statement parser
         NULL
     );
 
-    // Use the existing function body parser that handles local VAR sections
-    // This allows functions to have local variable declarations before BEGIN
-    combinator_t* program_function_body = standalone_function_body;
+    // Use the nested function body parser for complete programs to support nested functions
+    // Use the standalone function body for standalone parsing
+    combinator_t* program_function_body = nested_function_body;
     
     // Procedure declaration: procedure name [(params)] ; body
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
@@ -1626,6 +1684,14 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
         working_function,                            // working function parser
         working_procedure,                           // working procedure parser
+        NULL
+    );
+    
+    // Set up the nested function parser to point to the working function/procedure parsers
+    // This allows nested function/procedure declarations within function bodies
+    multi(*nested_proc_or_func, PASCAL_T_NONE,
+        working_function,                            // nested functions
+        working_procedure,                           // nested procedures
         NULL
     );
     

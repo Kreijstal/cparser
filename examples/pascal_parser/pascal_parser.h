@@ -70,6 +70,12 @@ typedef enum {
     PASCAL_T_TO,
     PASCAL_T_DOWNTO,
     PASCAL_T_ASM_BLOCK,
+    // Exception handling types
+    PASCAL_T_TRY_BLOCK,
+    PASCAL_T_FINALLY_BLOCK,
+    PASCAL_T_EXCEPT_BLOCK,
+    PASCAL_T_RAISE_STMT,
+    PASCAL_T_ON_CLAUSE,
     // Program structure types
     PASCAL_T_PROGRAM_DECL,
     PASCAL_T_PROGRAM_HEADER,
