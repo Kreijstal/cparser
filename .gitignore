@@ -29,3 +29,4 @@ build/
 /calculator
 /json_parser_cli
 /pascal_parser_cli
+examples/*/test_pascal
