@@ -1147,9 +1147,17 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
+    // For now, use a simpler statement list parser for BEGIN-END blocks
+    // that only handles assignment and expression statements (most common in function bodies)
+    // This avoids the circular reference issue with lazy(stmt_parser)
+    combinator_t* simple_stmt = multi(new_combinator(), PASCAL_T_NONE,
+        assignment,                            // assignment statements
+        expr_stmt,                            // expression statements
+        NULL
+    );
+    
     // Parse statements separated by semicolons (semicolon is separator, not terminator)
-    // This allows for optional trailing semicolon as well
-    combinator_t* stmt_list = sep_end_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* stmt_list = sep_end_by(simple_stmt, token(match(";")));
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
