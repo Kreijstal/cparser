@@ -83,6 +83,9 @@ typedef enum {
     PASCAL_T_TYPE_DECL,
     PASCAL_T_RANGE_TYPE,
     PASCAL_T_ARRAY_TYPE,
+    PASCAL_T_CLASS_TYPE,
+    PASCAL_T_CLASS_MEMBER,
+    PASCAL_T_ACCESS_MODIFIER,
     // Uses clause types
     PASCAL_T_USES_SECTION,
     PASCAL_T_USES_UNIT,
@@ -107,6 +110,7 @@ combinator_t* pascal_token(combinator_t* p);
 combinator_t* compiler_directive(tag_t tag);
 combinator_t* range_type(tag_t tag);
 combinator_t* array_type(tag_t tag);
+combinator_t* class_type(tag_t tag);
 
 // --- Utility Functions ---
 ParseResult parse_pascal_expression(input_t* input, combinator_t* parser);

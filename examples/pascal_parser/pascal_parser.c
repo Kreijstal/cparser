@@ -320,6 +320,54 @@ combinator_t* array_type(tag_t tag) {
     return comb;
 }
 
+// Simple class type parser: class ... end
+static ParseResult class_type_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    // Parse "class" keyword (case insensitive)
+    combinator_t* class_keyword = token(match_ci("class"));
+    ParseResult class_res = parse(in, class_keyword);
+    if (!class_res.is_success) {
+        free_combinator(class_keyword);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected 'class'"));
+    }
+    free_ast(class_res.value.ast);
+    free_combinator(class_keyword);
+    
+    // For now, skip class body and just parse "end" directly for testing
+    combinator_t* end_keyword = token(match_ci("end"));
+    ParseResult end_res = parse(in, end_keyword);
+    if (!end_res.is_success) {
+        free_combinator(end_keyword);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected 'end' after class"));
+    }
+    free_ast(end_res.value.ast);
+    free_combinator(end_keyword);
+    
+    // Build AST
+    ast_t* class_ast = new_ast();
+    class_ast->typ = pargs->tag;
+    class_ast->sym = NULL;
+    class_ast->child = NULL; // No body for now
+    class_ast->next = NULL;
+    
+    set_ast_position(class_ast, in);
+    return make_success(class_ast);
+}
+
+combinator_t* class_type(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = class_type_fn;
+    return comb;
+}
+
 static ParseResult type_name_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
@@ -836,6 +884,9 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TYPE_DECL: return "TYPE_DECL";
         case PASCAL_T_RANGE_TYPE: return "RANGE_TYPE";
         case PASCAL_T_ARRAY_TYPE: return "ARRAY_TYPE";
+        case PASCAL_T_CLASS_TYPE: return "CLASS_TYPE";
+        case PASCAL_T_CLASS_MEMBER: return "CLASS_MEMBER";
+        case PASCAL_T_ACCESS_MODIFIER: return "ACCESS_MODIFIER";
         // Uses clause types
         case PASCAL_T_USES_SECTION: return "USES_SECTION";
         case PASCAL_T_USES_UNIT: return "USES_UNIT";
@@ -1272,6 +1323,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Enhanced Variable declaration: var1, var2, var3 : type;
     combinator_t* var_identifier_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* type_spec = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
+        class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
         range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1
         type_name(PASCAL_T_IDENTIFIER),                 // built-in types
