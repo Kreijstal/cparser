@@ -5,10 +5,61 @@
 #include <ctype.h>
 
 // --- Forward Declarations ---
+typedef struct { char* str; } match_args;  // For keyword matching
+extern ast_t* ast_nil;  // From parser.c
 
 // --- Helper Functions ---
 static bool is_whitespace_char(char c) {
     return isspace((unsigned char)c);
+}
+
+// Helper function to check if a character can be part of an identifier
+static bool is_identifier_char(char c) {
+    return isalnum((unsigned char)c) || c == '_';
+}
+
+// Word-boundary aware case-insensitive keyword matching
+static ParseResult keyword_ci_fn(input_t* in, void* args) {
+    char* str = ((match_args*)args)->str;
+    InputState state;
+    save_input_state(in, &state);
+    
+    int len = strlen(str);
+    
+    // Match the keyword case-insensitively
+    for (int i = 0; i < len; i++) {
+        char c = read1(in);
+        if (tolower(c) != tolower(str[i])) {
+            restore_input_state(in, &state);
+            char* err_msg;
+            asprintf(&err_msg, "Expected keyword '%s' (case-insensitive)", str);
+            return make_failure(in, err_msg);
+        }
+    }
+    
+    // Check for word boundary: next character should not be alphanumeric or underscore
+    if (in->start < in->length) {
+        char next_char = in->buffer[in->start];
+        if (is_identifier_char(next_char)) {
+            restore_input_state(in, &state);
+            char* err_msg;
+            asprintf(&err_msg, "Expected keyword '%s', not part of identifier", str);
+            return make_failure(in, err_msg);
+        }
+    }
+    
+    return make_success(ast_nil);
+}
+
+// Create word-boundary aware case-insensitive keyword parser
+combinator_t* keyword_ci(char* str) {
+    match_args* args = (match_args*)safe_malloc(sizeof(match_args));
+    args->str = str;
+    combinator_t* comb = new_combinator();
+    comb->type = P_CI_KEYWORD;
+    comb->fn = keyword_ci_fn;
+    comb->args = args;
+    return comb;
 }
 
 // Pascal-style comment parser: { comment content }
@@ -1032,9 +1083,9 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_insert(*p, 3, PASCAL_T_EQ, EXPR_INFIX, ASSOC_LEFT, token(match("=")));
     expr_altern(*p, 3, PASCAL_T_LT, token(match("<")));
     expr_altern(*p, 3, PASCAL_T_GT, token(match(">")));
-    expr_altern(*p, 3, PASCAL_T_IN, token(match("in")));
-    expr_altern(*p, 3, PASCAL_T_IS, token(match("is")));
-    expr_altern(*p, 3, PASCAL_T_AS, token(match("as")));
+    expr_altern(*p, 3, PASCAL_T_IN, token(keyword_ci("in")));
+    expr_altern(*p, 3, PASCAL_T_IS, token(keyword_ci("is")));
+    expr_altern(*p, 3, PASCAL_T_AS, token(keyword_ci("as")));
     // Multi-character operators (added last = tried first in expr parser)
     expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));
     expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
@@ -1050,11 +1101,11 @@ void init_pascal_expression_parser(combinator_t** p) {
     // Precedence 6: Multiplication, Division, Modulo, and Bitwise shifts
     expr_insert(*p, 6, PASCAL_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
     expr_altern(*p, 6, PASCAL_T_DIV, token(match("/")));
-    expr_altern(*p, 6, PASCAL_T_INTDIV, token(match("div")));
-    expr_altern(*p, 6, PASCAL_T_MOD, token(match("mod")));
+    expr_altern(*p, 6, PASCAL_T_INTDIV, token(keyword_ci("div")));
+    expr_altern(*p, 6, PASCAL_T_MOD, token(keyword_ci("mod")));
     expr_altern(*p, 6, PASCAL_T_MOD, token(match("%")));
-    expr_altern(*p, 6, PASCAL_T_SHL, token(match("shl")));
-    expr_altern(*p, 6, PASCAL_T_SHR, token(match("shr")));
+    expr_altern(*p, 6, PASCAL_T_SHL, token(keyword_ci("shl")));
+    expr_altern(*p, 6, PASCAL_T_SHR, token(keyword_ci("shr")));
     
     // Precedence 7: Unary operators (highest precedence)
     expr_insert(*p, 7, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
