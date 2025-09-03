@@ -1148,11 +1148,26 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Non-empty begin-end blocks with statements
-    combinator_t* stmt_list = sep_by(lazy(stmt_parser), token(match(";")));
+    // Use a more flexible parser that handles both separation and termination
+    combinator_t* first_stmt = lazy(stmt_parser);
+    combinator_t* additional_stmt = seq(new_combinator(), PASCAL_T_NONE,
+        token(match(";")),                     // semicolon  
+        lazy(stmt_parser),                     // followed by another statement
+        NULL
+    );
+    combinator_t* trailing_semicolon = token(match(";"));
+    
+    // Statement list: first_statement [; additional_statement]* [;]
+    combinator_t* stmt_list = seq(new_combinator(), PASCAL_T_NONE,
+        first_stmt,                            // first statement (required)
+        many(additional_stmt),                 // zero or more additional statements after semicolons
+        optional(trailing_semicolon),          // optional trailing semicolon
+        NULL
+    );
+    
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
-        stmt_list,                             // statement list (at least one statement)
-        optional(token(match(";"))),           // optional trailing semicolon
+        stmt_list,                             // statement list 
         token(match_ci("end")),                // end keyword
         NULL
     );
