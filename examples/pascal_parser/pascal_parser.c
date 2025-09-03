@@ -5,7 +5,6 @@
 #include <ctype.h>
 
 // --- Forward Declarations ---
-static ParseResult builtin_ident_fn(input_t* in, void* args);
 
 // --- Helper Functions ---
 static bool is_whitespace_char(char c) {
@@ -947,155 +946,15 @@ static void post_process_set_operations(ast_t* ast) {
 
 // Helper function to create case-insensitive identifier parsers for built-in functions
 // Arguments struct for builtin identifier parsing
-typedef struct { char* name; } builtin_args;
 
-static combinator_t* builtin_identifier(const char* name) {
-    // Use a custom parser that matches case-insensitively but creates a symbol
-    combinator_t* parser = new_combinator();
-    builtin_args* args = (builtin_args*)safe_malloc(sizeof(builtin_args));
-    args->name = strdup(name); // Make a copy since the original might be const
-    
-    // Create a custom function that matches case-insensitively but creates an identifier AST
-    parser->type = P_CI_KEYWORD;  // Use existing type for proper cleanup
-    parser->fn = builtin_ident_fn;
-    parser->args = args;
-    parser->extra_to_free = args->name;  // Ensure the duplicated string gets freed
-    return parser;
-}
-
-// Custom parser function for built-in identifiers - matches case-insensitively but creates symbols
-static ParseResult builtin_ident_fn(input_t* in, void* args) {
-    char* str = ((builtin_args*)args)->name;
-    InputState state; 
-    save_input_state(in, &state);
-    
-    int len = strlen(str);
-    for (int i = 0; i < len; i++) {
-        char c = read1(in);
-        if (tolower(c) != tolower(str[i])) {
-            restore_input_state(in, &state);
-            char* err_msg; 
-            asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
-            return make_failure(in, err_msg);
-        }
-    }
-    
-    // Check that the match is a complete identifier (not a prefix)
-    char next_char = read1(in);
-    if (next_char != EOF && (isalnum(next_char) || next_char == '_')) {
-        restore_input_state(in, &state);
-        char* err_msg; 
-        asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
-        return make_failure(in, err_msg);
-    }
-    if (next_char != EOF) in->start--; // Put back the character
-    
-    // Create identifier AST with symbol
-    ast_t* ast = new_ast();
-    ast->typ = PASCAL_T_IDENTIFIER;
-    ast->sym = sym_lookup(str); // Use original casing for symbol
-    ast->child = NULL;
-    ast->next = NULL;
-    set_ast_position(ast, in);
-    
-    return make_success(ast);
-}
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    // Built-in Pascal functions and procedures - comprehensive list
-    // Helper to create case-insensitive identifier parser for built-ins
-    combinator_t* builtin_func = multi(new_combinator(), PASCAL_T_IDENTIFIER,
-        // Built-in functions that return values - longer names first to avoid partial matching  
-        token(builtin_identifier("inttostr")),      // inttostr(integer) -> string - before any 'int' matches
-        token(builtin_identifier("strtoint")),      // strtoint(string) -> integer - before any 'str' matches  
-        token(builtin_identifier("floattostr")),    // floattostr(real) -> string - before any 'float' matches
-        token(builtin_identifier("strtofloat")),    // strtofloat(string) -> real - before any 'str' matches
-        token(builtin_identifier("uppercase")),     // uppercase(string) -> string - before upcase
-        token(builtin_identifier("lowercase")),     // lowercase(char) -> char - before any 'low' matches
-        token(builtin_identifier("paramcount")),    // paramcount -> integer - before any 'param' matches
-        token(builtin_identifier("paramstr")),      // paramstr(index) -> string - before any 'param' matches
-        token(builtin_identifier("filesize")),      // filesize(file) -> integer - before any 'file' matches  
-        token(builtin_identifier("filepos")),       // filepos(file) -> integer - before any 'file' matches
-        token(builtin_identifier("length")),        // length(string) -> integer
-        token(builtin_identifier("ord")),           // ord(char) -> integer  
-        token(builtin_identifier("chr")),           // chr(integer) -> char
-        token(builtin_identifier("succ")),          // succ(ordinal) -> ordinal
-        token(builtin_identifier("pred")),          // pred(ordinal) -> ordinal
-        token(builtin_identifier("abs")),           // abs(number) -> number
-        token(builtin_identifier("sqr")),           // sqr(number) -> number
-        token(builtin_identifier("sqrt")),          // sqrt(number) -> real
-        token(builtin_identifier("sin")),           // sin(real) -> real
-        token(builtin_identifier("cos")),           // cos(real) -> real
-        token(builtin_identifier("arctan")),        // arctan(real) -> real
-        token(builtin_identifier("exp")),           // exp(real) -> real
-        token(builtin_identifier("ln")),            // ln(real) -> real
-        token(builtin_identifier("trunc")),         // trunc(real) -> integer
-        token(builtin_identifier("round")),         // round(real) -> integer
-        token(builtin_identifier("random")),        // random[(integer)] -> real/integer
-        token(builtin_identifier("copy")),          // copy(string, start, count) -> string
-        token(builtin_identifier("pos")),           // pos(substr, string) -> integer
-        token(builtin_identifier("upcase")),        // upcase(char) -> char
-        token(builtin_identifier("trim")),          // trim(string) -> string
-        token(builtin_identifier("sizeof")),        // sizeof(type/var) -> integer
-        token(builtin_identifier("high")),          // high(array/type) -> ordinal
-        token(builtin_identifier("low")),           // low(array/type) -> ordinal
-        token(builtin_identifier("odd")),           // odd(integer) -> boolean
-        token(builtin_identifier("eof")),           // eof[(file)] -> boolean
-        token(builtin_identifier("eoln")),          // eoln[(file)] -> boolean
-        // Built-in procedures (no return value) - longer names first to avoid partial matching
-        token(builtin_identifier("inc")),           // inc(variable [, increment])
-        token(builtin_identifier("dec")),           // dec(variable [, decrement])
-        token(builtin_identifier("writeln")),       // writeln(args...) - must come before write
-        token(builtin_identifier("write")),         // write(args...)
-        token(builtin_identifier("readln")),        // readln(variables...) - must come before read
-        token(builtin_identifier("read")),          // read(variables...)
-        token(builtin_identifier("randomize")),     // randomize
-        token(builtin_identifier("clrscr")),        // clrscr
-        token(builtin_identifier("gotoxy")),        // gotoxy(x, y)
-        token(builtin_identifier("delete")),        // delete(string, start, count)
-        token(builtin_identifier("insert")),        // insert(source, dest, position)
-        token(builtin_identifier("str")),           // str(number, string)
-        token(builtin_identifier("val")),           // val(string, number, code)
-        token(builtin_identifier("new")),           // new(pointer)
-        token(builtin_identifier("dispose")),       // dispose(pointer)
-        token(builtin_identifier("getmem")),        // getmem(pointer, size)
-        token(builtin_identifier("freemem")),       // freemem(pointer, size)
-        token(builtin_identifier("fillchar")),      // fillchar(var, size, value)
-        token(builtin_identifier("move")),          // move(source, dest, size)
-        token(builtin_identifier("halt")),          // halt[(exitcode)]
-        token(builtin_identifier("exit")),          // exit[(result)]
-        token(builtin_identifier("break")),         // break
-        token(builtin_identifier("continue")),      // continue
-        token(builtin_identifier("assign")),        // assign(file, filename)
-        token(builtin_identifier("reset")),         // reset(file)
-        token(builtin_identifier("rewrite")),       // rewrite(file)
-        token(builtin_identifier("close")),         // close(file)
-        token(builtin_identifier("seek")),          // seek(file, position)
-        token(builtin_identifier("flush")),         // flush[(file)]
-        token(builtin_identifier("erase")),         // erase(file)
-        token(builtin_identifier("rename")),        // rename(file, newname)
-        token(builtin_identifier("setlength")),     // setlength(string/array, length)
-        // Object Pascal built-ins
-        token(builtin_identifier("free")),          // object.free
-        token(builtin_identifier("create")),        // constructor
-        token(builtin_identifier("destroy")),       // destructor
-        token(builtin_identifier("inherited")),     // inherited call
-        NULL
-    );
+    // Standard Pascal identifier parser - handles all identifiers uniformly
+    combinator_t* identifier = token(cident(PASCAL_T_IDENTIFIER));
     
-    // Enhanced identifier parser for standalone identifiers (variables, constants)
-    combinator_t* identifier = multi(new_combinator(), PASCAL_T_IDENTIFIER,
-        builtin_func,                     // built-in functions/procedures as identifiers
-        token(cident(PASCAL_T_IDENTIFIER)), // custom identifiers
-        NULL
-    );
-    // Function name: either custom identifier or built-in function
-    combinator_t* func_name = multi(new_combinator(), PASCAL_T_IDENTIFIER,
-        builtin_func,                     // built-in functions first
-        token(cident(PASCAL_T_IDENTIFIER)), // custom identifiers
-        NULL
-    );
+    // Function name: use standard identifier parser  
+    combinator_t* func_name = token(cident(PASCAL_T_IDENTIFIER));
     
     // Function call parser: function name followed by optional argument list
     combinator_t* arg_list = between(
