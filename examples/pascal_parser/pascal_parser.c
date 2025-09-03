@@ -1147,17 +1147,38 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // For now, use a simpler statement list parser for BEGIN-END blocks
-    // that only handles assignment and expression statements (most common in function bodies)
-    // This avoids the circular reference issue with lazy(stmt_parser)
-    combinator_t* simple_stmt = multi(new_combinator(), PASCAL_T_NONE,
-        assignment,                            // assignment statements
-        expr_stmt,                            // expression statements
+    // Use a simple fixed statement list for BEGIN-END blocks to avoid circular references
+    // This is specifically for function bodies where the most common patterns are:
+    // - assignments: interim := 0;
+    // - function calls: INC(i);
+    // - simple expressions: Damm := interim=0;
+    combinator_t* simple_assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
+        token(cident(PASCAL_T_IDENTIFIER)),    // variable name
+        token(match(":=")),                    // assignment operator
+        lazy(expr_parser),                     // expression (use expr_parser from above)
         NULL
     );
     
-    // Parse statements separated by semicolons (semicolon is separator, not terminator)
-    combinator_t* stmt_list = sep_end_by(simple_stmt, token(match(";")));
+    combinator_t* simple_expr_stmt = seq(new_combinator(), PASCAL_T_STATEMENT,
+        lazy(expr_parser),                     // expression
+        NULL
+    );
+    
+    // Create a basic statement parser for function body BEGIN-END blocks
+    combinator_t* function_stmt = multi(new_combinator(), PASCAL_T_NONE,
+        simple_assignment,                     // assignment statements
+        simple_expr_stmt,                      // expression statements (function calls)
+        NULL
+    );
+    
+    // Handle statements with optional trailing semicolons
+    combinator_t* stmt_list = multi(new_combinator(), PASCAL_T_NONE,
+        sep_end_by(function_stmt, token(match(";"))),  // try sep_end_by first
+        sep_by(function_stmt, token(match(";"))),      // fallback to sep_by 
+        function_stmt,                                 // single statement
+        succeed(ast_nil),                              // empty (for empty blocks)
+        NULL
+    );
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
