@@ -1559,12 +1559,12 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    // Procedure or function declaration/definition - try declarations first (shorter), then definitions
+    // Procedure or function declaration/definition - try definitions first (longer), then declarations
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
-        function_declaration,                        // function declarations (headers only)
-        procedure_declaration,                       // procedure declarations (headers only)  
         function_definition,                         // function definitions (with bodies)
         procedure_definition,                        // procedure definitions (with bodies)
+        function_declaration,                        // function declarations (headers only)
+        procedure_declaration,                       // procedure declarations (headers only)  
         NULL
     );
     
