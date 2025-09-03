@@ -75,6 +75,7 @@ typedef enum {
     PASCAL_T_FINALLY_BLOCK,
     PASCAL_T_EXCEPT_BLOCK,
     PASCAL_T_RAISE_STMT,
+    PASCAL_T_INHERITED_STMT,
     PASCAL_T_ON_CLAUSE,
     // Program structure types
     PASCAL_T_PROGRAM_DECL,

@@ -1044,6 +1044,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_FINALLY_BLOCK: return "FINALLY_BLOCK";
         case PASCAL_T_EXCEPT_BLOCK: return "EXCEPT_BLOCK";
         case PASCAL_T_RAISE_STMT: return "RAISE_STMT";
+        case PASCAL_T_INHERITED_STMT: return "INHERITED_STMT";
         case PASCAL_T_ON_CLAUSE: return "ON_CLAUSE";
         case PASCAL_T_PROGRAM_DECL: return "PROGRAM_DECL";
         case PASCAL_T_PROGRAM_HEADER: return "PROGRAM_HEADER";
@@ -1424,6 +1425,13 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
+    // Inherited statement: inherited [method_call]
+    combinator_t* inherited_stmt = seq(new_combinator(), PASCAL_T_INHERITED_STMT,
+        token(keyword_ci("inherited")),        // inherited keyword (case-insensitive)
+        optional(lazy(expr_parser)),           // optional method call expression (e.g., inherited Destroy)
+        NULL
+    );
+    
     // Main statement parser: try different types of statements (order matters!)
     // Note: VAR sections are handled by the complete program parser context
     multi(*stmt_parser, PASCAL_T_NONE,
@@ -1431,6 +1439,7 @@ void init_pascal_statement_parser(combinator_t** p) {
         try_finally,                          // try-finally blocks
         try_except,                           // try-except blocks
         raise_stmt,                           // raise statements
+        inherited_stmt,                       // inherited statements
         asm_stmt,                             // inline assembly blocks
         if_stmt,                              // if statements
         for_stmt,                             // for statements

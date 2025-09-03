@@ -4799,9 +4799,44 @@ void test_pascal_sample_class_incremental_parsing(void) {
         free_error(res.value.error);
     }
     
-    free_combinator(stmt_parser);
+    // Test 8: Test object creation and method calls  
+    printf("Test 8 - object creation and method calls: ");
+    combinator_t* complete_parser2 = new_combinator();
+    init_pascal_complete_program_parser(&complete_parser2);
+    
+    input = new_input();
+    char* program_with_main = "program Test;\n"
+                             "type\n"
+                             "  TMyClass = class\n"
+                             "    constructor Create;\n"
+                             "  end;\n"
+                             "constructor TMyClass.Create;\n"
+                             "begin\n"
+                             "end;\n"
+                             "var\n"
+                             "  lMyClass: TMyClass;\n"
+                             "begin\n"
+                             "  lMyClass := TMyClass.Create;\n"  // Object creation
+                             "end.\n";
+    input->buffer = strdup(program_with_main);
+    input->length = strlen(input->buffer);
+    
+    res = parse(input, complete_parser2);
+    if (res.is_success) {
+        printf("SUCCESS\n");
+        free_ast(res.value.ast);
+    } else {
+        printf("FAILED: %s (line %d, col %d)\n", res.value.error->message, 
+               res.value.error->line, res.value.error->col);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
     free(input->buffer);
     free(input);
+    free_combinator(complete_parser2);
 
     free_combinator(complete_parser);
 }
