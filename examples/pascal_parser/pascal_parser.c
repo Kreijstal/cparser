@@ -1102,12 +1102,12 @@ void init_pascal_statement_parser(combinator_t** p) {
     
     // If statement: if expression then statement [else statement]
     combinator_t* if_stmt = seq(new_combinator(), PASCAL_T_IF_STMT,
-        token(match("if")),                    // if keyword
-        lazy(expr_parser),                     // condition
-        token(match("then")),                  // then keyword
-        lazy(stmt_parser),                     // then statement
+        token(match_ci("if")),                     // if keyword (case-insensitive)
+        lazy(expr_parser),                         // condition
+        token(match_ci("then")),                   // then keyword (case-insensitive)
+        lazy(stmt_parser),                         // then statement
         optional(seq(new_combinator(), PASCAL_T_ELSE,    // optional else part
-            token(match("else")),
+            token(match_ci("else")),               // else keyword (case-insensitive)
             lazy(stmt_parser),
             NULL
         )),
@@ -1116,27 +1116,27 @@ void init_pascal_statement_parser(combinator_t** p) {
     
     // For statement: for identifier := expression (to|downto) expression do statement
     combinator_t* for_direction = multi(new_combinator(), PASCAL_T_NONE,
-        token(match("to")),
-        token(match("downto")),
+        token(match_ci("to")),                 // to keyword (case-insensitive)
+        token(match_ci("downto")),             // downto keyword (case-insensitive)
         NULL
     );
     combinator_t* for_stmt = seq(new_combinator(), PASCAL_T_FOR_STMT,
-        token(match("for")),                   // for keyword
+        token(match_ci("for")),                // for keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),    // loop variable
         token(match(":=")),                    // assignment
         lazy(expr_parser),                     // start expression
         for_direction,                         // to or downto
         lazy(expr_parser),                     // end expression
-        token(match("do")),                    // do keyword
+        token(match_ci("do")),                 // do keyword (case-insensitive)
         lazy(stmt_parser),                     // loop body statement
         NULL
     );
     
     // While statement: while expression do statement
     combinator_t* while_stmt = seq(new_combinator(), PASCAL_T_WHILE_STMT,
-        token(match("while")),                 // while keyword
+        token(match_ci("while")),              // while keyword (case-insensitive)
         lazy(expr_parser),                     // condition
-        token(match("do")),                    // do keyword
+        token(match_ci("do")),                 // do keyword (case-insensitive)
         lazy(stmt_parser),                     // body statement
         NULL
     );
