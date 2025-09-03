@@ -3126,6 +3126,469 @@ void test_pascal_chained_array_access(void) {
     free(input);
 }
 
+// === FOCUSED FUNCTION/PROCEDURE PARSING TESTS ===
+void test_pascal_simple_function_declaration(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "function Add(a: integer; b: integer): integer;\n"
+                   "begin\n"
+                   "  Add := a + b;\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== SIMPLE FUNCTION DECLARATION TEST ===\n");
+    if (!res.is_success) {
+        printf("Function declaration failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Function declaration success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_simple_procedure_declaration(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "procedure Print(s: string);\n"
+                   "begin\n"
+                   "  writeln(s);\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== SIMPLE PROCEDURE DECLARATION TEST ===\n");
+    if (!res.is_success) {
+        printf("Procedure declaration failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Procedure declaration success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_function_with_var_section(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "function Calculate: integer;\n"
+                   "var\n"
+                   "  result: integer;\n"
+                   "begin\n"
+                   "  result := 42;\n"
+                   "  Calculate := result;\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== FUNCTION WITH VAR SECTION TEST ===\n");
+    if (!res.is_success) {
+        printf("Function with VAR failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Function with VAR success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_function_with_begin_end(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "function GetValue: integer;\n"
+                   "begin\n"
+                   "  GetValue := 123;\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== FUNCTION WITH BEGIN-END TEST ===\n");
+    if (!res.is_success) {
+        printf("Function with BEGIN-END failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Function with BEGIN-END success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_minimal_program_with_function(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Minimal;\n"
+                   "function Test: boolean;\n"
+                   "begin\n"
+                   "  Test := true;\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== MINIMAL PROGRAM WITH FUNCTION TEST ===\n");
+    if (!res.is_success) {
+        printf("Minimal program failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Minimal program success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_main_program_block(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Simple;\n"
+                   "begin\n"
+                   "  writeln('Hello');\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== MAIN PROGRAM BLOCK TEST ===\n");
+    if (!res.is_success) {
+        printf("Main program block failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Main program block success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_program_header_only(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   ".\n";  // Just program header and period
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== PROGRAM HEADER ONLY TEST ===\n");
+    if (!res.is_success) {
+        printf("Program header failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Program header success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_just_function_keyword(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "function\n"
+                   ".\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== JUST FUNCTION KEYWORD TEST ===\n");
+    if (!res.is_success) {
+        printf("Just function keyword failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Just function keyword success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_function_name_only(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "function MyFunc\n"
+                   ".\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== FUNCTION NAME ONLY TEST ===\n");
+    if (!res.is_success) {
+        printf("Function name only failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Function name only success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_function_with_return_type_only(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "function MyFunc: integer\n"
+                   ".\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== FUNCTION WITH RETURN TYPE ONLY TEST ===\n");
+    if (!res.is_success) {
+        printf("Function with return type failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Function with return type success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_with_var_section_before_function(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "var\n"
+                   "  x: integer;\n"
+                   "function MyFunc: integer;\n"
+                   "begin\n"
+                   "  MyFunc := 42;\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== WITH VAR SECTION BEFORE FUNCTION TEST ===\n");
+    if (!res.is_success) {
+        printf("Var section before function failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Var section before function success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_standalone_procedure(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_procedure_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "procedure Test;\n"
+                   "begin\n"
+                   "  writeln('hello');\n"
+                   "end;\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== STANDALONE PROCEDURE TEST ===\n");
+    if (!res.is_success) {
+        printf("Standalone procedure failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Standalone procedure success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -3221,5 +3684,18 @@ TEST_LIST = {
     { "test_pascal_mixed_quotes", test_pascal_mixed_quotes },
     { "test_pascal_array_of_array", test_pascal_array_of_array },
     { "test_pascal_chained_array_access", test_pascal_chained_array_access },
+    // === FOCUSED FUNCTION/PROCEDURE PARSING TESTS ===
+    { "test_pascal_simple_function_declaration", test_pascal_simple_function_declaration },
+    { "test_pascal_simple_procedure_declaration", test_pascal_simple_procedure_declaration },
+    { "test_pascal_function_with_var_section", test_pascal_function_with_var_section },
+    { "test_pascal_function_with_begin_end", test_pascal_function_with_begin_end },
+    { "test_pascal_minimal_program_with_function", test_pascal_minimal_program_with_function },
+    { "test_pascal_main_program_block", test_pascal_main_program_block },
+    { "test_pascal_program_header_only", test_pascal_program_header_only },
+    { "test_pascal_just_function_keyword", test_pascal_just_function_keyword },
+    { "test_pascal_function_name_only", test_pascal_function_name_only },
+    { "test_pascal_function_with_return_type_only", test_pascal_function_with_return_type_only },
+    { "test_pascal_with_var_section_before_function", test_pascal_with_var_section_before_function },
+    { "test_pascal_standalone_procedure", test_pascal_standalone_procedure },
     { NULL, NULL }
 };
