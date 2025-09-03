@@ -62,33 +62,13 @@ combinator_t* keyword_ci(char* str) {
     return comb;
 }
 
-// Pascal-style comment parser: { comment content }
-static ParseResult pascal_comment_fn(input_t* in, void* args) {
-    InputState state;
-    save_input_state(in, &state);
-    
-    char c = read1(in);
-    if (c != '{') {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '{'"));
-    }
-    
-    // Read until '}' 
-    while ((c = read1(in)) != EOF) {
-        if (c == '}') {
-            return make_success(ast_nil);
-        }
-    }
-    
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Unterminated comment"));
-}
-
+// Pascal-style comment parser using proper combinators: { comment content }
 combinator_t* pascal_comment() {
-    combinator_t* comb = new_combinator();
-    comb->fn = pascal_comment_fn;
-    comb->args = NULL;
-    return comb;
+    return seq(new_combinator(), PASCAL_T_NONE,
+        match("{"),
+        until(match("}"), PASCAL_T_NONE),
+        match("}"),
+        NULL);
 }
 
 // Enhanced whitespace parser that handles both whitespace and Pascal comments
@@ -114,56 +94,15 @@ combinator_t* token(combinator_t* p) {
     return pascal_token(p);
 }
 
-// Compiler directive parser: {$directive parameter}
-static ParseResult compiler_directive_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
-    InputState state;
-    save_input_state(in, &state);
-    
-    // Must start with {$
-    char c1 = read1(in);
-    char c2 = read1(in);
-    if (c1 != '{' || c2 != '$') {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '{$'"));
-    }
-    
-    // Read directive name and parameters until }
-    int start_pos = in->start;
-    char c;
-    while ((c = read1(in)) != EOF) {
-        if (c == '}') {
-            int len = in->start - start_pos - 1; // -1 for the '}'
-            if (len <= 0) {
-                restore_input_state(in, &state);
-                return make_failure(in, strdup("Empty compiler directive"));
-            }
-            
-            // Extract directive content
-            char* directive_text = strndup(in->buffer + start_pos, len);
-            
-            ast_t* ast = new_ast();
-            ast->typ = pargs->tag;
-            ast->sym = sym_lookup(directive_text);
-            ast->child = NULL;
-            ast->next = NULL;
-            free(directive_text);
-            set_ast_position(ast, in);
-            return make_success(ast);
-        }
-    }
-    
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Unterminated compiler directive"));
-}
-
+// Compiler directive parser using proper combinators: {$directive parameter}  
 combinator_t* compiler_directive(tag_t tag) {
-    combinator_t* comb = new_combinator();
-    prim_args* args = safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    comb->args = args;
-    comb->fn = compiler_directive_fn;
-    return comb;
+    return right(
+        match("{$"),
+        left(
+            until(match("}"), tag),
+            match("}")
+        )
+    );
 }
 
 // Range type parser: start..end (e.g., -1..1)
