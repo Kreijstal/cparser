@@ -395,7 +395,7 @@ combinator_t* array_type(tag_t tag) {
     return comb;
 }
 
-// Simple class type parser: class ... end
+// Enhanced class type parser: class [access_sections] end
 static ParseResult class_type_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
@@ -412,10 +412,152 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     free_ast(class_res.value.ast);
     free_combinator(class_keyword);
     
-    // For now, skip class body and just parse "end" directly for testing
+    // Build class body parser
+    ast_t* class_body = NULL;
+    
+    // Field declaration: field_name: Type;
+    combinator_t* field_name = token(cident(PASCAL_T_IDENTIFIER));
+    combinator_t* field_type = token(cident(PASCAL_T_IDENTIFIER)); // simplified type for now
+    combinator_t* field_decl = seq(new_combinator(), PASCAL_T_FIELD_DECL,
+        field_name,
+        token(match(":")),
+        field_type,
+        token(match(";")),
+        NULL
+    );
+    
+    // Method declarations (simplified - just headers for now)
+    combinator_t* method_name = token(cident(PASCAL_T_IDENTIFIER));
+    combinator_t* param_list = optional(between(
+        token(match("(")),
+        token(match(")")),
+        sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(";")))
+    ));
+    
+    // Constructor declaration: constructor Name;
+    combinator_t* constructor_decl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
+        token(match_ci("constructor")),
+        method_name,
+        param_list,
+        token(match(";")),
+        NULL
+    );
+    
+    // Destructor declaration: destructor Name; override;  
+    combinator_t* destructor_decl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
+        token(match_ci("destructor")),
+        method_name,
+        param_list,
+        token(match(";")),
+        optional(token(match_ci("override"))),
+        optional(token(match(";"))),
+        NULL
+    );
+    
+    // Procedure declaration: procedure Name;
+    combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_METHOD_DECL,
+        token(match_ci("procedure")),
+        method_name,
+        param_list,
+        token(match(";")),
+        NULL
+    );
+    
+    // Function declaration: function Name: ReturnType;  
+    combinator_t* function_decl = seq(new_combinator(), PASCAL_T_METHOD_DECL,
+        token(match_ci("function")),
+        method_name,
+        param_list,
+        token(match(":")),
+        token(cident(PASCAL_T_IDENTIFIER)), // return type
+        token(match(";")),
+        NULL
+    );
+    
+    // Property declaration: property Name: Type read ReadField write WriteField;
+    combinator_t* property_decl = seq(new_combinator(), PASCAL_T_PROPERTY_DECL,
+        token(match_ci("property")),
+        token(cident(PASCAL_T_IDENTIFIER)), // property name
+        token(match(":")),
+        token(cident(PASCAL_T_IDENTIFIER)), // property type
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(match_ci("read")),
+            token(cident(PASCAL_T_IDENTIFIER)), // read field/method
+            NULL
+        )),
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(match_ci("write")),
+            token(cident(PASCAL_T_IDENTIFIER)), // write field/method
+            NULL
+        )),
+        token(match(";")),
+        NULL
+    );
+    
+    // Class member: field, method, constructor, destructor, or property
+    combinator_t* class_member = multi(new_combinator(), PASCAL_T_CLASS_MEMBER,
+        constructor_decl,
+        destructor_decl,
+        procedure_decl,
+        function_decl,
+        property_decl,
+        field_decl,
+        NULL
+    );
+    
+    // Comment handling - simple line comment parser
+    combinator_t* line_comment = seq(new_combinator(), PASCAL_T_COMMENT,
+        match("//"),
+        until(match("\n"), PASCAL_T_STRING),
+        NULL
+    );
+    
+    // Skip comments and whitespace in class body
+    combinator_t* class_element = multi(new_combinator(), PASCAL_T_NONE,
+        class_member,
+        line_comment,
+        NULL
+    );
+    
+    // Access sections: private, public, protected, published
+    combinator_t* access_keyword = multi(new_combinator(), PASCAL_T_ACCESS_MODIFIER,
+        token(match_ci("private")),
+        token(match_ci("public")),
+        token(match_ci("protected")),
+        token(match_ci("published")),
+        NULL
+    );
+    
+    // Access section: access_keyword followed by members
+    combinator_t* access_section = seq(new_combinator(), PASCAL_T_NONE,
+        access_keyword,
+        many(class_element),
+        NULL
+    );
+    
+    // Class body: optional access sections and members
+    combinator_t* class_body_parser = many(multi(new_combinator(), PASCAL_T_NONE,
+        access_section,
+        class_element,
+        NULL
+    ));
+    
+    // Parse class body
+    ParseResult body_res = parse(in, class_body_parser);
+    if (body_res.is_success) {
+        class_body = body_res.value.ast;
+    } else {
+        // Class body parsing failed, but this might be acceptable for empty class
+        class_body = NULL;
+        free_error(body_res.value.error);
+    }
+    free_combinator(class_body_parser);
+    
+    // Parse "end" keyword  
     combinator_t* end_keyword = token(match_ci("end"));
     ParseResult end_res = parse(in, end_keyword);
     if (!end_res.is_success) {
+        if (class_body) free_ast(class_body);
         free_combinator(end_keyword);
         restore_input_state(in, &state);
         return make_failure(in, strdup("Expected 'end' after class"));
@@ -423,11 +565,11 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     free_ast(end_res.value.ast);
     free_combinator(end_keyword);
     
-    // Build AST
+    // Build final class AST
     ast_t* class_ast = new_ast();
     class_ast->typ = pargs->tag;
     class_ast->sym = NULL;
-    class_ast->child = NULL; // No body for now
+    class_ast->child = class_body; // Include parsed class body
     class_ast->next = NULL;
     
     set_ast_position(class_ast, in);
@@ -909,6 +1051,16 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_CLASS_TYPE: return "CLASS_TYPE";
         case PASCAL_T_CLASS_MEMBER: return "CLASS_MEMBER";
         case PASCAL_T_ACCESS_MODIFIER: return "ACCESS_MODIFIER";
+        case PASCAL_T_CLASS_BODY: return "CLASS_BODY";
+        case PASCAL_T_PRIVATE_SECTION: return "PRIVATE_SECTION";
+        case PASCAL_T_PUBLIC_SECTION: return "PUBLIC_SECTION";
+        case PASCAL_T_PROTECTED_SECTION: return "PROTECTED_SECTION";
+        case PASCAL_T_PUBLISHED_SECTION: return "PUBLISHED_SECTION";
+        case PASCAL_T_FIELD_DECL: return "FIELD_DECL";
+        case PASCAL_T_METHOD_DECL: return "METHOD_DECL";
+        case PASCAL_T_PROPERTY_DECL: return "PROPERTY_DECL";
+        case PASCAL_T_CONSTRUCTOR_DECL: return "CONSTRUCTOR_DECL";
+        case PASCAL_T_DESTRUCTOR_DECL: return "DESTRUCTOR_DECL";
         // Uses clause types
         case PASCAL_T_USES_SECTION: return "USES_SECTION";
         case PASCAL_T_USES_UNIT: return "USES_UNIT";
@@ -1680,8 +1832,52 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    // Procedure or function definitions - use the simple working parsers
+    // Method implementations (constructor/destructor/procedure with class.method syntax)
+    // Constructor implementation: constructor ClassName.MethodName; body;
+    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_NONE,
+        token(cident(PASCAL_T_IDENTIFIER)),          // class name
+        token(match(".")),                           // dot
+        token(cident(PASCAL_T_IDENTIFIER)),          // method name
+        NULL
+    );
+    
+    combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
+        token(match_ci("constructor")),              // constructor keyword
+        method_name_with_class,                      // ClassName.MethodName
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // semicolon
+        program_function_body,                       // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+    
+    // Destructor implementation: destructor ClassName.MethodName; body;
+    combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
+        token(match_ci("destructor")),               // destructor keyword
+        method_name_with_class,                      // ClassName.MethodName
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // semicolon
+        program_function_body,                       // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+    
+    // Procedure implementation: procedure ClassName.MethodName; body;
+    combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(match_ci("procedure")),                // procedure keyword
+        method_name_with_class,                      // ClassName.MethodName
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // semicolon
+        program_function_body,                       // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+
+    // Procedure or function definitions - including method implementations
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
+        constructor_impl,                            // constructor implementations
+        destructor_impl,                             // destructor implementations
+        procedure_impl,                              // procedure implementations
         working_function,                            // working function parser
         working_procedure,                           // working procedure parser
         NULL
