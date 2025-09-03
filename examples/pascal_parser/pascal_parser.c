@@ -1449,10 +1449,26 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Simple function body that just handles VAR section + begin-end
+    // Create a dedicated begin-end block parser for function bodies
+    // Use many instead of sep_end_by for better control over statement parsing
+    combinator_t* function_stmt = seq(new_combinator(), PASCAL_T_NONE,
+        lazy(stmt_parser),                           // statement
+        token(match(";")),                           // followed by semicolon
+        NULL
+    );
+    combinator_t* function_stmt_list = many(function_stmt);
+    combinator_t* function_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        token(match("begin")),                       // begin keyword
+        function_stmt_list,                          // statement list (zero or more)
+        token(match("end")),                         // end keyword
+        NULL
+    );
+    
+    // Simple function body that handles VAR section + begin-end + trailing semicolon
     combinator_t* function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local var section
-        lazy(stmt_parser),                           // begin-end block handled by statement parser
+        function_begin_end,                          // dedicated begin-end block parser
+        token(match(";")),                           // semicolon after function body (for program context)
         NULL
     );
     
