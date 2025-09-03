@@ -1317,10 +1317,10 @@ static ParseResult main_block_content_fn(input_t* in, void* args) {
     int content_start = in->start;
     int content_end = -1;
     
-    // Find the "end" keyword (simple implementation)
+    // Find the "end" keyword (case-insensitive)
     while (in->start < in->length) {
         if (in->start + 3 <= in->length &&
-            strncmp(in->buffer + in->start, "end", 3) == 0) {
+            strncasecmp(in->buffer + in->start, "end", 3) == 0) {
             // Check if it's a word boundary
             if (in->start + 3 == in->length || !isalnum(in->buffer[in->start + 3])) {
                 content_end = in->start;
