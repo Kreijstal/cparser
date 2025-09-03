@@ -829,7 +829,9 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TYPECAST: return "TYPECAST";
         case PASCAL_T_FUNC_CALL: return "FUNC_CALL";
         case PASCAL_T_ARRAY_ACCESS: return "ARRAY_ACCESS";
+        case PASCAL_T_MEMBER_ACCESS: return "MEMBER_ACCESS";
         case PASCAL_T_ARG_LIST: return "ARG_LIST";
+        case PASCAL_T_TUPLE: return "TUPLE";
         case PASCAL_T_PROCEDURE_DECL: return "PROCEDURE_DECL";
         case PASCAL_T_FUNCTION_DECL: return "FUNCTION_DECL";
         case PASCAL_T_PARAM_LIST: return "PARAM_LIST";
@@ -975,6 +977,14 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
 
+    // Tuple constructor: (expr, expr, ...) - for nested array constants like ((1,2),(3,4))
+    combinator_t* tuple = seq(new_combinator(), PASCAL_T_TUPLE,
+        token(match("(")),
+        sep_by(lazy(p), token(match(","))),  // comma-separated list of expressions
+        token(match(")")),
+        NULL
+    );
+
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
         token(real_number(PASCAL_T_REAL)),        // Real numbers (3.14) - try first
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
@@ -986,6 +996,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         typecast,                                 // Type casts Integer(x) - try before func_call
         array_access,                             // Array access table[i,j] - try before func_call
         func_call,                                // Function calls func(x)
+        tuple,                                    // Tuple constants (a,b,c) - try before identifier
         identifier,                               // Identifiers (variables, built-ins)
         between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
         NULL
@@ -1032,11 +1043,14 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_altern(*p, 6, PASCAL_T_SHL, token(keyword_ci("shl")));
     expr_altern(*p, 6, PASCAL_T_SHR, token(keyword_ci("shr")));
     
-    // Precedence 7: Unary operators (highest precedence)
+    // Precedence 7: Unary operators
     expr_insert(*p, 7, PASCAL_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
     expr_insert(*p, 7, PASCAL_T_POS, EXPR_PREFIX, ASSOC_NONE, token(match("+")));
     expr_insert(*p, 7, PASCAL_T_NOT, EXPR_PREFIX, ASSOC_NONE, token(match("not")));
     expr_insert(*p, 7, PASCAL_T_ADDR, EXPR_PREFIX, ASSOC_NONE, token(match("@")));
+    
+    // Precedence 8: Member access (highest precedence)
+    expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(match(".")));
 }
 
 // ASM block body parser - uses proper until() combinator instead of manual scanning
