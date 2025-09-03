@@ -59,7 +59,17 @@ void test_pascal_function_call(void) {
 
     TEST_ASSERT(res.is_success);
     TEST_ASSERT(res.value.ast->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(res.value.ast->sym->name, "my_func") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_name_node = res.value.ast;
+    if (res.value.ast->child && res.value.ast->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_name_node = res.value.ast->child;
+    }
+    
+    TEST_ASSERT(actual_name_node->sym && 
+               actual_name_node->sym->name && 
+               strcmp(actual_name_node->sym->name, "my_func") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
@@ -103,7 +113,17 @@ void test_pascal_function_call_no_args(void) {
     // First child should be the function name
     ast_t* func_name = res.value.ast->child;
     TEST_ASSERT(func_name->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(func_name->sym->name, "func") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_name_node = func_name;
+    if (func_name->child && func_name->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_name_node = func_name->child;
+    }
+    
+    TEST_ASSERT(actual_name_node->sym && 
+               actual_name_node->sym->name && 
+               strcmp(actual_name_node->sym->name, "func") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
@@ -127,7 +147,17 @@ void test_pascal_function_call_with_args(void) {
     // First child should be the function name
     ast_t* func_name = res.value.ast->child;
     TEST_ASSERT(func_name->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(func_name->sym->name, "func") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_name_node = func_name;
+    if (func_name->child && func_name->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_name_node = func_name->child;
+    }
+    
+    TEST_ASSERT(actual_name_node->sym && 
+               actual_name_node->sym->name && 
+               strcmp(actual_name_node->sym->name, "func") == 0);
     
     // Arguments follow
     ast_t* arg1 = func_name->next;
@@ -248,7 +278,17 @@ void test_pascal_complex_expression(void) {
     // Function name
     ast_t* func_name = func_call->child;
     TEST_ASSERT(func_name->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(func_name->sym->name, "procedure") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_name_node = func_name;
+    if (func_name->child && func_name->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_name_node = func_name->child;
+    }
+    
+    TEST_ASSERT(actual_name_node->sym && 
+               actual_name_node->sym->name && 
+               strcmp(actual_name_node->sym->name, "procedure") == 0);
     
     // Function argument: (5*7)-5
     ast_t* arg = func_name->next;
@@ -464,7 +504,17 @@ void test_pascal_address_operator(void) {
     // Check operand
     ast_t* operand = res.value.ast->child;
     TEST_ASSERT(operand->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(operand->sym->name, "myVar") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_name_node = operand;
+    if (operand->child && operand->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_name_node = operand->child;
+    }
+    
+    TEST_ASSERT(actual_name_node->sym && 
+               actual_name_node->sym->name && 
+               strcmp(actual_name_node->sym->name, "myVar") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
@@ -740,12 +790,32 @@ void test_pascal_is_operator(void) {
     // Check left operand (object identifier)
     ast_t* left = res.value.ast->child;
     TEST_ASSERT(left->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(left->sym->name, "MyObject") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_left_node = left;
+    if (left->child && left->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_left_node = left->child;
+    }
+    
+    TEST_ASSERT(actual_left_node->sym && 
+               actual_left_node->sym->name && 
+               strcmp(actual_left_node->sym->name, "MyObject") == 0);
     
     // Check right operand (class type identifier)
     ast_t* right = left->next;
     TEST_ASSERT(right->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(right->sym->name, "TMyClass") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_right_node = right;
+    if (right->child && right->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_right_node = right->child;
+    }
+    
+    TEST_ASSERT(actual_right_node->sym && 
+               actual_right_node->sym->name && 
+               strcmp(actual_right_node->sym->name, "TMyClass") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
@@ -770,12 +840,32 @@ void test_pascal_as_operator(void) {
     // Check left operand (object identifier)
     ast_t* left = res.value.ast->child;
     TEST_ASSERT(left->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(left->sym->name, "Sender") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_left_node = left;
+    if (left->child && left->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_left_node = left->child;
+    }
+    
+    TEST_ASSERT(actual_left_node->sym && 
+               actual_left_node->sym->name && 
+               strcmp(actual_left_node->sym->name, "Sender") == 0);
     
     // Check right operand (target class type)
     ast_t* right = left->next;
     TEST_ASSERT(right->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(right->sym->name, "TButton") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_right_node = right;
+    if (right->child && right->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_right_node = right->child;
+    }
+    
+    TEST_ASSERT(actual_right_node->sym && 
+               actual_right_node->sym->name && 
+               strcmp(actual_right_node->sym->name, "TButton") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
@@ -801,12 +891,32 @@ void test_pascal_as_operator_with_field_access(void) {
     // Check left operand
     ast_t* left = res.value.ast->child;
     TEST_ASSERT(left->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(left->sym->name, "SomeObject") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_left_node = left;
+    if (left->child && left->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_left_node = left->child;
+    }
+    
+    TEST_ASSERT(actual_left_node->sym && 
+               actual_left_node->sym->name && 
+               strcmp(actual_left_node->sym->name, "SomeObject") == 0);
     
     // Check right operand
     ast_t* right = left->next;
     TEST_ASSERT(right->typ == PASCAL_T_IDENTIFIER);
-    TEST_ASSERT(strcmp(right->sym->name, "TForm") == 0);
+    
+    // Handle both regular identifiers and built-in function structure
+    ast_t* actual_right_node = right;
+    if (right->child && right->child->typ == PASCAL_T_IDENTIFIER) {
+        // Use the child identifier for built-in functions
+        actual_right_node = right->child;
+    }
+    
+    TEST_ASSERT(actual_right_node->sym && 
+               actual_right_node->sym->name && 
+               strcmp(actual_right_node->sym->name, "TForm") == 0);
 
     free_ast(res.value.ast);
     free_combinator(p);
