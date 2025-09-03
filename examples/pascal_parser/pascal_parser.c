@@ -1567,9 +1567,11 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Function body parser: handles local sections followed by begin-end block
     // This is different from statement parsing - functions can have local declarations
+    
+    // Local variable declaration for functions - reuse the main program's variable declaration format
     combinator_t* local_var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
         token(match_ci("var")),                      // var keyword (case-insensitive for VAR/var)
-        many(var_decl),                              // multiple variable declarations
+        many(var_decl),                              // multiple variable declarations (same format as main program)
         NULL
     );
     
@@ -1598,8 +1600,27 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Function declaration: function name [(params)] : return_type ; body
-    combinator_t* function_decl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+    // Function declaration (header only): function name [(params)] : return_type;
+    combinator_t* function_declaration = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+        token(match_ci("function")),                 // function keyword (case-insensitive)
+        token(cident(PASCAL_T_IDENTIFIER)),          // function name
+        param_list,                                  // optional parameter list
+        return_type,                                 // return type
+        token(match(";")),                           // terminating semicolon (no body)
+        NULL
+    );
+    
+    // Procedure declaration (header only): procedure name [(params)];
+    combinator_t* procedure_declaration = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // terminating semicolon (no body)
+        NULL
+    );
+
+    // Function definition (with body): function name [(params)] : return_type ; body ;
+    combinator_t* function_definition = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
         token(match_ci("function")),                 // function keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
@@ -1609,10 +1630,22 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Procedure or function declaration
+    // Procedure definition (with body): procedure name [(params)] ; body ;
+    combinator_t* procedure_definition = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // semicolon after parameters
+        program_function_body,                       // procedure body with terminating semicolon for programs
+        NULL
+    );
+
+    // Procedure or function declaration/definition - try declarations first (shorter), then definitions
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
-        function_decl,                               // function declarations first
-        procedure_decl,                              // procedure declarations second
+        function_declaration,                        // function declarations (headers only)
+        procedure_declaration,                       // procedure declarations (headers only)  
+        function_definition,                         // function definitions (with bodies)
+        procedure_definition,                        // procedure definitions (with bodies)
         NULL
     );
     
