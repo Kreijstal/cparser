@@ -1128,6 +1128,17 @@ void test_pascal_begin_end_block(void) {
 
     ParseResult res = parse(input, p);
 
+    // DEBUG: Print error details if parsing failed
+    if (!res.is_success) {
+        printf("DEBUG begin_end_block: Parse failed: %s at line %d, col %d\n", 
+               res.value.error->message, 
+               res.value.error->line, 
+               res.value.error->col);
+        if (res.value.error->partial_ast) {
+            printf("DEBUG: Partial AST available\n");
+        }
+    }
+
     TEST_ASSERT(res.is_success);
     TEST_ASSERT(res.value.ast->typ == PASCAL_T_BEGIN_BLOCK);
     

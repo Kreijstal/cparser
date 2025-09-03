@@ -1170,7 +1170,7 @@ void init_pascal_statement_parser(combinator_t** p) {
     
     // Assignment statement: identifier := expression (no semicolon here)
     combinator_t* assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
-        token(cident(PASCAL_T_IDENTIFIER)),    // variable name
+        token(pascal_identifier(PASCAL_T_IDENTIFIER)),    // variable name
         token(match(":=")),                    // assignment operator
         lazy(expr_parser),                     // expression
         NULL
