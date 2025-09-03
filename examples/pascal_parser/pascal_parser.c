@@ -1147,15 +1147,9 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // For function bodies, use a simpler approach that definitely handles trailing semicolons
-    // Parse statements terminated by semicolons, allowing trailing semicolon
-    combinator_t* stmt_with_semicolon = seq(new_combinator(), PASCAL_T_NONE,
-        lazy(stmt_parser),                     // the statement itself
-        token(match(";")),                     // required semicolon after statement
-        NULL
-    );
-    
-    combinator_t* stmt_list = many(stmt_with_semicolon);  // zero or more statements with semicolons
+    // Parse statements separated by semicolons (semicolon is separator, not terminator)
+    // This allows for optional trailing semicolon as well
+    combinator_t* stmt_list = sep_end_by(lazy(stmt_parser), token(match(";")));
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
