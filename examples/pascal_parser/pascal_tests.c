@@ -1996,6 +1996,96 @@ void test_pascal_anonymous_recursion_program(void) {
     free(input);
 }
 
+void test_minimal_damm_program(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    // Start with just the sections that work
+    char* program = "program DammAlgorithm;\n"
+                   "uses sysutils;\n"
+                   "TYPE TA = ARRAY[0..9,0..9] OF UInt8;\n"
+                   "CONST table : TA = ((0,3,1));\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== MINIMAL DAMM TEST ===\n");
+    if (!res.is_success) {
+        printf("Minimal Parse failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST available:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Minimal parse succeeded!\n");
+        // Don't print full AST to keep output clean
+    }
+    
+    TEST_CHECK(res.is_success);
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_minimal_damm_with_function(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    // Add just a simple function
+    char* program = "program DammAlgorithm;\n"
+                   "function Test: integer;\n"
+                   "begin\n"
+                   "  // empty function\n"  
+                   "end;\n"
+                   "begin\n"
+                   "  // empty main\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== MINIMAL DAMM WITH FUNCTION TEST ===\n");
+    if (!res.is_success) {
+        printf("Function Parse failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST available:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Function parse succeeded!\n");
+        // Don't print full AST to keep output clean
+    }
+    
+    TEST_CHECK(res.is_success);
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -2057,6 +2147,9 @@ TEST_LIST = {
     { "test_pascal_multiple_variables", test_pascal_multiple_variables },
     { "test_pascal_type_section", test_pascal_type_section },
     { "test_pascal_complex_random_program", test_pascal_complex_random_program },
+    // Debug tests for DammAlgorithm  
+    { "test_minimal_damm_program", test_minimal_damm_program },
+    { "test_minimal_damm_with_function", test_minimal_damm_with_function },
     // New advanced Pascal program tests
     { "test_pascal_damm_algorithm_program", test_pascal_damm_algorithm_program },
     { "test_pascal_sample_class_program", test_pascal_sample_class_program },

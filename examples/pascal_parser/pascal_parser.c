@@ -1440,13 +1440,32 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
+    // Simple begin-end block for function/procedure bodies (without special main program logic)
+    combinator_t* stmt_list = sep_end_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* function_begin_block = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        token(match_ci("begin")),                    // begin keyword
+        stmt_list,                                   // statement list (empty or non-empty)
+        token(match_ci("end")),                      // end keyword
+        NULL
+    );
+    
+    // Function body parser that handles local sections like VAR, CONST, TYPE
+    // followed by a begin-end block (similar to main program structure)
+    combinator_t* function_body = seq(new_combinator(), PASCAL_T_NONE,
+        optional(var_section),                       // optional local var section
+        optional(const_section),                     // optional local const section  
+        optional(type_section),                      // optional local type section
+        function_begin_block,                        // mandatory begin-end block (not main_block)
+        NULL
+    );
+    
     // Procedure declaration: procedure name [(params)] ; body
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match("procedure")),                   // procedure keyword
+        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // procedure body
+        function_body,                               // procedure body with local sections
         NULL
     );
     
@@ -1457,7 +1476,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         param_list,                                  // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // function body (temporarily simple)
+        function_body,                               // function body with local sections
         NULL
     );
     
