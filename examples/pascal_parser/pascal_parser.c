@@ -1585,9 +1585,9 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Enhanced main block parser that tries proper statement parsing first, falls back to hack
     combinator_t* enhanced_main_block_content = main_block_content(PASCAL_T_NONE);
     combinator_t* main_block = seq(new_combinator(), PASCAL_T_MAIN_BLOCK,
-        token(match_ci("begin")),                       // begin keyword
+        token(keyword_ci("begin")),                     // begin keyword (with word boundary check)
         enhanced_main_block_content,                 // properly parsed content (or fallback to raw text)
-        token(match_ci("end")),                         // end keyword
+        token(keyword_ci("end")),                       // end keyword (with word boundary check)
         NULL
     );
     
@@ -1620,7 +1620,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Var section: var var_decl var_decl ...
     combinator_t* var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
-        token(match_ci("var")),                         // var keyword
+        token(keyword_ci("var")),                       // var keyword (with word boundary check)
         many(var_decl),                              // multiple variable declarations
         NULL
     );
@@ -1636,7 +1636,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Type section: type type_decl type_decl ...
     combinator_t* type_section = seq(new_combinator(), PASCAL_T_TYPE_SECTION,
-        token(match_ci("type")),                        // type keyword
+        token(keyword_ci("type")),                      // type keyword (with word boundary check)
         many(type_decl),                             // multiple type declarations
         NULL
     );
@@ -1644,7 +1644,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Uses section: uses unit1, unit2, unit3;
     combinator_t* uses_unit = token(cident(PASCAL_T_USES_UNIT));
     combinator_t* uses_section = seq(new_combinator(), PASCAL_T_USES_SECTION,
-        token(match_ci("uses")),                        // uses keyword  
+        token(keyword_ci("uses")),                      // uses keyword (with word boundary check)
         sep_by(uses_unit, token(match(","))),        // unit names separated by commas
         token(match(";")),                           // semicolon
         NULL
@@ -1683,7 +1683,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     );
     
     combinator_t* const_section = seq(new_combinator(), PASCAL_T_CONST_SECTION,
-        token(match_ci("const")),                       // const keyword
+        token(keyword_ci("const")),                     // const keyword (with word boundary check)
         many(const_decl),                            // multiple const declarations
         NULL
     );
@@ -1766,7 +1766,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Function declaration (header only): function name [(params)] : return_type;
     combinator_t* function_declaration = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(match_ci("function")),                 // function keyword (case-insensitive)
+        token(keyword_ci("function")),               // function keyword (with word boundary check)
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
         return_type,                                 // return type
@@ -1811,7 +1811,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Working function parser: function name [(params)] : return_type ; body ;  
     combinator_t* working_function = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(match_ci("function")),                 // function keyword (case-insensitive to match existing style)
+        token(keyword_ci("function")),               // function keyword (with word boundary check)
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
         return_type,                                 // return type
@@ -1842,7 +1842,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     );
     
     combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
-        token(match_ci("constructor")),              // constructor keyword
+        token(keyword_ci("constructor")),              // constructor keyword (with word boundary check)
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
@@ -1852,7 +1852,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     );
     
     combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
-        token(match_ci("destructor")),               // destructor keyword
+        token(keyword_ci("destructor")),               // destructor keyword (with word boundary check)
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
@@ -1862,7 +1862,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     );
     
     combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match_ci("procedure")),                // procedure keyword
+        token(keyword_ci("procedure")),              // procedure keyword (with word boundary check)
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
@@ -1901,17 +1901,18 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Complete program: program Name(params); [uses clause] [type section] [const section] [var section] [procedures/functions] begin end.
+    // Complete program: program Name(params); [uses clause] [type section] [const section] [var section] [procedures/functions] [var section] begin end.
     seq(*p, PASCAL_T_PROGRAM_DECL,
-        token(match_ci("program")),                     // program keyword
+        token(keyword_ci("program")),                   // program keyword (with word boundary check)
         token(cident(PASCAL_T_IDENTIFIER)),          // program name  
         program_param_list,                          // optional parameter list
         token(match(";")),                           // semicolon
         optional(uses_section),                      // optional uses section
         optional(type_section),                      // optional type section
         optional(const_section),                     // optional const section
-        optional(var_section),                       // optional var section
+        optional(var_section),                       // optional var section (before functions)
         many(all_declarations),                      // zero or more procedure/function/method declarations
+        optional(var_section),                       // optional var section (after functions) - Pascal allows this
         optional(main_block),                        // optional main program block
         token(match(".")),                           // final period
         NULL
