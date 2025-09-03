@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <strings.h>  // For strcasecmp
 
 // --- Forward Declarations ---
 typedef struct { char* str; } match_args;  // For keyword matching
@@ -92,6 +93,81 @@ combinator_t* pascal_token(combinator_t* p) {
 // Backward compatibility: keep old token() function name for existing code
 combinator_t* token(combinator_t* p) {
     return pascal_token(p);
+}
+
+// Pascal reserved keywords that should NEVER be identifiers (case-insensitive) 
+// This is a conservative list of keywords that should never be parsed as identifiers
+static const char* pascal_reserved_keywords[] = {
+    "begin", "end", "if", "then", "else", "while", "do", "for", "to", "downto",
+    "repeat", "until", "case", "of", "var", "const", "type", 
+    "and", "or", "not", "xor", "div", "mod", "in", "nil", "true", "false",
+    "array", "record", "set", "packed",
+    NULL
+};
+
+// Helper function to check if a string is a Pascal reserved keyword (case-insensitive)
+static bool is_pascal_keyword(const char* str) {
+    for (int i = 0; pascal_reserved_keywords[i] != NULL; i++) {
+        if (strcasecmp(str, pascal_reserved_keywords[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Pascal identifier parser that excludes reserved keywords
+static ParseResult pascal_identifier_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    int start_pos = in->start;
+    char c = read1(in);
+    
+    // Must start with letter or underscore
+    if (c != '_' && !isalpha(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected identifier"));
+    }
+    
+    // Continue with alphanumeric or underscore
+    while (isalnum(c = read1(in)) || c == '_');
+    if (c != EOF) in->start--;
+    
+    // Extract the identifier text
+    int len = in->start - start_pos;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_pos, len);
+    text[len] = '\0';
+    
+    // Check if it's a reserved keyword
+    if (is_pascal_keyword(text)) {
+        free(text);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Identifier cannot be a reserved keyword"));
+    }
+    
+    // Create AST node for valid identifier (following original cident_fn pattern)
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    free(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+// Create Pascal identifier combinator that excludes keywords
+combinator_t* pascal_identifier(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_CIDENT; // Reuse the same type for compatibility
+    comb->fn = pascal_identifier_fn;
+    comb->args = args;
+    return comb;
 }
 
 // Compiler directive parser using proper combinators: {$directive parameter}  
@@ -928,11 +1004,11 @@ static void post_process_set_operations(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    // Standard Pascal identifier parser - handles all identifiers uniformly
-    combinator_t* identifier = token(cident(PASCAL_T_IDENTIFIER));
+    // Pascal identifier parser - excludes reserved keywords like BEGIN, END, etc.
+    combinator_t* identifier = token(pascal_identifier(PASCAL_T_IDENTIFIER));
     
-    // Function name: use standard identifier parser  
-    combinator_t* func_name = token(cident(PASCAL_T_IDENTIFIER));
+    // Function name: use Pascal identifier parser that excludes keywords
+    combinator_t* func_name = token(pascal_identifier(PASCAL_T_IDENTIFIER));
     
     // Function call parser: function name followed by optional argument list
     combinator_t* arg_list = between(
