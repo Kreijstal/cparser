@@ -1465,11 +1465,10 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
-    // Function body for complete programs: includes terminating semicolon
+    // Function body for complete programs: no extra terminating semicolon needed
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local var section
-        lazy(stmt_parser),                           // begin-end block handled by statement parser
-        token(match(";")),                           // terminating semicolon after function body
+        lazy(stmt_parser),                           // begin-end block handled by statement parser (includes semicolon)
         NULL
     );
     
@@ -1482,7 +1481,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Procedure declaration: procedure name [(params)] ; body
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(match("procedure")),                   // procedure keyword (case-sensitive like working version)
+        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after parameters
@@ -1492,7 +1491,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     
     // Function declaration: function name [(params)] : return_type ; body
     combinator_t* function_decl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(match("function")),                    // function keyword (case-sensitive like working version)
+        token(match_ci("function")),                 // function keyword (case-insensitive)
         token(cident(PASCAL_T_IDENTIFIER)),          // function name
         param_list,                                  // optional parameter list
         return_type,                                 // return type
