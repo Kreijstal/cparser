@@ -1147,32 +1147,8 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // Use a simple fixed statement list for BEGIN-END blocks to avoid circular references
-    // This is specifically for function bodies where the most common patterns are:
-    // - assignments: interim := 0;
-    // - function calls: INC(i);
-    // - simple expressions: Damm := interim=0;
-    combinator_t* simple_assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
-        token(cident(PASCAL_T_IDENTIFIER)),    // variable name
-        token(match(":=")),                    // assignment operator
-        lazy(expr_parser),                     // expression (use expr_parser from above)
-        NULL
-    );
-    
-    combinator_t* simple_expr_stmt = seq(new_combinator(), PASCAL_T_STATEMENT,
-        lazy(expr_parser),                     // expression
-        NULL
-    );
-    
-    // Create a basic statement parser for function body BEGIN-END blocks
-    combinator_t* function_stmt = multi(new_combinator(), PASCAL_T_NONE,
-        simple_assignment,                     // assignment statements
-        simple_expr_stmt,                      // expression statements (function calls)
-        NULL
-    );
-    
-    // Use the standard sep_end_by for statement lists in BEGIN-END blocks
-    combinator_t* stmt_list = sep_end_by(function_stmt, token(match(";")));
+    // Standard BEGIN-END block for main statement parser (uses full recursive parsing)
+    combinator_t* stmt_list = sep_end_by(lazy(stmt_parser), token(match(";")));
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
@@ -1551,15 +1527,56 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Local VAR section - reuse the existing var_section parser
     combinator_t* local_var_section = var_section;
     
-    // Function body for complete programs: uses the statement parser directly without lazy reference
-    combinator_t** direct_stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
-    *direct_stmt_parser = new_combinator();
-    (*direct_stmt_parser)->extra_to_free = direct_stmt_parser;
-    init_pascal_statement_parser(direct_stmt_parser);
+    // Create a specialized function body parser that avoids circular references
+    // This parser handles the most common function body patterns without full recursive complexity
+    
+    combinator_t* func_assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
+        token(cident(PASCAL_T_IDENTIFIER)),    // variable name
+        token(match(":=")),                    // assignment operator
+        token(cident(PASCAL_T_IDENTIFIER)),    // simple identifier (simplified - no complex expressions)
+        NULL
+    );
+    
+    combinator_t* func_expr_stmt = seq(new_combinator(), PASCAL_T_STATEMENT,
+        token(cident(PASCAL_T_IDENTIFIER)),    // simple identifier (function calls, etc)
+        NULL
+    );
+    
+    // Simple statement types for function bodies
+    combinator_t* func_stmt = multi(new_combinator(), PASCAL_T_NONE,
+        func_assignment,                       // assignments
+        func_expr_stmt,                       // expressions/function calls
+        NULL
+    );
+    
+    // Statement list with terminator-style semicolons (stmt; stmt; stmt;)
+    combinator_t* func_stmt_list = many(seq(new_combinator(), PASCAL_T_NONE,
+        func_stmt,
+        token(match(";")),
+        NULL
+    ));
+    
+    // Function body BEGIN-END block (specialized, no circular references)
+    combinator_t* func_begin_end = multi(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        // Empty block
+        seq(new_combinator(), PASCAL_T_NONE,
+            token(match_ci("begin")),
+            token(match_ci("end")),
+            NULL
+        ),
+        // Non-empty block  
+        seq(new_combinator(), PASCAL_T_NONE,
+            token(match_ci("begin")),
+            func_stmt_list,                    // statements with terminating semicolons
+            token(match_ci("end")),
+            NULL
+        ),
+        NULL
+    );
     
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // now enabled - functions can have local VAR sections
-        *direct_stmt_parser,                         // use statement parser directly (not lazy)
+        func_begin_end,                              // specialized function BEGIN-END parser
         NULL
     );
     
