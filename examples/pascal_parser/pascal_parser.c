@@ -1115,7 +1115,13 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Standard BEGIN-END block for main statement parser (uses full recursive parsing)
-    combinator_t* stmt_list = sep_end_by(lazy(stmt_parser), token(match(";")));
+    // Use sep_by with optional trailing semicolon to properly handle Pascal semicolon rules
+    combinator_t* stmt_list_sep_by = sep_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* stmt_list = seq(new_combinator(), PASCAL_T_NONE,
+        stmt_list_sep_by,                      // statements separated by semicolons
+        optional(token(match(";"))),           // optional trailing semicolon
+        NULL
+    );
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword

@@ -3937,6 +3937,242 @@ void test_debug_minimal_program_structure(void) {
     free_combinator(p);
 }
 
+void test_debug_assignment_statement_parsing(void) {
+    printf("=== DEBUG ASSIGNMENT STATEMENT PARSING TEST ===\n");
+    
+    // Test 1: Parse assignment statement with expression parser
+    combinator_t* expr_parser = new_combinator();
+    init_pascal_expression_parser(&expr_parser);
+    
+    input_t* input1 = new_input();
+    input1->buffer = strdup("Add");
+    input1->length = strlen("Add");
+    
+    ParseResult res1 = parse(input1, expr_parser);
+    printf("Test 1 - Parse 'Add' as expression: %s\n", res1.is_success ? "SUCCESS" : "FAILED");
+    if (res1.is_success) {
+        print_pascal_ast(res1.value.ast);
+        free_ast(res1.value.ast);
+    } else {
+        printf("Error: %s\n", res1.value.error->message);
+        if (res1.value.error->partial_ast) {
+            print_pascal_ast(res1.value.error->partial_ast);
+        }
+        free_error(res1.value.error);
+    }
+    free(input1->buffer);
+    free(input1);
+    free_combinator(expr_parser);
+    
+    // Test 2: Parse assignment statement with statement parser
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+    
+    input_t* input2 = new_input();
+    input2->buffer = strdup("Add := a + b");
+    input2->length = strlen("Add := a + b");
+    
+    ParseResult res2 = parse(input2, stmt_parser);
+    printf("\nTest 2 - Parse 'Add := a + b' as statement: %s\n", res2.is_success ? "SUCCESS" : "FAILED");
+    if (res2.is_success) {
+        print_pascal_ast(res2.value.ast);
+        free_ast(res2.value.ast);
+    } else {
+        printf("Error: %s\n", res2.value.error->message);
+        if (res2.value.error->partial_ast) {
+            print_pascal_ast(res2.value.error->partial_ast);
+        }
+        free_error(res2.value.error);
+    }
+    free(input2->buffer);
+    free(input2);
+    free_combinator(stmt_parser);
+    
+    // Test 3: Parse simple begin-end block with assignment
+    combinator_t* stmt_parser2 = new_combinator();
+    init_pascal_statement_parser(&stmt_parser2);
+    
+    input_t* input3 = new_input();
+    input3->buffer = strdup("begin Add := a + b; end");
+    input3->length = strlen("begin Add := a + b; end");
+    
+    ParseResult res3 = parse(input3, stmt_parser2);
+    printf("\nTest 3 - Parse 'begin Add := a + b; end' as statement: %s\n", res3.is_success ? "SUCCESS" : "FAILED");
+    if (res3.is_success) {
+        print_pascal_ast(res3.value.ast);
+        free_ast(res3.value.ast);
+    } else {
+        printf("Error: %s\n", res3.value.error->message);
+        if (res3.value.error->partial_ast) {
+            print_pascal_ast(res3.value.error->partial_ast);
+        }
+        free_error(res3.value.error);
+    }
+    free(input3->buffer);
+    free(input3);
+    free_combinator(stmt_parser2);
+    
+    // Test 4: Parse simple begin-end block with main program parser
+    combinator_t* prog_parser = new_combinator();
+    init_pascal_program_parser(&prog_parser);
+    
+    input_t* input4 = new_input();
+    input4->buffer = strdup("begin Add := a + b; end");
+    input4->length = strlen("begin Add := a + b; end");
+    
+    ParseResult res4 = parse(input4, prog_parser);
+    printf("\nTest 4 - Parse 'begin Add := a + b; end' with program parser: %s\n", res4.is_success ? "SUCCESS" : "FAILED");
+    if (res4.is_success) {
+        print_pascal_ast(res4.value.ast);
+        free_ast(res4.value.ast);
+    } else {
+        printf("Error: %s\n", res4.value.error->message);
+        if (res4.value.error->partial_ast) {
+            print_pascal_ast(res4.value.error->partial_ast);
+        }
+        free_error(res4.value.error);
+    }
+    free(input4->buffer);
+    free(input4);
+    free_combinator(prog_parser);
+    
+    // Test 5: Parse statement with semicolon terminator
+    combinator_t* stmt_parser3 = new_combinator();
+    init_pascal_statement_parser(&stmt_parser3);
+    
+    input_t* input5 = new_input();
+    input5->buffer = strdup("Add := a + b;");
+    input5->length = strlen("Add := a + b;");
+    
+    ParseResult res5 = parse(input5, stmt_parser3);
+    printf("\nTest 5 - Parse 'Add := a + b;' (with semicolon): %s\n", res5.is_success ? "SUCCESS" : "FAILED");
+    if (res5.is_success) {
+        print_pascal_ast(res5.value.ast);
+        free_ast(res5.value.ast);
+    } else {
+        printf("Error: %s\n", res5.value.error->message);
+        if (res5.value.error->partial_ast) {
+            print_pascal_ast(res5.value.error->partial_ast);
+        }
+        free_error(res5.value.error);
+    }
+    free(input5->buffer);
+    free(input5);
+    free_combinator(stmt_parser3);
+    
+    // Test 6: Try parsing without semicolon in begin-end
+    combinator_t* stmt_parser4 = new_combinator();
+    init_pascal_statement_parser(&stmt_parser4);
+    
+    input_t* input6 = new_input();
+    input6->buffer = strdup("begin Add := a + b end");
+    input6->length = strlen("begin Add := a + b end");
+    
+    ParseResult res6 = parse(input6, stmt_parser4);
+    printf("\nTest 6 - Parse 'begin Add := a + b end' (no semicolon): %s\n", res6.is_success ? "SUCCESS" : "FAILED");
+    if (res6.is_success) {
+        print_pascal_ast(res6.value.ast);
+        free_ast(res6.value.ast);
+    } else {
+        printf("Error: %s\n", res6.value.error->message);
+        if (res6.value.error->partial_ast) {
+            print_pascal_ast(res6.value.error->partial_ast);
+        }
+        free_error(res6.value.error);
+    }
+    free(input6->buffer);
+    free(input6);
+    free_combinator(stmt_parser4);
+    
+    // Test 7: Test individual components of begin-end parsing
+    printf("\nTest 7 - Testing begin-end components individually:\n");
+    
+    // Test 7a: Just the begin keyword with pascal_token
+    combinator_t* begin_keyword = pascal_token(match_ci("begin"));
+    input_t* input7a = new_input();
+    input7a->buffer = strdup("begin");
+    input7a->length = strlen("begin");
+    
+    ParseResult res7a = parse(input7a, begin_keyword);
+    printf("7a - Parse 'begin' keyword: %s\n", res7a.is_success ? "SUCCESS" : "FAILED");
+    if (!res7a.is_success) {
+        printf("Error: %s\n", res7a.value.error->message);
+        free_error(res7a.value.error);
+    } else {
+        free_ast(res7a.value.ast);
+    }
+    free(input7a->buffer);
+    free(input7a);
+    free_combinator(begin_keyword);
+    
+    // Test 7b: Empty begin-end block
+    combinator_t* empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        pascal_token(match_ci("begin")),
+        pascal_token(match_ci("end")),
+        NULL
+    );
+    input_t* input7b = new_input();
+    input7b->buffer = strdup("begin end");
+    input7b->length = strlen("begin end");
+    
+    ParseResult res7b = parse(input7b, empty_begin_end);
+    printf("7b - Parse 'begin end': %s\n", res7b.is_success ? "SUCCESS" : "FAILED");
+    if (!res7b.is_success) {
+        printf("Error: %s\n", res7b.value.error->message);
+        if (res7b.value.error->partial_ast) {
+            print_pascal_ast(res7b.value.error->partial_ast);
+        }
+        free_error(res7b.value.error);
+    } else {
+        print_pascal_ast(res7b.value.ast);
+        free_ast(res7b.value.ast);
+    }
+    free(input7b->buffer);
+    free(input7b);
+    free_combinator(empty_begin_end);
+    
+    // Test 7c: Test the basic assignment inside simple_stmt
+    combinator_t* expr_parser_test = new_combinator();
+    init_pascal_expression_parser(&expr_parser_test);
+    
+    combinator_t* basic_assignment_test = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
+        pascal_token(cident(PASCAL_T_IDENTIFIER)),
+        pascal_token(match(":=")),
+        expr_parser_test,  // don't use lazy for this test
+        NULL
+    );
+    
+    input_t* input7c = new_input();
+    input7c->buffer = strdup("Add := a + b");
+    input7c->length = strlen("Add := a + b");
+    
+    ParseResult res7c = parse(input7c, basic_assignment_test);
+    printf("7c - Parse 'Add := a + b' with basic assignment: %s\n", res7c.is_success ? "SUCCESS" : "FAILED");
+    if (!res7c.is_success) {
+        printf("Error: %s\n", res7c.value.error->message);
+        if (res7c.value.error->partial_ast) {
+            print_pascal_ast(res7c.value.error->partial_ast);
+        }
+        free_error(res7c.value.error);
+    } else {
+        print_pascal_ast(res7c.value.ast);
+        free_ast(res7c.value.ast);
+    }
+    free(input7c->buffer);
+    free(input7c);
+    free_combinator(basic_assignment_test);
+    free_combinator(expr_parser_test);
+    
+    // Test 7d: Test the complete begin-end with assignment (manual creation)
+    printf("7d - Testing complete non-empty begin-end manually:\n");
+    
+    // Instead of complex nested tests, let me see what happens when I manually test the actual failing pattern
+    // The issue might be elsewhere - let me check if the statement parser itself has an issue
+    
+    printf("DEBUG: All individual components work, but begin-end with content fails.\n");
+    printf("DEBUG: This suggests the issue is in the multi() combinator or statement parser order.\n");
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -4051,5 +4287,6 @@ TEST_LIST = {
     { "test_debug_just_proc_or_func_parser", test_debug_just_proc_or_func_parser },
     { "test_debug_program_without_functions", test_debug_program_without_functions },
     { "test_debug_minimal_program_structure", test_debug_minimal_program_structure },
+    { "test_debug_assignment_statement_parsing", test_debug_assignment_statement_parsing },
     { NULL, NULL }
 };
