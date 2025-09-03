@@ -1832,8 +1832,8 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    // Method implementations (constructor/destructor/procedure with class.method syntax)
-    // Constructor implementation: constructor ClassName.MethodName; body;
+    // Object Pascal method implementations (constructor/destructor/procedure with class.method syntax)
+    // These are Object Pascal extensions, not standard Pascal
     combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_NONE,
         token(cident(PASCAL_T_IDENTIFIER)),          // class name
         token(match(".")),                           // dot
@@ -1846,40 +1846,50 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
-        program_function_body,                       // method body
+        lazy(stmt_parser),                           // use statement parser for method body
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
     
-    // Destructor implementation: destructor ClassName.MethodName; body;
     combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
         token(match_ci("destructor")),               // destructor keyword
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
-        program_function_body,                       // method body
+        lazy(stmt_parser),                           // use statement parser for method body
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
     
-    // Procedure implementation: procedure ClassName.MethodName; body;
     combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(match_ci("procedure")),                // procedure keyword
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
-        program_function_body,                       // method body
+        lazy(stmt_parser),                           // use statement parser for method body
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
 
-    // Procedure or function definitions - including method implementations
+    // Object Pascal method implementations - separate from standard Pascal proc_or_func
+    combinator_t* method_impl = multi(new_combinator(), PASCAL_T_NONE,
+        constructor_impl,
+        destructor_impl,
+        procedure_impl,
+        NULL
+    );
+
+    // Standard Pascal procedure or function definitions
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
-        constructor_impl,                            // constructor implementations
-        destructor_impl,                             // destructor implementations
-        procedure_impl,                              // procedure implementations
         working_function,                            // working function parser
         working_procedure,                           // working procedure parser
+        NULL
+    );
+    
+    // Combined Pascal and Object Pascal declarations
+    combinator_t* all_declarations = multi(new_combinator(), PASCAL_T_NONE,
+        proc_or_func,                                // standard Pascal procedures/functions
+        method_impl,                                 // Object Pascal method implementations
         NULL
     );
     
@@ -1901,7 +1911,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         optional(type_section),                      // optional type section
         optional(const_section),                     // optional const section
         optional(var_section),                       // optional var section
-        many(proc_or_func),                          // zero or more procedure/function declarations
+        many(all_declarations),                      // zero or more procedure/function/method declarations
         optional(main_block),                        // optional main program block
         token(match(".")),                           // final period
         NULL
