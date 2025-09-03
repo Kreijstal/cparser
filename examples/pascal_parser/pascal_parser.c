@@ -772,21 +772,7 @@ static combinator_t* set_constructor(tag_t tag) {
     return comb;
 }
 
-// Multi combinator approach for relational operators to handle prefix conflicts
-static combinator_t* relational_ops() {
-    return multi(new_combinator(), PASCAL_T_NONE,
-        token(match("<=")), // try longer matches first
-        token(match(">=")),
-        token(match("<>")),
-        token(match("=")),
-        token(match("<")),
-        token(match(">")),
-        token(match("in")),
-        token(match("is")),
-        token(match("as")),
-        NULL
-    );
-}
+// Removed unused relational_ops() function that had non-boundary-aware match("in")
 
 // Pascal string literal parser - supports both single 'text' and double "text" quotes
 static ParseResult pascal_string_fn(input_t* in, void* args) {
