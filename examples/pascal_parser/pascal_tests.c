@@ -2874,6 +2874,258 @@ void test_pascal_2d_array_assignment(void) {
     free(input);
 }
 
+// === ADDITIONAL EDGE CASE TESTS ===
+
+// Test empty class (should work as baseline)
+void test_pascal_empty_class(void) {
+    combinator_t* p = class_type(PASCAL_T_CLASS_TYPE);
+
+    input_t* input = new_input();
+    input->buffer = strdup("class end");  
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== EMPTY CLASS TEST ===\n");
+    if (!res.is_success) {
+        printf("Empty class failed: %s\n", res.value.error->message);
+    } else {
+        printf("Empty class succeeded (expected)!\n");
+        print_pascal_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);  // Empty classes should work
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test simple field declaration (minimal failure case)
+void test_pascal_simple_field_declaration(void) {
+    combinator_t* p = class_type(PASCAL_T_CLASS_TYPE);
+
+    input_t* input = new_input();
+    input->buffer = strdup("class x: integer; end");  
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== SIMPLE FIELD DECLARATION TEST ===\n");
+    if (!res.is_success) {
+        printf("Simple field declaration failed (expected): %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Simple field declaration unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+    }
+
+    TEST_CHECK(!res.is_success);  // Expected to fail
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test dot operator in isolation
+void test_pascal_dot_operator(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("a.b");  // Minimal dot expression
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== DOT OPERATOR TEST ===\n");
+    if (!res.is_success) {
+        printf("Dot operator failed: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Dot operator result (parsing stops at '.'):\n");
+        print_pascal_ast(res.value.ast);
+        // Check what was actually parsed - just print the AST
+    }
+
+    TEST_CHECK(res.is_success);  // It should parse 'a' and stop
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test invalid array indexing syntax
+void test_pascal_invalid_array_syntax(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("arr[i,]");  // Trailing comma
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== INVALID ARRAY SYNTAX TEST ===\n");
+    if (!res.is_success) {
+        printf("Invalid array syntax failed (expected): %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Invalid array syntax unexpectedly succeeded:\n");
+        print_pascal_ast(res.value.ast);
+    }
+
+    TEST_CHECK(!res.is_success);  // Should fail due to trailing comma
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test single vs double quotes in strings
+void test_pascal_mixed_quotes(void) {
+    const char* test_cases[] = {
+        "'single'",      // Single quotes (char literal?)
+        "\"double\"",    // Double quotes (string literal)
+        "'multi char'",  // Single quotes with multiple chars
+    };
+    
+    for (int i = 0; i < 3; i++) {
+        combinator_t* p = new_combinator();
+        init_pascal_expression_parser(&p);
+
+        input_t* input = new_input();
+        input->buffer = strdup(test_cases[i]);
+        input->length = strlen(input->buffer);
+
+        ParseResult res = parse(input, p);
+
+        printf("=== MIXED QUOTES TEST: %s ===\n", test_cases[i]);
+        if (!res.is_success) {
+            printf("Mixed quotes failed: %s\n", res.value.error->message);
+        } else {
+            printf("Mixed quotes result:\n");
+            print_pascal_ast(res.value.ast);
+        }
+
+        TEST_CHECK(res.is_success);  // Should work
+        
+        if (res.is_success) {
+            free_ast(res.value.ast);
+        } else {
+            free_error(res.value.error);
+        }
+        
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+    }
+}
+
+// Test array of array type syntax
+void test_pascal_array_of_array(void) {
+    combinator_t* p = array_type(PASCAL_T_ARRAY_TYPE);
+
+    input_t* input = new_input();
+    input->buffer = strdup("ARRAY[1..10] OF ARRAY[1..5] OF integer");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== ARRAY OF ARRAY TEST ===\n");
+    if (!res.is_success) {
+        printf("Array of array failed: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Array of array succeeded!\n");
+        print_pascal_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);  // Should work
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test chained array access (e.g., arr[i][j] vs arr[i,j])
+void test_pascal_chained_array_access(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("arr[i][j]");  // Chained vs comma syntax
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== CHAINED ARRAY ACCESS TEST ===\n");
+    if (!res.is_success) {
+        printf("Chained array access failed: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    } else {
+        printf("Chained array access result:\n");
+        print_pascal_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);  // Should work as nested array access
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -2961,5 +3213,13 @@ TEST_LIST = {
     { "test_pascal_nested_array_const", test_pascal_nested_array_const },
     { "test_pascal_constructor_syntax", test_pascal_constructor_syntax },
     { "test_pascal_2d_array_assignment", test_pascal_2d_array_assignment },
+    // === EDGE CASE TESTS ===
+    { "test_pascal_empty_class", test_pascal_empty_class },
+    { "test_pascal_simple_field_declaration", test_pascal_simple_field_declaration },
+    { "test_pascal_dot_operator", test_pascal_dot_operator },
+    { "test_pascal_invalid_array_syntax", test_pascal_invalid_array_syntax },
+    { "test_pascal_mixed_quotes", test_pascal_mixed_quotes },
+    { "test_pascal_array_of_array", test_pascal_array_of_array },
+    { "test_pascal_chained_array_access", test_pascal_chained_array_access },
     { NULL, NULL }
 };
