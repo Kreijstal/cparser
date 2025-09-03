@@ -3671,6 +3671,272 @@ void test_pascal_debug_proc_or_func_directly(void) {
     free(input);
 }
 
+void test_debug_range_expression(void) {
+    printf("=== DEBUG RANGE EXPRESSION TEST ===\n");
+    
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    // Test multi-character operators that work
+    input_t* input1 = new_input();
+    input1->buffer = strdup("1<=2");
+    input1->length = strlen("1<=2");
+    
+    ParseResult res1 = parse(input1, p);
+    printf("Parsing '1<=2': %s\n", res1.is_success ? "SUCCESS" : "FAILED");
+    if (res1.is_success) {
+        printf("AST for '1<=2':\n");
+        print_pascal_ast(res1.value.ast);
+        free_ast(res1.value.ast);
+    } else {
+        printf("Error: %s\n", res1.value.error->message);
+        if (res1.value.error->partial_ast) {
+            print_pascal_ast(res1.value.error->partial_ast);
+        }
+        free_error(res1.value.error);
+    }
+    free(input1->buffer);
+    free(input1);
+
+    // Test the problematic range expression
+    input_t* input = new_input();
+    input->buffer = strdup("1..10");
+    input->length = strlen("1..10");
+
+    ParseResult res = parse(input, p);
+
+    if (res.is_success) {
+        printf("Range expression parsing succeeded!\n");
+        if (res.value.ast) {
+            print_pascal_ast(res.value.ast);
+        }
+        free_ast(res.value.ast);
+    } else {
+        printf("Range expression parsing failed!\n");
+        if (res.value.error) {
+            printf("Error at line %d, col %d: %s\n", 
+                res.value.error->line, res.value.error->col, res.value.error->message);
+            if (res.value.error->partial_ast) {
+                printf("Partial AST:\n");
+                print_pascal_ast(res.value.error->partial_ast);
+            }
+            free_error(res.value.error);
+        }
+    }
+
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_debug_just_proc_or_func_parser(void) {
+    printf("=== DEBUG JUST PROC_OR_FUNC PARSER TEST ===\n");
+    
+    // Test standalone procedure parser
+    input_t* input = new_input();
+    input->buffer = strdup("procedure Test; begin end;");
+    input->length = strlen("procedure Test; begin end;");
+    
+    combinator_t* proc_parser = new_combinator();
+    init_pascal_procedure_parser(&proc_parser);
+    
+    ParseResult res = parse(input, proc_parser);
+    
+    if (res.is_success) {
+        printf("Standalone procedure parser succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Standalone procedure parser failed!\n");
+        printf("Error: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+    
+    free_combinator(proc_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_debug_program_without_functions(void) {
+    printf("=== DEBUG PROGRAM WITHOUT FUNCTIONS TEST ===\n");
+    
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+    
+    input_t* input = new_input();
+    input->buffer = strdup("program Test; begin writeln('Hello'); end.");
+    input->length = strlen("program Test; begin writeln('Hello'); end.");
+    
+    ParseResult res = parse(input, p);
+    
+    if (res.is_success) {
+        printf("Program without functions succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Program without functions failed!\n");
+        printf("Error: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_debug_minimal_program_structure(void) {
+    printf("=== DEBUG MINIMAL PROGRAM STRUCTURE TEST ===\n");
+    
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+    
+    // Test 1: just program name + end
+    input_t* input1 = new_input();
+    input1->buffer = strdup("program Test; end.");
+    input1->length = strlen("program Test; end.");
+    
+    ParseResult res1 = parse(input1, p);
+    
+    printf("Test 1 - 'program Test; end.': %s\n", res1.is_success ? "SUCCESS" : "FAILED");
+    if (res1.is_success) {
+        print_pascal_ast(res1.value.ast);
+        free_ast(res1.value.ast);
+    } else {
+        printf("Error at line %d, col %d: %s\n", 
+            res1.value.error->line, res1.value.error->col, res1.value.error->message);
+        if (res1.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res1.value.error->partial_ast);
+        }
+        free_error(res1.value.error);
+    }
+    free(input1->buffer);
+    free(input1);
+    
+    // Test 2: program name + begin end
+    input_t* input2 = new_input();
+    input2->buffer = strdup("program Test; begin end.");
+    input2->length = strlen("program Test; begin end.");
+    
+    ParseResult res2 = parse(input2, p);
+    
+    printf("\nTest 2 - 'program Test; begin end.': %s\n", res2.is_success ? "SUCCESS" : "FAILED");
+    if (res2.is_success) {
+        print_pascal_ast(res2.value.ast);
+        free_ast(res2.value.ast);
+    } else {
+        printf("Error: %s\n", res2.value.error->message);
+        if (res2.value.error->partial_ast) {
+            print_pascal_ast(res2.value.error->partial_ast);
+        }
+        free_error(res2.value.error);
+    }
+    free(input2->buffer);
+    free(input2);
+    
+    // Test 3: program + function + main block  
+    input_t* input3 = new_input();
+    input3->buffer = strdup("program Test; function Add: integer; begin end; begin end.");
+    input3->length = strlen("program Test; function Add: integer; begin end; begin end.");
+    
+    ParseResult res3 = parse(input3, p);
+    
+    printf("\nTest 3 - 'program with simple function': %s\n", res3.is_success ? "SUCCESS" : "FAILED");
+    if (res3.is_success) {
+        print_pascal_ast(res3.value.ast);
+        free_ast(res3.value.ast);
+    } else {
+        printf("Error at line %d, col %d: %s\n", 
+            res3.value.error->line, res3.value.error->col, res3.value.error->message);
+        if (res3.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res3.value.error->partial_ast);
+        }
+        free_error(res3.value.error);
+    }
+    free(input3->buffer);
+    free(input3);
+    
+    // Test 4: program + function with parameters + main block
+    input_t* input4 = new_input();
+    input4->buffer = strdup("program Test; function Add(a: integer): integer; begin end; begin end.");
+    input4->length = strlen("program Test; function Add(a: integer): integer; begin end; begin end.");
+    
+    ParseResult res4 = parse(input4, p);
+    
+    printf("\nTest 4 - 'program with function + parameters': %s\n", res4.is_success ? "SUCCESS" : "FAILED");
+    if (res4.is_success) {
+        print_pascal_ast(res4.value.ast);
+        free_ast(res4.value.ast);
+    } else {
+        printf("Error at line %d, col %d: %s\n", 
+            res4.value.error->line, res4.value.error->col, res4.value.error->message);
+        if (res4.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res4.value.error->partial_ast);
+        }
+        free_error(res4.value.error);
+    }
+    free(input4->buffer);
+    free(input4);
+    
+    // Test 5: program + function with multiple parameters + main block
+    input_t* input5 = new_input();
+    input5->buffer = strdup("program Test; function Add(a: integer; b: integer): integer; begin end; begin end.");
+    input5->length = strlen("program Test; function Add(a: integer; b: integer): integer; begin end; begin end.");
+    
+    ParseResult res5 = parse(input5, p);
+    
+    printf("\nTest 5 - 'program with function + multiple parameters': %s\n", res5.is_success ? "SUCCESS" : "FAILED");
+    if (res5.is_success) {
+        print_pascal_ast(res5.value.ast);
+        free_ast(res5.value.ast);
+    } else {
+        printf("Error at line %d, col %d: %s\n", 
+            res5.value.error->line, res5.value.error->col, res5.value.error->message);
+        if (res5.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res5.value.error->partial_ast);
+        }
+        free_error(res5.value.error);
+    }
+    free(input5->buffer);
+    free(input5);
+    
+    // Test 6: program + function with statements in body + main block
+    input_t* input6 = new_input();
+    input6->buffer = strdup("program Test; function Add(a: integer; b: integer): integer; begin Add := a + b; end; begin end.");
+    input6->length = strlen("program Test; function Add(a: integer; b: integer): integer; begin Add := a + b; end; begin end.");
+    
+    ParseResult res6 = parse(input6, p);
+    
+    printf("\nTest 6 - 'program with function + body statements': %s\n", res6.is_success ? "SUCCESS" : "FAILED");
+    if (res6.is_success) {
+        print_pascal_ast(res6.value.ast);
+        free_ast(res6.value.ast);
+    } else {
+        printf("Error at line %d, col %d: %s\n", 
+            res6.value.error->line, res6.value.error->col, res6.value.error->message);
+        if (res6.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res6.value.error->partial_ast);
+        }
+        free_error(res6.value.error);
+    }
+    free(input6->buffer);
+    free(input6);
+    
+    free_combinator(p);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -3781,5 +4047,9 @@ TEST_LIST = {
     { "test_pascal_standalone_procedure", test_pascal_standalone_procedure },
     { "test_pascal_debug_function_keyword_matching", test_pascal_debug_function_keyword_matching },
     { "test_pascal_debug_proc_or_func_directly", test_pascal_debug_proc_or_func_directly },
+    { "test_debug_range_expression", test_debug_range_expression },
+    { "test_debug_just_proc_or_func_parser", test_debug_just_proc_or_func_parser },
+    { "test_debug_program_without_functions", test_debug_program_without_functions },
+    { "test_debug_minimal_program_structure", test_debug_minimal_program_structure },
     { NULL, NULL }
 };
