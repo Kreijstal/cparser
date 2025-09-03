@@ -944,7 +944,100 @@ static void post_process_set_operations(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    // Function call parser: identifier followed by optional argument list
+    // Built-in Pascal functions and procedures - comprehensive list
+    combinator_t* builtin_func = multi(new_combinator(), PASCAL_T_IDENTIFIER,
+        // Built-in functions that return values
+        token(match_ci("length")),        // length(string) -> integer
+        token(match_ci("ord")),           // ord(char) -> integer  
+        token(match_ci("chr")),           // chr(integer) -> char
+        token(match_ci("succ")),          // succ(ordinal) -> ordinal
+        token(match_ci("pred")),          // pred(ordinal) -> ordinal
+        token(match_ci("abs")),           // abs(number) -> number
+        token(match_ci("sqr")),           // sqr(number) -> number
+        token(match_ci("sqrt")),          // sqrt(number) -> real
+        token(match_ci("sin")),           // sin(real) -> real
+        token(match_ci("cos")),           // cos(real) -> real
+        token(match_ci("arctan")),        // arctan(real) -> real
+        token(match_ci("exp")),           // exp(real) -> real
+        token(match_ci("ln")),            // ln(real) -> real
+        token(match_ci("trunc")),         // trunc(real) -> integer
+        token(match_ci("round")),         // round(real) -> integer
+        token(match_ci("random")),        // random[(integer)] -> real/integer
+        token(match_ci("inttostr")),      // inttostr(integer) -> string
+        token(match_ci("strtoint")),      // strtoint(string) -> integer
+        token(match_ci("floattostr")),    // floattostr(real) -> string
+        token(match_ci("strtofloat")),    // strtofloat(string) -> real
+        token(match_ci("copy")),          // copy(string, start, count) -> string
+        token(match_ci("pos")),           // pos(substr, string) -> integer
+        token(match_ci("upcase")),        // upcase(char) -> char
+        token(match_ci("lowercase")),     // lowercase(char) -> char
+        token(match_ci("uppercase")),     // uppercase(string) -> string
+        token(match_ci("trim")),          // trim(string) -> string
+        token(match_ci("sizeof")),        // sizeof(type/var) -> integer
+        token(match_ci("high")),          // high(array/type) -> ordinal
+        token(match_ci("low")),           // low(array/type) -> ordinal
+        token(match_ci("odd")),           // odd(integer) -> boolean
+        token(match_ci("eof")),           // eof[(file)] -> boolean
+        token(match_ci("eoln")),          // eoln[(file)] -> boolean
+        token(match_ci("filesize")),      // filesize(file) -> integer
+        token(match_ci("filepos")),       // filepos(file) -> integer
+        token(match_ci("paramcount")),    // paramcount -> integer
+        token(match_ci("paramstr")),      // paramstr(index) -> string
+        // Built-in procedures (no return value)
+        token(match_ci("inc")),           // inc(variable [, increment])
+        token(match_ci("dec")),           // dec(variable [, decrement])
+        token(match_ci("write")),         // write(args...)
+        token(match_ci("writeln")),       // writeln(args...)
+        token(match_ci("read")),          // read(variables...)
+        token(match_ci("readln")),        // readln(variables...)
+        token(match_ci("randomize")),     // randomize
+        token(match_ci("clrscr")),        // clrscr
+        token(match_ci("gotoxy")),        // gotoxy(x, y)
+        token(match_ci("delete")),        // delete(string, start, count)
+        token(match_ci("insert")),        // insert(source, dest, position)
+        token(match_ci("str")),           // str(number, string)
+        token(match_ci("val")),           // val(string, number, code)
+        token(match_ci("new")),           // new(pointer)
+        token(match_ci("dispose")),       // dispose(pointer)
+        token(match_ci("getmem")),        // getmem(pointer, size)
+        token(match_ci("freemem")),       // freemem(pointer, size)
+        token(match_ci("fillchar")),      // fillchar(var, size, value)
+        token(match_ci("move")),          // move(source, dest, size)
+        token(match_ci("halt")),          // halt[(exitcode)]
+        token(match_ci("exit")),          // exit[(result)]
+        token(match_ci("break")),         // break
+        token(match_ci("continue")),      // continue
+        token(match_ci("assign")),        // assign(file, filename)
+        token(match_ci("reset")),         // reset(file)
+        token(match_ci("rewrite")),       // rewrite(file)
+        token(match_ci("close")),         // close(file)
+        token(match_ci("seek")),          // seek(file, position)
+        token(match_ci("flush")),         // flush[(file)]
+        token(match_ci("erase")),         // erase(file)
+        token(match_ci("rename")),        // rename(file, newname)
+        token(match_ci("setlength")),     // setlength(string/array, length)
+        // Object Pascal built-ins
+        token(match_ci("free")),          // object.free
+        token(match_ci("create")),        // constructor
+        token(match_ci("destroy")),       // destructor
+        token(match_ci("inherited")),     // inherited call
+        NULL
+    );
+    
+    // Enhanced identifier parser for standalone identifiers (variables, constants)
+    combinator_t* identifier = multi(new_combinator(), PASCAL_T_IDENTIFIER,
+        builtin_func,                     // built-in functions/procedures as identifiers
+        token(cident(PASCAL_T_IDENTIFIER)), // custom identifiers
+        NULL
+    );
+    // Function name: either custom identifier or built-in function
+    combinator_t* func_name = multi(new_combinator(), PASCAL_T_IDENTIFIER,
+        builtin_func,                     // built-in functions first
+        token(cident(PASCAL_T_IDENTIFIER)), // custom identifiers
+        NULL
+    );
+    
+    // Function call parser: function name followed by optional argument list
     combinator_t* arg_list = between(
         token(match("(")),
         token(match(")")),
@@ -952,7 +1045,7 @@ void init_pascal_expression_parser(combinator_t** p) {
     );
     
     combinator_t* func_call = seq(new_combinator(), PASCAL_T_FUNC_CALL,
-        token(cident(PASCAL_T_IDENTIFIER)),
+        func_name,                        // function name (built-in or custom)
         arg_list,
         NULL
     );
@@ -965,7 +1058,7 @@ void init_pascal_expression_parser(combinator_t** p) {
     );
     
     combinator_t* array_access = seq(new_combinator(), PASCAL_T_ARRAY_ACCESS,
-        token(cident(PASCAL_T_IDENTIFIER)),
+        func_name,                        // array name (built-in or custom identifier)
         index_list,
         NULL
     );
@@ -998,7 +1091,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         typecast,                                 // Type casts Integer(x) - try before func_call
         array_access,                             // Array access table[i,j] - try before func_call
         func_call,                                // Function calls func(x)
-        token(cident(PASCAL_T_IDENTIFIER)),       // Identifiers (variables)
+        identifier,                               // Identifiers (variables, built-ins)
         between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
         NULL
     );
