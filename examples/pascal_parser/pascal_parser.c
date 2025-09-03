@@ -1171,14 +1171,8 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // Handle statements with optional trailing semicolons
-    combinator_t* stmt_list = multi(new_combinator(), PASCAL_T_NONE,
-        sep_end_by(function_stmt, token(match(";"))),  // try sep_end_by first
-        sep_by(function_stmt, token(match(";"))),      // fallback to sep_by 
-        function_stmt,                                 // single statement
-        succeed(ast_nil),                              // empty (for empty blocks)
-        NULL
-    );
+    // Use the standard sep_end_by for statement lists in BEGIN-END blocks
+    combinator_t* stmt_list = sep_end_by(function_stmt, token(match(";")));
     
     combinator_t* non_empty_begin_end = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
         token(match_ci("begin")),              // begin keyword
