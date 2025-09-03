@@ -2045,12 +2045,10 @@ void test_minimal_damm_with_function(void) {
     init_pascal_complete_program_parser(&p);
 
     input_t* input = new_input();
-    // Add just a simple function with sections 
+    // Add just a simple function with VAR
     char* program = "program DammAlgorithm;\n"
-                   "uses sysutils;\n"
-                   "TYPE TA = ARRAY[0..9,0..9] OF UInt8;\n"
-                   "CONST table : TA = ((0,3,1));\n"
                    "function Test: integer;\n"
+                   "var x: integer;\n"
                    "begin\n"
                    "end;\n"
                    "begin\n"

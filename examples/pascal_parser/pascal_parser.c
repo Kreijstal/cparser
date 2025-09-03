@@ -1134,6 +1134,7 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Main statement parser: try different types of statements (order matters!)
+    // Note: VAR sections are handled by the complete program parser context
     multi(*stmt_parser, PASCAL_T_NONE,
         begin_end_block,                      // compound statements (must come before expr_stmt)
         asm_stmt,                             // inline assembly blocks
@@ -1440,13 +1441,28 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
     
+    // Function body parser: handles local sections followed by begin-end block
+    // This is different from statement parsing - functions can have local declarations
+    combinator_t* local_var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
+        token(match_ci("var")),                      // var keyword (case-insensitive for VAR/var)
+        many(var_decl),                              // multiple variable declarations
+        NULL
+    );
+    
+    // Simple function body that just handles VAR section + begin-end
+    combinator_t* function_body = seq(new_combinator(), PASCAL_T_NONE,
+        optional(local_var_section),                 // optional local var section
+        lazy(stmt_parser),                           // begin-end block handled by statement parser
+        NULL
+    );
+    
     // Procedure declaration: procedure name [(params)] ; body
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(match("procedure")),                   // procedure keyword (case-sensitive like working version)
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // procedure body (same as working version)
+        function_body,                               // procedure body with local sections
         NULL
     );
     
@@ -1457,7 +1473,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         param_list,                                  // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // function body (same as working version)
+        function_body,                               // function body with local sections
         NULL
     );
     
