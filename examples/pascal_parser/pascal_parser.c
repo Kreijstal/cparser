@@ -1513,16 +1513,16 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Create a specialized function body parser that avoids circular references
     // This parser handles the most common function body patterns without full recursive complexity
     
-    // Use the existing statement parser for function bodies
-    // Simplify function body parsing by reusing stmt_parser and removing local var section for now
-    combinator_t* program_function_body = lazy(stmt_parser);  // just use the statement parser directly
-    
     // Function body for standalone parsing (no terminating semicolon)
     combinator_t* standalone_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local var section
         lazy(stmt_parser),                           // begin-end block handled by statement parser
         NULL
     );
+
+    // Use the existing function body parser that handles local VAR sections
+    // This allows functions to have local variable declarations before BEGIN
+    combinator_t* program_function_body = standalone_function_body;
     
     // Procedure declaration: procedure name [(params)] ; body
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
@@ -1586,7 +1586,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         param_list,                                  // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon after signature
-        lazy(stmt_parser),                           // function body (begin...end block)
+        program_function_body,                       // function body with VAR section support
         optional(token(match(";"))),                 // optional terminating semicolon after function body
         NULL
     );
@@ -1597,7 +1597,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after signature
-        lazy(stmt_parser),                           // procedure body (begin...end block)  
+        program_function_body,                       // procedure body with VAR section support
         optional(token(match(";"))),                 // optional terminating semicolon after procedure body
         NULL
     );
