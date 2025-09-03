@@ -111,6 +111,7 @@ combinator_t* pascal_comment();
 combinator_t* pascal_whitespace();  
 combinator_t* pascal_token(combinator_t* p);
 combinator_t* token(combinator_t* p);  // Backward compatibility wrapper
+combinator_t* pascal_identifier(tag_t tag);  // Pascal identifier that excludes reserved keywords
 combinator_t* compiler_directive(tag_t tag);
 combinator_t* range_type(tag_t tag);
 combinator_t* array_type(tag_t tag);
