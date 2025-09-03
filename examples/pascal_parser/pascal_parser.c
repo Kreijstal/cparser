@@ -1484,17 +1484,8 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // This parser handles the most common function body patterns without full recursive complexity
     
     // Use the existing statement parser for function bodies
-    // Create a new statement parser specifically for this function to avoid circular references
-    combinator_t** function_stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
-    *function_stmt_parser = new_combinator();
-    (*function_stmt_parser)->extra_to_free = function_stmt_parser;
-    init_pascal_statement_parser(function_stmt_parser);
-    
-    combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
-        optional(local_var_section),                 // optional local VAR section for functions
-        lazy(function_stmt_parser),                  // dedicated statement parser for this context
-        NULL
-    );
+    // Simplify function body parsing by reusing stmt_parser and removing local var section for now
+    combinator_t* program_function_body = lazy(stmt_parser);  // just use the statement parser directly
     
     // Function body for standalone parsing (no terminating semicolon)
     combinator_t* standalone_function_body = seq(new_combinator(), PASCAL_T_NONE,
@@ -1555,11 +1546,36 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    // Procedure or function definitions - only include definitions with bodies for complete programs
-    // Function/procedure declarations (headers only) are not used in complete programs
+    // Create simple working function and procedure parsers based on the standalone versions
+    // These work because they use the simpler statement parsing approach
+    
+    // Working function parser: function name [(params)] : return_type ; body ;  
+    combinator_t* working_function = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+        token(match_ci("function")),                 // function keyword (case-insensitive to match existing style)
+        token(cident(PASCAL_T_IDENTIFIER)),          // function name
+        param_list,                                  // optional parameter list
+        return_type,                                 // return type
+        token(match(";")),                           // semicolon after signature
+        lazy(stmt_parser),                           // function body (begin...end block)
+        optional(token(match(";"))),                 // optional terminating semicolon after function body
+        NULL
+    );
+    
+    // Working procedure parser: procedure name [(params)] ; body ;
+    combinator_t* working_procedure = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(match_ci("procedure")),                // procedure keyword (case-insensitive)
+        token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
+        param_list,                                  // optional parameter list
+        token(match(";")),                           // semicolon after signature
+        lazy(stmt_parser),                           // procedure body (begin...end block)  
+        optional(token(match(";"))),                 // optional terminating semicolon after procedure body
+        NULL
+    );
+
+    // Procedure or function definitions - use the simple working parsers
     combinator_t* proc_or_func = multi(new_combinator(), PASCAL_T_NONE,
-        function_definition,                         // function definitions (with bodies)
-        procedure_definition,                        // procedure definitions (with bodies)
+        working_function,                            // working function parser
+        working_procedure,                           // working procedure parser
         NULL
     );
     

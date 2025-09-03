@@ -3589,6 +3589,88 @@ void test_pascal_standalone_procedure(void) {
     free(input);
 }
 
+void test_pascal_debug_function_keyword_matching(void) {
+    // Test if the function keyword is being properly matched by the complete program parser
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "FUNCTION MyFunc: integer;\n"  // Test uppercase to see if case-insensitive works
+                   "begin\n"
+                   "  MyFunc := 42;\n"
+                   "end;\n"
+                   "begin\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== DEBUG FUNCTION KEYWORD MATCHING TEST ===\n");
+    if (!res.is_success) {
+        printf("Function keyword matching failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Function keyword matching success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_debug_proc_or_func_directly(void) {
+    // Try to test the proc_or_func parser component directly  
+    // This is tricky since it's an internal component, but let's see what we can do
+    combinator_t* p = new_combinator();
+    
+    // Try to replicate what proc_or_func should match by using procedure parser
+    init_pascal_procedure_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "function MyFunc: integer;\n"
+                   "begin\n"
+                   "  MyFunc := 42;\n"
+                   "end;\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    printf("=== DEBUG PROC_OR_FUNC DIRECTLY TEST ===\n");
+    if (!res.is_success) {
+        printf("Direct proc_or_func failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    } else {
+        printf("Direct proc_or_func success:\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    }
+
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -3697,5 +3779,7 @@ TEST_LIST = {
     { "test_pascal_function_with_return_type_only", test_pascal_function_with_return_type_only },
     { "test_pascal_with_var_section_before_function", test_pascal_with_var_section_before_function },
     { "test_pascal_standalone_procedure", test_pascal_standalone_procedure },
+    { "test_pascal_debug_function_keyword_matching", test_pascal_debug_function_keyword_matching },
+    { "test_pascal_debug_proc_or_func_directly", test_pascal_debug_proc_or_func_directly },
     { NULL, NULL }
 };
