@@ -1487,10 +1487,8 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Function body parser: handles local sections followed by begin-end block
     // This is different from statement parsing - functions can have local declarations
     
-    // Temporarily disable local VAR section parsing to isolate the issue
-    combinator_t* local_var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
-        NULL  // Empty parser that always succeeds
-    );
+    // Local VAR section - reuse the existing var_section parser
+    combinator_t* local_var_section = var_section;
     
     // Function body for complete programs: uses the statement parser directly without lazy reference
     combinator_t** direct_stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
@@ -1499,7 +1497,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     init_pascal_statement_parser(direct_stmt_parser);
     
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
-        // optional(local_var_section),                 // temporarily disabled
+        optional(local_var_section),                 // now enabled - functions can have local VAR sections
         *direct_stmt_parser,                         // use statement parser directly (not lazy)
         token(match(";")),                           // terminating semicolon after function body
         NULL
