@@ -1469,79 +1469,16 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Create a specialized function body parser that avoids circular references
     // This parser handles the most common function body patterns without full recursive complexity
     
-    // Boolean literal parsers for function bodies
-    combinator_t* boolean_true = seq(new_combinator(), PASCAL_T_BOOLEAN,
-        match_ci("true"),
-        NULL
-    );
-    combinator_t* boolean_false = seq(new_combinator(), PASCAL_T_BOOLEAN,
-        match_ci("false"),  
-        NULL
-    );
-    
-    // More flexible assignment parser for function bodies
-    combinator_t* func_rhs_expr = multi(new_combinator(), PASCAL_T_NONE,
-        token(integer(PASCAL_T_INTEGER)),      // integers like 0, 1, etc.
-        token(boolean_true),                   // boolean literals
-        token(boolean_false),
-        token(cident(PASCAL_T_IDENTIFIER)),    // identifiers and function calls
-        NULL
-    );
-    
-    combinator_t* func_assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
-        token(cident(PASCAL_T_IDENTIFIER)),    // variable name
-        token(match(":=")),                    // assignment operator
-        func_rhs_expr,                         // more flexible right-hand side
-        NULL
-    );
-    
-    combinator_t* func_expr_stmt = seq(new_combinator(), PASCAL_T_STATEMENT,
-        token(cident(PASCAL_T_IDENTIFIER)),    // simple identifier (function calls, etc)
-        NULL
-    );
-    
-    // Simple statement types for function bodies
-    combinator_t* func_stmt = multi(new_combinator(), PASCAL_T_NONE,
-        func_assignment,                       // assignments
-        func_expr_stmt,                       // expressions/function calls
-        NULL
-    );
-    
-    // Statement list that handles optional trailing semicolons correctly
-    combinator_t* func_stmt_list = multi(new_combinator(), PASCAL_T_NONE,
-        // Single statement with optional semicolon
-        seq(new_combinator(), PASCAL_T_NONE,
-            func_stmt,
-            optional(token(match(";"))),
-            NULL
-        ),
-        // Multiple statements separated by semicolons
-        sep_by(func_stmt, token(match(";"))),
-        // Empty list (handled by optional in the begin-end block)
-        NULL
-    );
-    
-    // Function body BEGIN-END block (specialized, no circular references)
-    combinator_t* func_begin_end = multi(new_combinator(), PASCAL_T_BEGIN_BLOCK,
-        // Empty block
-        seq(new_combinator(), PASCAL_T_NONE,
-            token(match_ci("begin")),
-            token(match_ci("end")),
-            NULL
-        ),
-        // Non-empty block  
-        seq(new_combinator(), PASCAL_T_NONE,
-            token(match_ci("begin")),
-            func_stmt_list,                    // statements with terminating semicolons
-            token(match_ci("end")),
-            NULL
-        ),
-        NULL
-    );
+    // Use the existing statement parser for function bodies
+    // Create a new statement parser specifically for this function to avoid circular references
+    combinator_t** function_stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *function_stmt_parser = new_combinator();
+    (*function_stmt_parser)->extra_to_free = function_stmt_parser;
+    init_pascal_statement_parser(function_stmt_parser);
     
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
-        optional(local_var_section),                 // now enabled - functions can have local VAR sections
-        func_begin_end,                              // specialized function BEGIN-END parser
+        optional(local_var_section),                 // optional local VAR section for functions
+        lazy(function_stmt_parser),                  // dedicated statement parser for this context
         NULL
     );
     
