@@ -645,7 +645,7 @@ static combinator_t* range_operator(tag_t tag) {
     return comb;
 }
 
-// Custom parser for set constructors (e.g., [1, 2, 3], ['a'..'z'])
+// Simplified set constructor parser using existing parse utilities
 static ParseResult set_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
@@ -664,21 +664,23 @@ static ParseResult set_fn(input_t* in, void* args) {
     set_node->next = NULL;
     set_ast_position(set_node, in);
     
-    // Skip whitespace
+    // Skip whitespace manually
     char c;
     while (isspace(c = read1(in)));
     if (c != EOF) in->start--;
     
-    // Handle empty set
+    // Check for empty set
     c = read1(in);
     if (c == ']') {
         return make_success(set_node);
     }
     if (c != EOF) in->start--; // Back up
     
-    // Parse set elements (temporarily create a sub-parser for this)
-    // For now, we'll handle simple cases - this is a complex recursive parse
-    // We'll parse comma-separated expressions until we hit ']'
+    // Parse set elements using expression parser
+    combinator_t* expr_parser = new_combinator();
+    init_pascal_expression_parser(&expr_parser);
+    
+    // Parse comma-separated expressions
     ast_t* first_element = NULL;
     ast_t* current_element = NULL;
     
@@ -687,74 +689,22 @@ static ParseResult set_fn(input_t* in, void* args) {
         while (isspace(c = read1(in)));
         if (c != EOF) in->start--;
         
-        // Try to parse a simple element (number, char, or identifier)
-        InputState elem_state;
-        save_input_state(in, &elem_state);
-        
-        ast_t* element = NULL;
-        
-        // Try character literal first
-        if (in->buffer[in->start] == '\'') {
-            ParseResult char_result = char_fn(in, &(prim_args){PASCAL_T_CHAR});
-            if (char_result.is_success) {
-                element = char_result.value.ast;
-            }
-        }
-        
-        // Try integer
-        if (!element && isdigit(in->buffer[in->start])) {
-            int start_pos = in->start;
-            while (isdigit(c = read1(in)));
-            if (c != EOF) in->start--;
-            
-            int len = in->start - start_pos;
-            char* text = (char*)safe_malloc(len + 1);
-            strncpy(text, in->buffer + start_pos, len);
-            text[len] = '\0';
-            
-            element = new_ast();
-            element->typ = PASCAL_T_INTEGER;
-            element->sym = sym_lookup(text);
-            free(text);
-            element->child = NULL;
-            element->next = NULL;
-            set_ast_position(element, in);
-        }
-        
-        // Try identifier
-        if (!element && (isalpha(in->buffer[in->start]) || in->buffer[in->start] == '_')) {
-            int start_pos = in->start;
-            while (isalnum(c = read1(in)) || c == '_');
-            if (c != EOF) in->start--;
-            
-            int len = in->start - start_pos;
-            char* text = (char*)safe_malloc(len + 1);
-            strncpy(text, in->buffer + start_pos, len);
-            text[len] = '\0';
-            
-            element = new_ast();
-            element->typ = PASCAL_T_IDENTIFIER;
-            element->sym = sym_lookup(text);
-            free(text);
-            element->child = NULL;
-            element->next = NULL;
-            set_ast_position(element, in);
-        }
-        
-        if (!element) {
+        ParseResult elem_result = parse(in, expr_parser);
+        if (!elem_result.is_success) {
             free_ast(set_node);
+            free_combinator(expr_parser);
             restore_input_state(in, &state);
             return make_failure(in, strdup("Expected set element"));
         }
         
         // Add element to set
         if (!first_element) {
-            first_element = element;
-            current_element = element;
-            set_node->child = element;
+            first_element = elem_result.value.ast;
+            current_element = elem_result.value.ast;
+            set_node->child = elem_result.value.ast;
         } else {
-            current_element->next = element;
-            current_element = element;
+            current_element->next = elem_result.value.ast;
+            current_element = elem_result.value.ast;
         }
         
         // Skip whitespace
@@ -769,19 +719,21 @@ static ParseResult set_fn(input_t* in, void* args) {
             continue; // Parse next element
         } else {
             free_ast(set_node);
+            free_combinator(expr_parser);
             restore_input_state(in, &state);
             return make_failure(in, strdup("Expected ',' or ']'"));
         }
     }
     
+    free_combinator(expr_parser);
     return make_success(set_node);
 }
 
-static combinator_t* set_constructor(tag_t tag) {
+static combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
     prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->type = P_SATISFY;
     comb->fn = set_fn;
     comb->args = args;
     return comb;
@@ -1066,7 +1018,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(pascal_string(PASCAL_T_STRING)),    // Strings ("hello" or 'hello')
-        token(set_constructor(PASCAL_T_SET)),     // Set constructors [1, 2, 3]
+        set_constructor(PASCAL_T_SET, NULL),      // Set constructors [1, 2, 3]
         token(boolean_true),                      // Boolean true
         token(boolean_false),                     // Boolean false
         typecast,                                 // Type casts Integer(x) - try before func_call
