@@ -1742,6 +1742,260 @@ void test_pascal_complex_random_program(void) {
     free(input);
 }
 
+void test_pascal_damm_algorithm_program(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program DammAlgorithm;\n"
+                   "uses\n"
+                   "  sysutils;\n"
+                   "\n"
+                   "TYPE TA = ARRAY[0..9,0..9] OF UInt8;\n"
+                   "CONST table : TA =\n"
+                   "                ((0,3,1,7,5,9,8,6,4,2),\n"
+                   "                 (7,0,9,2,1,5,4,8,6,3),\n"
+                   "                 (4,2,0,6,8,7,1,3,5,9),\n"
+                   "                 (1,7,5,0,9,8,3,4,2,6),\n"
+                   "                 (6,1,2,3,0,4,5,9,7,8),\n"
+                   "                 (3,6,7,4,2,0,9,5,8,1),\n"
+                   "                 (5,8,6,9,7,2,0,1,3,4),\n"
+                   "                 (8,9,4,5,3,6,2,0,1,7),\n"
+                   "                 (9,4,3,8,6,1,7,2,0,5),\n"
+                   "                 (2,5,8,1,4,3,6,7,9,0));\n"
+                   "\n"
+                   "function Damm(s : string) : BOOLEAN;\n"
+                   "VAR\n"
+                   "  interim,i : UInt8;\n"
+                   "BEGIN\n"
+                   "  interim := 0;\n"
+                   "  i := 1;\n"
+                   "  WHILE i <= length(s) DO\n"
+                   "  Begin\n"
+                   "    interim := table[interim,ORD(s[i])-ORD('0')];\n"
+                   "    INC(i);\n"
+                   "  END;\n"
+                   "  Damm := interim=0;\n"
+                   "END;\n"
+                   "\n"
+                   "PROCEDURE Print(number : Uint32);\n"
+                   "VAR\n"
+                   "    isValid : BOOLEAN;\n"
+                   "    buf :string;\n"
+                   "BEGIN\n"
+                   "    buf := IntToStr(number);\n"
+                   "    isValid := Damm(buf);\n"
+                   "    Write(buf);\n"
+                   "    IF isValid THEN\n"
+                   "      Write(' is valid')\n"
+                   "    ELSE\n"
+                   "      Write(' is invalid');\n"
+                   "    WriteLn;\n"
+                   "END;\n"
+                   "\n"
+                   "BEGIN\n"
+                   "    Print(5724);\n"
+                   "    Print(5727);\n"
+                   "    Print(112946);\n"
+                   "    Print(112949);\n"
+                   "    Readln;\n"
+                   "END.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("DammAlgorithm Parse failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST available:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    }
+
+    // This test will likely fail due to missing features like:
+    // - uses clause
+    // - 2D array type declarations
+    // - multi-dimensional array constant initialization
+    // - while loops  
+    // - array indexing syntax
+    // - various built-in functions (length, ORD, INC, IntToStr)
+    TEST_CHECK(res.is_success); // Use CHECK so other tests can run
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_sample_class_program(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program SampleClass;\n"
+                   "\n"
+                   "{$APPTYPE CONSOLE}\n"
+                   "\n"
+                   "type\n"
+                   "  TMyClass = class\n"
+                   "  private\n"
+                   "    FSomeField: Integer; // by convention, fields are usually private and exposed as properties\n"
+                   "  public\n"
+                   "    constructor Create;\n"
+                   "    destructor Destroy; override;\n"
+                   "    procedure SomeMethod;\n"
+                   "    property SomeField: Integer read FSomeField write FSomeField;\n"
+                   "  end;\n"
+                   "\n"
+                   "constructor TMyClass.Create;\n"
+                   "begin\n"
+                   "  FSomeField := -1\n"
+                   "end;\n"
+                   "\n"
+                   "destructor TMyClass.Destroy;\n"
+                   "begin\n"
+                   "  // free resources, etc\n"
+                   "\n"
+                   "  inherited Destroy;\n"
+                   "end;\n"
+                   "\n"
+                   "procedure TMyClass.SomeMethod;\n"
+                   "begin\n"
+                   "  // do something\n"
+                   "end;\n"
+                   "\n"
+                   "\n"
+                   "var\n"
+                   "  lMyClass: TMyClass;\n"
+                   "begin\n"
+                   "  lMyClass := TMyClass.Create;\n"
+                   "  try\n"
+                   "    lMyClass.SomeField := 99;\n"
+                   "    lMyClass.SomeMethod();\n"
+                   "  finally\n"
+                   "    lMyClass.Free;\n"
+                   "  end;\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("SampleClass Parse failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST available:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    }
+
+    // This test will likely fail due to missing features like:
+    // - class definitions (type class end)
+    // - private/public sections
+    // - constructor/destructor declarations
+    // - property declarations
+    // - override keyword
+    // - inherited keyword
+    // - try/finally blocks
+    // - C++-style comments (//)
+    // - method implementations with dot notation
+    TEST_CHECK(res.is_success); // Use CHECK so other tests can run
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_anonymous_recursion_program(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program AnonymousRecursion;\n"
+                   "\n"
+                   "{$APPTYPE CONSOLE}\n"
+                   "\n"
+                   "uses\n"
+                   "  SysUtils;\n"
+                   "\n"
+                   "function Fib(X: Integer): integer;\n"
+                   "\n"
+                   "\tfunction DoFib(N: Integer): Integer;\n"
+                   "\tbegin\n"
+                   "\tif N < 2 then Result:=N\n"
+                   "\telse Result:=DoFib(N-1) + DoFib(N-2);\n"
+                   "\tend;\n"
+                   "\n"
+                   "begin\n"
+                   "if X < 0 then raise Exception.Create('Argument < 0')\n"
+                   "else Result:=DoFib(X);\n"
+                   "end;\n"
+                   "\n"
+                   "\n"
+                   "var I: integer;\n"
+                   "\n"
+                   "begin\n"
+                   "for I:=-1 to 15 do\n"
+                   "\tbegin\n"
+                   "\ttry\n"
+                   "\tWriteLn(I:3,' - ',Fib(I):3);\n"
+                   "\texcept WriteLn(I,' - Error'); end;\n"
+                   "\tend;\n"
+                   "WriteLn('Hit Any Key');\n"
+                   "ReadLn;\n"
+                   "end.\n";
+                   
+    input->buffer = strdup(program);
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("AnonymousRecursion Parse failed at line %d, col %d: %s\n", 
+               res.value.error->line, res.value.error->col, res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST available:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+    }
+
+    // This test will likely fail due to missing features like:
+    // - uses clause
+    // - nested function definitions inside functions
+    // - Result special variable
+    // - raise statements with exception handling
+    // - try/except blocks
+    // - formatted output (WriteLn with :3 formatting)
+    // - tabs in source code
+    TEST_CHECK(res.is_success); // Use CHECK so other tests can run
+    
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1803,5 +2057,9 @@ TEST_LIST = {
     { "test_pascal_multiple_variables", test_pascal_multiple_variables },
     { "test_pascal_type_section", test_pascal_type_section },
     { "test_pascal_complex_random_program", test_pascal_complex_random_program },
+    // New advanced Pascal program tests
+    { "test_pascal_damm_algorithm_program", test_pascal_damm_algorithm_program },
+    { "test_pascal_sample_class_program", test_pascal_sample_class_program },
+    { "test_pascal_anonymous_recursion_program", test_pascal_anonymous_recursion_program },
     { NULL, NULL }
 };
