@@ -4316,6 +4316,178 @@ void test_pascal_damm_root_cause_analysis(void) {
     // optional sections properly or in the uses/type/const section parsers
 }
 
+// === NEW FOCUSED UNIT TESTS FOR ANALYZING CURRENT FAILURES ===
+void test_pascal_class_keyword_simple(void) {
+    printf("=== CLASS KEYWORD SIMPLE TEST ===\n");
+    
+    combinator_t* expr_parser = new_combinator();
+    init_pascal_expression_parser(&expr_parser);
+    
+    input_t* input = new_input();
+    input->buffer = strdup("TMyClass = class end");
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, expr_parser);
+    if (res.is_success) {
+        printf("Class keyword unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Class keyword failed (expected): %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    // This should fail - we don't support class definitions yet
+    TEST_CHECK(!res.is_success); 
+    
+    free_combinator(expr_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_nested_function_simple(void) {
+    printf("=== NESTED FUNCTION SIMPLE TEST ===\n");
+    
+    combinator_t* func_parser = new_combinator();
+    init_pascal_procedure_parser(&func_parser);
+    
+    input_t* input = new_input();
+    // Simplified nested function - just the structure
+    input->buffer = strdup("function Outer: integer; function Inner: integer; begin end; begin end");
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, func_parser);
+    if (res.is_success) {
+        printf("Nested function unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Nested function failed (expected): %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    // This should fail - we don't support nested functions yet
+    TEST_CHECK(!res.is_success);
+    
+    free_combinator(func_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_try_finally_simple(void) {
+    printf("=== TRY-FINALLY SIMPLE TEST ===\n");
+    
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+    
+    input_t* input = new_input();
+    input->buffer = strdup("try x := 1 finally x := 2 end");
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, stmt_parser);
+    if (res.is_success) {
+        printf("Try-finally unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Try-finally failed (expected): %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    // This should fail - we don't support exception handling yet
+    TEST_CHECK(!res.is_success);
+    
+    free_combinator(stmt_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_compiler_directive_simple(void) {
+    printf("=== COMPILER DIRECTIVE SIMPLE TEST ===\n");
+    
+    combinator_t* program_parser = new_combinator();
+    init_pascal_complete_program_parser(&program_parser);
+    
+    input_t* input = new_input();
+    input->buffer = strdup("program Test; {$APPTYPE CONSOLE} begin end.");
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, program_parser);
+    if (res.is_success) {
+        printf("Compiler directive succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Compiler directive failed: %s\n", res.value.error->message);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST:\n");
+            print_pascal_ast(res.value.error->partial_ast);
+        }
+        free_error(res.value.error);
+    }
+    
+    // This might succeed or fail depending on current directive support
+    free_combinator(program_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_raise_exception_simple(void) {
+    printf("=== RAISE EXCEPTION SIMPLE TEST ===\n");
+    
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+    
+    input_t* input = new_input();
+    input->buffer = strdup("raise Exception.Create('Error message')");
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, stmt_parser);
+    if (res.is_success) {
+        printf("Raise exception unexpectedly succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Raise exception failed (expected): %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    // This should fail - we don't support raise statements yet
+    TEST_CHECK(!res.is_success);
+    
+    free_combinator(stmt_parser);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_result_assignment_simple(void) {
+    printf("=== RESULT ASSIGNMENT SIMPLE TEST ===\n");
+    
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+    
+    input_t* input = new_input();
+    input->buffer = strdup("Result := 42");
+    input->length = strlen(input->buffer);
+    
+    ParseResult res = parse(input, stmt_parser);
+    if (res.is_success) {
+        printf("Result assignment succeeded!\n");
+        print_pascal_ast(res.value.ast);
+        free_ast(res.value.ast);
+    } else {
+        printf("Result assignment failed: %s\n", res.value.error->message);
+        free_error(res.value.error);
+    }
+    
+    // Result is just an identifier, this should work
+    TEST_CHECK(res.is_success);
+    
+    free_combinator(stmt_parser);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -4434,5 +4606,12 @@ TEST_LIST = {
     // === REQUESTED UNIT TESTS ===
     { "test_pascal_assignment_statement_unit", test_pascal_assignment_statement_unit },
     { "test_pascal_damm_root_cause_analysis", test_pascal_damm_root_cause_analysis },
+    // === NEW FOCUSED UNIT TESTS FOR ANALYZING CURRENT FAILURES ===
+    { "test_pascal_class_keyword_simple", test_pascal_class_keyword_simple },
+    { "test_pascal_nested_function_simple", test_pascal_nested_function_simple },
+    { "test_pascal_try_finally_simple", test_pascal_try_finally_simple },
+    { "test_pascal_compiler_directive_simple", test_pascal_compiler_directive_simple },
+    { "test_pascal_raise_exception_simple", test_pascal_raise_exception_simple },
+    { "test_pascal_result_assignment_simple", test_pascal_result_assignment_simple },
     { NULL, NULL }
 };
