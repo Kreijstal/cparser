@@ -1487,17 +1487,20 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     // Function body parser: handles local sections followed by begin-end block
     // This is different from statement parsing - functions can have local declarations
     
-    // Local variable declaration for functions - reuse the main program's variable declaration format
+    // Temporarily disable local VAR section parsing to isolate the issue
     combinator_t* local_var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
-        token(match_ci("var")),                      // var keyword (case-insensitive for VAR/var)
-        many(var_decl),                              // multiple variable declarations (same format as main program)
-        NULL
+        NULL  // Empty parser that always succeeds
     );
     
-    // Function body for complete programs: includes terminating semicolon
+    // Function body for complete programs: uses the statement parser directly without lazy reference
+    combinator_t** direct_stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *direct_stmt_parser = new_combinator();
+    (*direct_stmt_parser)->extra_to_free = direct_stmt_parser;
+    init_pascal_statement_parser(direct_stmt_parser);
+    
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
-        optional(local_var_section),                 // optional local var section
-        lazy(stmt_parser),                           // begin-end block handled by statement parser
+        // optional(local_var_section),                 // temporarily disabled
+        *direct_stmt_parser,                         // use statement parser directly (not lazy)
         token(match(";")),                           // terminating semicolon after function body
         NULL
     );
