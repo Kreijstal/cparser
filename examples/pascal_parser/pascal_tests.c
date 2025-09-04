@@ -2627,7 +2627,7 @@ void test_pascal_field_access_dot(void) {
     init_pascal_expression_parser(&p);
 
     input_t* input = new_input();
-    input->buffer = strdup("record.field");  
+    input->buffer = strdup("obj.field");  // Changed from "record.field" since "record" is reserved
     input->length = strlen(input->buffer);
 
     ParseResult res = parse(input, p);
@@ -2664,7 +2664,7 @@ void test_pascal_method_call_dot(void) {
     init_pascal_expression_parser(&p);
 
     input_t* input = new_input();
-    input->buffer = strdup("object.method(arg)");  
+    input->buffer = strdup("obj.method(arg)");  // Changed from "object.method" since "object" is reserved
     input->length = strlen(input->buffer);
 
     ParseResult res = parse(input, p);
