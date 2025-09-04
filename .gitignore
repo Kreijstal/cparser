@@ -15,6 +15,7 @@ Testing/
 /calc_tests
 /pascal_tests
 /pascal_parser_cli
+./test_strings
 build/
 
 # Compiled binaries

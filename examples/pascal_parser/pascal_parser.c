@@ -971,7 +971,7 @@ static combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
 // Removed unused relational_ops() function that had non-boundary-aware match("in")
 
 // Pascal single-quoted string content parser using combinators - handles '' escaping
-static ParseResult pascal_single_quoted_content_combinator_fn(input_t* in, void* args) {
+static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     int start_offset = in->start;
     
@@ -1037,7 +1037,7 @@ combinator_t* pascal_single_quoted_content(tag_t tag) {
     args->tag = tag;
     combinator_t* comb = new_combinator();
     comb->type = P_SATISFY; // Reuse existing type for custom parser
-    comb->fn = pascal_single_quoted_content_combinator_fn;
+    comb->fn = pascal_single_quoted_content_fn;
     comb->args = args;
     return comb;
 }
