@@ -1399,32 +1399,32 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
     
-    // Try-finally block: try statements finally statements end
-    combinator_t* try_finally = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
-        token(keyword_ci("try")),              // try keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
-        token(keyword_ci("finally")),          // finally keyword (case-insensitive) 
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in finally block
-        token(keyword_ci("end")),              // end keyword (case-insensitive)
-        NULL
-    );
+    // Try-finally block: try statements finally statements end (DISABLED - not supported yet)
+    // combinator_t* try_finally = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
+    //     token(keyword_ci("try")),              // try keyword (case-insensitive)
+    //     sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+    //     token(keyword_ci("finally")),          // finally keyword (case-insensitive) 
+    //     sep_by(lazy(stmt_parser), token(match(";"))), // statements in finally block
+    //     token(keyword_ci("end")),              // end keyword (case-insensitive)
+    //     NULL
+    // );
     
-    // Try-except block: try statements except statements end
-    combinator_t* try_except = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
-        token(keyword_ci("try")),              // try keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
-        token(keyword_ci("except")),           // except keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in except block
-        token(keyword_ci("end")),              // end keyword (case-insensitive)
-        NULL
-    );
+    // Try-except block: try statements except statements end (DISABLED - not supported yet)
+    // combinator_t* try_except = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
+    //     token(keyword_ci("try")),              // try keyword (case-insensitive)
+    //     sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+    //     token(keyword_ci("except")),           // except keyword (case-insensitive)
+    //     sep_by(lazy(stmt_parser), token(match(";"))), // statements in except block
+    //     token(keyword_ci("end")),              // end keyword (case-insensitive)
+    //     NULL
+    // );
     
-    // Raise statement: raise [expression]
-    combinator_t* raise_stmt = seq(new_combinator(), PASCAL_T_RAISE_STMT,
-        token(keyword_ci("raise")),            // raise keyword (case-insensitive)
-        optional(lazy(expr_parser)),           // optional exception expression
-        NULL
-    );
+    // Raise statement: raise [expression] (DISABLED - not supported yet)
+    // combinator_t* raise_stmt = seq(new_combinator(), PASCAL_T_RAISE_STMT,
+    //     token(keyword_ci("raise")),            // raise keyword (case-insensitive)
+    //     optional(lazy(expr_parser)),           // optional exception expression
+    //     NULL
+    // );
     
     // Inherited statement: inherited [method_call]
     combinator_t* inherited_stmt = seq(new_combinator(), PASCAL_T_INHERITED_STMT,
@@ -1437,9 +1437,9 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Note: VAR sections are handled by the complete program parser context
     multi(*stmt_parser, PASCAL_T_NONE,
         begin_end_block,                      // compound statements (must come before expr_stmt)
-        try_finally,                          // try-finally blocks
-        try_except,                           // try-except blocks
-        raise_stmt,                           // raise statements
+        // try_finally,                          // try-finally blocks (DISABLED)
+        // try_except,                           // try-except blocks (DISABLED)
+        // raise_stmt,                           // raise statements (DISABLED)
         inherited_stmt,                       // inherited statements
         asm_stmt,                             // inline assembly blocks
         if_stmt,                              // if statements

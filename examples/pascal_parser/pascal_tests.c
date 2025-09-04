@@ -263,8 +263,8 @@ void test_pascal_complex_expression(void) {
     init_pascal_expression_parser(&p);
 
     input_t* input = new_input();
-    input->buffer = strdup("procedure((5*7)-5)+\"test\"");
-    input->length = strlen("procedure((5*7)-5)+\"test\"");
+    input->buffer = strdup("testfunc((5*7)-5)+\"test\"");
+    input->length = strlen("testfunc((5*7)-5)+\"test\"");
 
     ParseResult res = parse(input, p);
 
@@ -288,7 +288,7 @@ void test_pascal_complex_expression(void) {
     
     TEST_ASSERT(actual_name_node->sym && 
                actual_name_node->sym->name && 
-               strcmp(actual_name_node->sym->name, "procedure") == 0);
+               strcmp(actual_name_node->sym->name, "testfunc") == 0);
     
     // Function argument: (5*7)-5
     ast_t* arg = func_name->next;
