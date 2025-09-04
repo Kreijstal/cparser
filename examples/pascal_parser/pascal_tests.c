@@ -2928,7 +2928,7 @@ void test_pascal_dot_operator(void) {
     free(input);
 }
 
-// Test invalid array indexing syntax
+// Test invalid array indexing syntax - should fail completely, not partially succeed
 void test_pascal_invalid_array_syntax(void) {
     combinator_t* p = new_combinator();
     init_pascal_expression_parser(&p);
@@ -2947,11 +2947,25 @@ void test_pascal_invalid_array_syntax(void) {
             print_pascal_ast(res.value.error->partial_ast);
         }
     } else {
-        printf("Invalid array syntax unexpectedly succeeded:\n");
+        printf("Parse result: consumed %d/%d characters\n", input->start, input->length);
+        printf("AST result:\n");
         print_pascal_ast(res.value.ast);
+        
+        // Check if all input was consumed - if not, this should be considered a failure
+        if (input->start < input->length) {
+            printf("ERROR: Parser only consumed partial input - this should fail!\n");
+            printf("Remaining input: '");
+            for (int i = input->start; i < input->length; i++) {
+                printf("%c", input->buffer[i]);
+            }
+            printf("'\n");
+        }
     }
 
-    TEST_CHECK(res.is_success);  // Parser now accepts partial parsing (just "arr")
+    // The test should expect failure because arr[i,] with trailing comma is invalid Pascal
+    // If it succeeds but doesn't consume all input, that's also a failure
+    bool should_succeed = res.is_success && (input->start == input->length);
+    TEST_CHECK(!should_succeed);  // This should fail - trailing comma is invalid
     
     if (res.is_success) {
         free_ast(res.value.ast);

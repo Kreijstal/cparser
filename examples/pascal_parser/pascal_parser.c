@@ -203,6 +203,8 @@ combinator_t* pascal_identifier(tag_t tag) {
 // Keywords that can be used as function names in expressions
 static const char* expression_allowed_keywords[] = {
     "procedure", "function", "program", "unit",
+    "record", "array", "set", "packed",  // type keywords that can be variable names
+    "object", "class",                   // OOP keywords that can be variable names
     NULL
 };
 
@@ -1207,8 +1209,8 @@ static void post_process_set_operations(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    // Pascal identifier parser - excludes reserved keywords like BEGIN, END, etc.
-    combinator_t* identifier = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    // Pascal identifier parser - use expression identifier that allows some keywords in expression contexts
+    combinator_t* identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
     
     // Function name: use expression identifier parser that allows certain keywords as function names
     combinator_t* func_name = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
@@ -1375,11 +1377,11 @@ void init_pascal_statement_parser(combinator_t** p) {
     combinator_t** stmt_parser = p;
     
     // Left-value parser: accepts identifiers and member access expressions  
-    combinator_t* simple_identifier = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    combinator_t* simple_identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
     combinator_t* member_access_lval = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
-        token(pascal_identifier(PASCAL_T_IDENTIFIER)),     // object name
-        token(match(".")),                                 // dot
-        token(pascal_identifier(PASCAL_T_IDENTIFIER)),     // field/property name
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // object name
+        token(match(".")),                                            // dot
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // field/property name
         NULL
     );
     combinator_t* lvalue = multi(new_combinator(), PASCAL_T_NONE,
@@ -1485,11 +1487,20 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Try-finally block: try statements finally statements end
+    // Use more lenient statement parsing that doesn't require semicolons
     combinator_t* try_finally = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
         token(keyword_ci("try")),              // try keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in try block
         token(keyword_ci("finally")),          // finally keyword (case-insensitive) 
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in finally block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in finally block
         token(keyword_ci("end")),              // end keyword (case-insensitive)
         NULL
     );
@@ -1497,9 +1508,17 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Try-except block: try statements except statements end
     combinator_t* try_except = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
         token(keyword_ci("try")),              // try keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in try block
         token(keyword_ci("except")),           // except keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in except block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in except block
         token(keyword_ci("end")),              // end keyword (case-insensitive)
         NULL
     );
