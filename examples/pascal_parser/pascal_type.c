@@ -185,26 +185,22 @@ combinator_t* array_type(tag_t tag) {
     return comb;
 }
 
-// Enhanced class type parser: class [access_sections] end
-static ParseResult class_type_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
-    InputState state;
-    save_input_state(in, &state);
+static ast_t* build_class_ast(ast_t* ast) {
+    // ast is the result of the seq.
+    // children are: class_keyword, class_body, end_keyword
+    ast_t* class_body = ast->child->next;
 
-    // Parse "class" keyword (case insensitive)
-    combinator_t* class_keyword = token(keyword_ci("class"));
-    ParseResult class_res = parse(in, class_keyword);
-    if (!class_res.is_success) {
-        free_combinator(class_keyword);
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected 'class'"));
-    }
-    free_ast(class_res.value.ast);
-    free_combinator(class_keyword);
+    ast_t* class_node = new_ast();
+    class_node->typ = ast->typ;
+    class_node->child = copy_ast(class_body);
+    class_node->line = ast->line;
+    class_node->col = ast->col;
 
-    // Build class body parser
-    ast_t* class_body = NULL;
+    free_ast(ast);
+    return class_node;
+}
 
+combinator_t* class_type(tag_t tag) {
     // Field declaration: field_name: Type;
     combinator_t* field_name = token(cident(PASCAL_T_IDENTIFIER));
     combinator_t* field_type = token(cident(PASCAL_T_IDENTIFIER)); // simplified type for now
@@ -332,111 +328,26 @@ static ParseResult class_type_fn(input_t* in, void* args) {
         NULL
     ));
 
-    // Parse class body
-    ParseResult body_res = parse(in, class_body_parser);
-    if (body_res.is_success) {
-        class_body = body_res.value.ast;
-    } else {
-        // Class body parsing failed, but this might be acceptable for empty class
-        class_body = NULL;
-        free_error(body_res.value.error);
-    }
-    free_combinator(class_body_parser);
+    combinator_t* class_parser = seq(new_combinator(), tag,
+        token(keyword_ci("class")),
+        class_body_parser,
+        token(keyword_ci("end")),
+        NULL
+    );
 
-    // Parse "end" keyword
-    combinator_t* end_keyword = token(keyword_ci("end"));
-    ParseResult end_res = parse(in, end_keyword);
-    if (!end_res.is_success) {
-        if (class_body) free_ast(class_body);
-        free_combinator(end_keyword);
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected 'end' after class"));
-    }
-    free_ast(end_res.value.ast);
-    free_combinator(end_keyword);
-
-    // Build final class AST
-    ast_t* class_ast = new_ast();
-    class_ast->typ = pargs->tag;
-    class_ast->sym = NULL;
-    class_ast->child = class_body; // Include parsed class body
-    class_ast->next = NULL;
-
-    set_ast_position(class_ast, in);
-    return make_success(class_ast);
-}
-
-combinator_t* class_type(tag_t tag) {
-    combinator_t* comb = new_combinator();
-    prim_args* args = safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    comb->args = args;
-    comb->fn = class_type_fn;
-    return comb;
-}
-
-static ParseResult type_name_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
-    InputState state;
-    save_input_state(in, &state);
-
-    const char* type_names[] = {
-        "integer", "real", "boolean", "char", "string",
-        "byte", "word", "longint", NULL
-    };
-
-    for (int i = 0; type_names[i] != NULL; i++) {
-        save_input_state(in, &state);
-        int len = strlen(type_names[i]);
-        bool matches = true;
-
-        for (int j = 0; j < len; j++) {
-            char c = read1(in);
-            if (tolower(c) != type_names[i][j]) {
-                matches = false;
-                break;
-            }
-        }
-
-        if (matches) {
-            // Check that next character is not alphanumeric (word boundary)
-            char next_char = read1(in);
-            if (next_char != EOF && (isalnum(next_char) || next_char == '_')) {
-                matches = false;
-            } else {
-                if (next_char != EOF) in->start--; // Back up if not EOF
-            }
-        }
-
-        if (matches) {
-            // Create symbol with the actual matched text (preserving original case)
-            restore_input_state(in, &state);
-            char* matched_text = malloc(len + 1);
-            for (int j = 0; j < len; j++) {
-                matched_text[j] = read1(in);
-            }
-            matched_text[len] = '\0';
-
-            ast_t* ast = new_ast();
-            ast->typ = pargs->tag;
-            ast->sym = sym_lookup(matched_text);
-            ast->child = NULL;
-            ast->next = NULL;
-            free(matched_text);
-            set_ast_position(ast, in);
-            return make_success(ast);
-        }
-    }
-
-    restore_input_state(in, &state);
-    return make_failure(in, strdup("Expected built-in type name"));
+    return map(class_parser, build_class_ast);
 }
 
 combinator_t* type_name(tag_t tag) {
-    combinator_t* comb = new_combinator();
-    prim_args* args = safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    comb->args = args;
-    comb->fn = type_name_fn;
-    return comb;
+    return multi(new_combinator(), PASCAL_T_NONE,
+        token(create_keyword_parser("integer", tag)),
+        token(create_keyword_parser("real", tag)),
+        token(create_keyword_parser("boolean", tag)),
+        token(create_keyword_parser("char", tag)),
+        token(create_keyword_parser("string", tag)),
+        token(create_keyword_parser("byte", tag)),
+        token(create_keyword_parser("word", tag)),
+        token(create_keyword_parser("longint", tag)),
+        NULL
+    );
 }

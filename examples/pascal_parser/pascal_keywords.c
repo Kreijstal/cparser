@@ -1,4 +1,5 @@
 #include "pascal_keywords.h"
+#include "pascal_parser.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -67,5 +68,78 @@ combinator_t* keyword_ci(char* str) {
     comb->type = P_CI_KEYWORD;
     comb->fn = keyword_ci_fn;
     comb->args = args;
+    return comb;
+}
+
+// New argument struct for the custom parser function
+typedef struct {
+    const char* keyword;
+    tag_t tag;
+} keyword_parser_args;
+
+// Custom parser function
+static ParseResult match_keyword_fn(input_t* in, void* args) {
+    keyword_parser_args* k_args = (keyword_parser_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+
+    int len = strlen(k_args->keyword);
+    bool matches = true;
+
+    // Case-insensitive match
+    for (int j = 0; j < len; j++) {
+        char c = read1(in);
+        if (tolower(c) != k_args->keyword[j]) { // Assuming keyword is all lowercase
+            matches = false;
+            break;
+        }
+    }
+
+    if (matches) {
+        // Word boundary check
+        char next_char = read1(in);
+        if (next_char != EOF && (isalnum(next_char) || next_char == '_')) {
+            matches = false;
+        } else {
+            if (next_char != EOF) in->start--;
+        }
+    }
+
+    if (matches) {
+        // On success, create AST node
+        restore_input_state(in, &state);
+        char* matched_text = malloc(len + 1);
+        for (int j = 0; j < len; j++) {
+            matched_text[j] = read1(in);
+        }
+        matched_text[len] = '\0';
+
+        ast_t* ast = new_ast();
+        ast->typ = k_args->tag;
+        ast->sym = sym_lookup(matched_text);
+        ast->child = NULL;
+        ast->next = NULL;
+        free(matched_text);
+        set_ast_position(ast, in);
+        return make_success(ast);
+    }
+
+    // On failure, restore state and return failure
+    restore_input_state(in, &state);
+    char* err_msg;
+    asprintf(&err_msg, "Expected keyword '%s'", k_args->keyword);
+    return make_failure(in, err_msg);
+}
+
+// Combinator constructor
+combinator_t* create_keyword_parser(const char* keyword_str, tag_t tag) {
+    combinator_t* comb = new_combinator();
+    keyword_parser_args* args = (keyword_parser_args*)safe_malloc(sizeof(keyword_parser_args));
+    args->keyword = keyword_str;
+    args->tag = tag;
+
+    comb->fn = match_keyword_fn;
+    comb->args = args;
+    // No specific type, it's a custom function
     return comb;
 }
