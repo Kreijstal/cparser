@@ -301,86 +301,41 @@ combinator_t* range_operator(tag_t tag) {
     return comb;
 }
 
-// Simplified set constructor parser using existing parse utilities
-static ParseResult set_fn(input_t* in, void* args) {
+// Simplified set constructor parser using combinators
+static ParseResult set_constructor_fn(input_t* in, void* args) {
     set_args* sargs = (set_args*)args;
-    InputState state;
-    save_input_state(in, &state);
+    tag_t tag = sargs->tag;
+    combinator_t** expr_parser = sargs->expr_parser;
 
-    // Must start with '['
-    if (read1(in) != '[') {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '['"));
+    // A set is a comma-separated list of expressions between square brackets
+    combinator_t* lbracket = token(match("["));
+    combinator_t* rbracket = token(match("]"));
+    combinator_t* comma = token(match(","));
+    combinator_t* set_elements = sep_by(lazy(expr_parser), comma);
+
+    // Use `between` to handle the brackets and get the optional elements
+    combinator_t* set_parser = between(lbracket, rbracket, optional(set_elements));
+
+    // Parse the input
+    ParseResult res = parse(in, set_parser);
+
+    // Clean up the combinators
+    free_combinator(set_parser);
+
+    if (!res.is_success) {
+        return res;
     }
 
+    // If successful, wrap the resulting list of elements in a PASCAL_T_SET node
     ast_t* set_node = new_ast();
-    set_node->typ = sargs->tag;
-    set_node->sym = NULL;
-    set_node->child = NULL;
-    set_node->next = NULL;
+    set_node->typ = tag;
+    if (res.value.ast == ast_nil) {
+        set_node->child = NULL;
+    } else {
+        set_node->child = res.value.ast;
+    }
     set_ast_position(set_node, in);
 
-    // Skip whitespace manually
-    char c;
-    while (isspace(c = read1(in)));
-    if (c != EOF) in->start--;
-
-    // Check for empty set
-    c = read1(in);
-    if (c == ']') {
-        return make_success(set_node);
-    }
-    if (c != EOF) in->start--; // Back up
-
-    // Parse set elements using the provided expression parser
-    combinator_t* expr_parser = lazy(sargs->expr_parser);
-
-    // Parse comma-separated expressions
-    ast_t* first_element = NULL;
-    ast_t* current_element = NULL;
-
-    while (true) {
-        // Skip whitespace
-        while (isspace(c = read1(in)));
-        if (c != EOF) in->start--;
-
-        ParseResult elem_result = parse(in, expr_parser);
-        if (!elem_result.is_success) {
-            free_ast(set_node);
-            free_combinator(expr_parser);
-            restore_input_state(in, &state);
-            return make_failure(in, strdup("Expected set element"));
-        }
-
-        // Add element to set
-        if (!first_element) {
-            first_element = elem_result.value.ast;
-            current_element = elem_result.value.ast;
-            set_node->child = elem_result.value.ast;
-        } else {
-            current_element->next = elem_result.value.ast;
-            current_element = elem_result.value.ast;
-        }
-
-        // Skip whitespace
-        while (isspace(c = read1(in)));
-        if (c != EOF) in->start--;
-
-        // Check for comma or closing bracket
-        c = read1(in);
-        if (c == ']') {
-            break;
-        } else if (c == ',') {
-            continue; // Parse next element
-        } else {
-            free_ast(set_node);
-            free_combinator(expr_parser);
-            restore_input_state(in, &state);
-            return make_failure(in, strdup("Expected ',' or ']'"));
-        }
-    }
-
-    free_combinator(expr_parser);
     return make_success(set_node);
 }
 
@@ -388,10 +343,12 @@ combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
     set_args* args = (set_args*)safe_malloc(sizeof(set_args));
     args->tag = tag;
     args->expr_parser = expr_parser;
+
     combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY;
-    comb->fn = set_fn;
+    comb->type = P_SATISFY; // Re-use a primitive type for our custom function
+    comb->fn = set_constructor_fn;
     comb->args = args;
+
     return comb;
 }
 
@@ -720,11 +677,6 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
     expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
 
-    // Multi-character operators (added last = tried first in expr parser)
-    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));
-    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
-    expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
-
     // Precedence 4: Range operator (..)
     expr_insert(*p, 4, PASCAL_T_RANGE, EXPR_INFIX, ASSOC_LEFT, token(match("..")));
 
@@ -758,9 +710,6 @@ void init_pascal_expression_parser(combinator_t** p) {
     );
     expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(member_access_op));
 
-    // Range operator (..) - SECOND insertion to override member access priority
-    // (Multi-character operators added last = tried first in expr parser)
-    expr_altern(*p, 4, PASCAL_T_RANGE, token(match("..")));
 }
 
 // --- Utility Functions ---
