@@ -2269,29 +2269,16 @@ void test_pascal_2d_array_indexing(void) {
 
     ParseResult res = parse(input, p);
 
-    // This test is expected to fail with current parser
+    // 2D array indexing should now work
     printf("=== 2D ARRAY INDEXING TEST ===\n");
-    if (!res.is_success) {
-        printf("2D array indexing failed (expected): %s\n", res.value.error->message);
-        if (res.value.error->partial_ast) {
-            printf("Partial AST:\n");
-            print_pascal_ast(res.value.error->partial_ast);
-        }
-    } else {
-        printf("2D array indexing unexpectedly succeeded!\n");
-        print_pascal_ast(res.value.ast);
-    }
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_ARRAY_ACCESS);
 
-    // For now, we expect this to fail, so use CHECK instead of ASSERT
-    TEST_CHECK(!res.is_success || 
-               (res.value.ast && res.value.ast->typ == PASCAL_T_ARRAY_ACCESS));
+    printf("2D array indexing succeeded!\n");
+    print_pascal_ast(res.value.ast);
     
-    if (res.is_success) {
-        free_ast(res.value.ast);
-    } else {
-        free_error(res.value.error);
-    }
-    
+    free_ast(res.value.ast);
     free_combinator(p);
     free(input->buffer);
     free(input);
@@ -2308,28 +2295,20 @@ void test_pascal_2d_array_type(void) {
     ParseResult res = parse(input, p);
 
     printf("=== 2D ARRAY TYPE TEST ===\n");
-    if (!res.is_success) {
-        printf("2D array type failed (expected): %s\n", res.value.error->message);
-    } else {
-        printf("2D array type unexpectedly succeeded!\n");
-        print_pascal_ast(res.value.ast);
-    }
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_ARRAY_TYPE);
 
-    TEST_CHECK(!res.is_success || 
-               (res.value.ast && res.value.ast->typ == PASCAL_T_ARRAY_TYPE));
+    printf("2D array type succeeded!\n");
+    print_pascal_ast(res.value.ast);
     
-    if (res.is_success) {
-        free_ast(res.value.ast);
-    } else {
-        free_error(res.value.error);
-    }
-    
+    free_ast(res.value.ast);
     free_combinator(p);
     free(input->buffer);
     free(input);
 }
 
-// Test class definition with fields (empty classes work, but not with fields)
+// Test class definition with fields (empty classes work, and now fields work too)
 void test_pascal_class_with_fields(void) {
     combinator_t* p = class_type(PASCAL_T_CLASS_TYPE);
 
@@ -2340,22 +2319,14 @@ void test_pascal_class_with_fields(void) {
     ParseResult res = parse(input, p);
 
     printf("=== CLASS WITH FIELDS TEST ===\n");
-    if (!res.is_success) {
-        printf("Class with fields failed (expected): %s\n", res.value.error->message);
-    } else {
-        printf("Class with fields unexpectedly succeeded!\n");
-        print_pascal_ast(res.value.ast);
-    }
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_CLASS_TYPE);
 
-    TEST_CHECK(!res.is_success || 
-               (res.value.ast && res.value.ast->typ == PASCAL_T_CLASS_TYPE));
+    printf("Class with fields succeeded!\n");
+    print_pascal_ast(res.value.ast);
     
-    if (res.is_success) {
-        free_ast(res.value.ast);
-    } else {
-        free_error(res.value.error);
-    }
-    
+    free_ast(res.value.ast);
     free_combinator(p);
     free(input->buffer);
     free(input);
@@ -2374,18 +2345,18 @@ void test_pascal_object_member_access(void) {
 
     printf("=== OBJECT MEMBER ACCESS TEST ===\n");
     if (!res.is_success) {
-        printf("Object member access failed (expected): %s\n", res.value.error->message);
+        printf("Object member access failed: %s\n", res.value.error->message);
         if (res.value.error->partial_ast) {
             printf("Partial AST:\n");
             print_pascal_ast(res.value.error->partial_ast);
         }
     } else {
-        printf("Object member access unexpectedly succeeded!\n");
+        printf("Object member access succeeded!\n");
         print_pascal_ast(res.value.ast);
     }
 
-    // Could be a new node type like PASCAL_T_MEMBER_ACCESS or parsed differently
-    TEST_CHECK(res.is_success);  // Let's see what happens
+    // Should succeed with PASCAL_T_MEMBER_ACCESS or similar
+    TEST_CHECK(res.is_success);
     
     if (res.is_success) {
         free_ast(res.value.ast);
@@ -2446,24 +2417,13 @@ void test_pascal_while_with_array_access(void) {
     ParseResult res = parse(input, p);
 
     printf("=== WHILE LOOP WITH ARRAY ACCESS TEST ===\n");
-    if (!res.is_success) {
-        printf("While with array access failed (expected): %s\n", res.value.error->message);
-        if (res.value.error->partial_ast) {
-            printf("Partial AST:\n");
-            print_pascal_ast(res.value.error->partial_ast);
-        }
-    } else {
-        printf("While with array access unexpectedly succeeded!\n");
-        print_pascal_ast(res.value.ast);
-    }
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast);
 
-    TEST_CHECK(!res.is_success || res.is_success);  // Either way is informative
+    printf("While with array access succeeded!\n");
+    print_pascal_ast(res.value.ast);
     
-    if (res.is_success) {
-        free_ast(res.value.ast);
-    } else {
-        free_error(res.value.error);
-    }
+    free_ast(res.value.ast);
     
     free_combinator(p);
     free(input->buffer);
@@ -2907,7 +2867,7 @@ void test_pascal_empty_class(void) {
     free(input);
 }
 
-// Test simple field declaration (minimal failure case)
+// Test simple field declaration (now working)
 void test_pascal_simple_field_declaration(void) {
     combinator_t* p = class_type(PASCAL_T_CLASS_TYPE);
 
@@ -2918,25 +2878,14 @@ void test_pascal_simple_field_declaration(void) {
     ParseResult res = parse(input, p);
 
     printf("=== SIMPLE FIELD DECLARATION TEST ===\n");
-    if (!res.is_success) {
-        printf("Simple field declaration failed (expected): %s\n", res.value.error->message);
-        if (res.value.error->partial_ast) {
-            printf("Partial AST:\n");
-            print_pascal_ast(res.value.error->partial_ast);
-        }
-    } else {
-        printf("Simple field declaration unexpectedly succeeded!\n");
-        print_pascal_ast(res.value.ast);
-    }
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_CLASS_TYPE);
 
-    TEST_CHECK(!res.is_success);  // Expected to fail
+    printf("Simple field declaration succeeded!\n");
+    print_pascal_ast(res.value.ast);
     
-    if (res.is_success) {
-        free_ast(res.value.ast);
-    } else {
-        free_error(res.value.error);
-    }
-    
+    free_ast(res.value.ast);
     free_combinator(p);
     free(input->buffer);
     free(input);
