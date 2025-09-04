@@ -3431,7 +3431,7 @@ void test_pascal_just_function_keyword(void) {
         free_ast(res.value.ast);
     }
 
-    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    TEST_CHECK(!res.is_success);  // This should fail - incomplete function declaration (just keyword)
     
     free_combinator(p);
     free(input->buffer);
@@ -3467,7 +3467,7 @@ void test_pascal_function_name_only(void) {
         free_ast(res.value.ast);
     }
 
-    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    TEST_CHECK(!res.is_success);  // This should fail - incomplete function declaration (no return type or body)
     
     free_combinator(p);
     free(input->buffer);
@@ -3503,7 +3503,7 @@ void test_pascal_function_with_return_type_only(void) {
         free_ast(res.value.ast);
     }
 
-    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    TEST_CHECK(!res.is_success);  // This should fail - incomplete function declaration (no body)
     
     free_combinator(p);
     free(input->buffer);
