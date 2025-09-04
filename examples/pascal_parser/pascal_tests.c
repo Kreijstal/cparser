@@ -2801,7 +2801,7 @@ void test_pascal_constructor_syntax(void) {
 // Test complex array assignment with 2D indexing
 void test_pascal_2d_array_assignment(void) {
     combinator_t* p = new_combinator();
-    init_pascal_program_parser(&p);
+    init_pascal_statement_parser(&p);
 
     input_t* input = new_input();
     input->buffer = strdup("matrix[i, j] := value + 1;");  
@@ -3394,7 +3394,7 @@ void test_pascal_just_function_keyword(void) {
         free_ast(res.value.ast);
     }
 
-    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    TEST_CHECK(!res.is_success);  // Invalid syntax - incomplete function (just "function")
     
     free_combinator(p);
     free(input->buffer);
@@ -3430,7 +3430,7 @@ void test_pascal_function_name_only(void) {
         free_ast(res.value.ast);
     }
 
-    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    TEST_CHECK(!res.is_success);  // Invalid syntax - function name without body
     
     free_combinator(p);
     free(input->buffer);
@@ -3466,7 +3466,7 @@ void test_pascal_function_with_return_type_only(void) {
         free_ast(res.value.ast);
     }
 
-    TEST_CHECK(res.is_success);  // This will likely fail, but let's see the error
+    TEST_CHECK(!res.is_success);  // Invalid syntax - function signature without body
     
     free_combinator(p);
     free(input->buffer);
@@ -4300,8 +4300,8 @@ void test_pascal_class_keyword_simple(void) {
         free_error(res.value.error);
     }
     
-    // This should fail - we don't support class definitions yet
-    TEST_CHECK(!res.is_success); 
+    // This should succeed - we now support basic class expressions
+    TEST_CHECK(res.is_success); 
     
     free_combinator(expr_parser);
     free(input->buffer);
@@ -4329,8 +4329,8 @@ void test_pascal_nested_function_simple(void) {
         free_error(res.value.error);
     }
     
-    // This should fail - we don't support nested functions yet
-    TEST_CHECK(!res.is_success);
+    // This should succeed - we now support basic nested function parsing
+    TEST_CHECK(res.is_success);
     
     free_combinator(func_parser);
     free(input->buffer);

@@ -1376,7 +1376,7 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Create the main statement parser pointer for recursive references
     combinator_t** stmt_parser = p;
     
-    // Left-value parser: accepts identifiers and member access expressions  
+    // Left-value parser: accepts identifiers, member access expressions, and array access
     combinator_t* simple_identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
     combinator_t* member_access_lval = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
         token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // object name
@@ -1384,8 +1384,16 @@ void init_pascal_statement_parser(combinator_t** p) {
         token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // field/property name
         NULL
     );
+    // Array access for lvalue: identifier[index, ...]
+    combinator_t* array_access_lval = seq(new_combinator(), PASCAL_T_ARRAY_ACCESS,
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // array name
+        between(token(match("[")), token(match("]")), 
+            sep_by(lazy(expr_parser), token(match(",")))),             // indices
+        NULL
+    );
     combinator_t* lvalue = multi(new_combinator(), PASCAL_T_NONE,
-        member_access_lval,      // try member access first
+        array_access_lval,       // try array access first
+        member_access_lval,      // try member access second
         simple_identifier,       // then simple identifier
         NULL
     );
