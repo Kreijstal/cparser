@@ -71,13 +71,15 @@ combinator_t* pascal_comment() {
         NULL);
 }
 
-// Enhanced whitespace parser that handles both whitespace and Pascal comments
+// Enhanced whitespace parser that handles whitespace, Pascal comments, and compiler directives
 combinator_t* pascal_whitespace() {
     combinator_t* ws_char = satisfy(is_whitespace_char, PASCAL_T_NONE);
     combinator_t* comment = pascal_comment();
+    combinator_t* directive = compiler_directive(PASCAL_T_NONE);  // Treat directives as ignorable whitespace
     combinator_t* ws_or_comment = multi(new_combinator(), PASCAL_T_NONE,
         ws_char,
         comment,
+        directive,  // Include compiler directives in whitespace
         NULL
     );
     return many(ws_or_comment);
@@ -329,12 +331,24 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     free_ast(class_res.value.ast);
     free_combinator(class_keyword);
     
-    // For now, skip class body and just parse "end" directly for testing
+    // Parse class body - consume everything until "end" for now
+    combinator_t* class_body_parser = until(token(match_ci("end")), PASCAL_T_NONE);
+    ParseResult body_res = parse(in, class_body_parser);
+    if (!body_res.is_success) {
+        free_combinator(class_body_parser);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected class body"));
+    }
+    ast_t* body_ast = body_res.value.ast;
+    free_combinator(class_body_parser);
+    
+    // Parse "end" keyword
     combinator_t* end_keyword = token(match_ci("end"));
     ParseResult end_res = parse(in, end_keyword);
     if (!end_res.is_success) {
         free_combinator(end_keyword);
         restore_input_state(in, &state);
+        free_ast(body_ast);
         return make_failure(in, strdup("Expected 'end' after class"));
     }
     free_ast(end_res.value.ast);
@@ -344,7 +358,7 @@ static ParseResult class_type_fn(input_t* in, void* args) {
     ast_t* class_ast = new_ast();
     class_ast->typ = pargs->tag;
     class_ast->sym = NULL;
-    class_ast->child = NULL; // No body for now
+    class_ast->child = body_ast; // Include the class body
     class_ast->next = NULL;
     
     set_ast_position(class_ast, in);
