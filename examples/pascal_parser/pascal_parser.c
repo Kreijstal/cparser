@@ -1693,101 +1693,23 @@ void init_pascal_method_implementation_parser(combinator_t** p) {
 // Pascal Complete Program Parser - for full Pascal programs  
 // Custom parser for main block content that parses statements properly
 static ParseResult main_block_content_fn(input_t* in, void* args) {
-    // First, capture content until matching "end" (with proper begin/end and try/end nesting)
-    int start_offset = in->start;
-    int content_start = in->start;
-    int content_end = -1;
-    int begin_count = 0;    // Track nested begin/end pairs
-    int try_count = 0;      // Track nested try/end pairs
-    
-    // Find the matching "end" keyword (case-insensitive) while respecting nesting
-    while (in->start < in->length) {
-        // Check for "begin" keyword
-        if (in->start + 5 <= in->length &&
-            strncasecmp(in->buffer + in->start, "begin", 5) == 0) {
-            // Check if it's a word boundary
-            if (in->start + 5 == in->length || !isalnum(in->buffer[in->start + 5])) {
-                begin_count++;
-                in->start += 5;
-                continue;
-            }
-        }
-        
-        // Check for "try" keyword
-        if (in->start + 3 <= in->length &&
-            strncasecmp(in->buffer + in->start, "try", 3) == 0) {
-            // Check if it's a word boundary
-            if (in->start + 3 == in->length || !isalnum(in->buffer[in->start + 3])) {
-                try_count++;
-                in->start += 3;
-                continue;
-            }
-        }
-        
-        // Check for "end" keyword
-        if (in->start + 3 <= in->length &&
-            strncasecmp(in->buffer + in->start, "end", 3) == 0) {
-            // Check if it's a word boundary
-            if (in->start + 3 == in->length || !isalnum(in->buffer[in->start + 3])) {
-                if (begin_count == 0 && try_count == 0) {
-                    // This is the matching end for the main block
-                    content_end = in->start;
-                    break;
-                } else {
-                    // This is an end for a nested begin or try
-                    if (try_count > 0) {
-                        try_count--;
-                    } else {
-                        begin_count--;
-                    }
-                }
-                in->start += 3;
-                continue;
-            }
-        }
-        in->start++;
-    }
-    
-    if (content_end == -1) {
-        return make_failure(in, strdup("Expected matching 'end' keyword"));
-    }
-    
-    // Extract the content between begin and end
-    int content_len = content_end - content_start;
-    if (content_len == 0) {
-        // Empty main block - return ast_nil
-        in->start = content_end; // Position at "end"
-        return make_success(ast_nil);
-    }
-    
-    // Create input for parsing the main block content
-    input_t* content_input = new_input();
-    content_input->buffer = strndup(in->buffer + content_start, content_len);
-    content_input->length = content_len;
-    content_input->line = in->line;
-    content_input->col = in->col;
+    // Parse statements until we can't parse any more
+    // Don't look for "end" - that's handled by the parent main_block parser
     
     // Create statement parser to parse the content
     combinator_t* stmt_parser = new_combinator();
     init_pascal_statement_parser(&stmt_parser);
     
-    // Parse as many statements as possible
-    combinator_t* stmt_list = sep_end_by(stmt_parser, token(match(";")));
-    ParseResult stmt_result = parse(content_input, stmt_list);
+    // Parse as many statements as possible, separated by semicolons
+    combinator_t* stmt_list = many(seq(new_combinator(), PASCAL_T_NONE,
+        stmt_parser,
+        optional(token(match(";"))),  // optional semicolon after each statement
+        NULL
+    ));
     
-    // Position input at the end of content for the main parser to continue
-    in->start = content_end;
-
-    if (stmt_result.is_success && content_input->start < content_input->length) {
-        free_ast(stmt_result.value.ast);
-        char* err_msg;
-        asprintf(&err_msg, "Syntax error at line %d, col %d", content_input->line, content_input->col);
-        stmt_result = make_failure(content_input, err_msg);
-    }
+    ParseResult stmt_result = parse(in, stmt_list);
     
     // Clean up
-    free(content_input->buffer);
-    free(content_input);
     free_combinator(stmt_list);
     
     return stmt_result;
