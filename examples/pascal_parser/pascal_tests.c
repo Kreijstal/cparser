@@ -2694,7 +2694,7 @@ void test_pascal_method_call_dot(void) {
     free(input);
 }
 
-// Test try/finally block (expected to fail)
+// Test try/finally block
 void test_pascal_try_finally(void) {
     combinator_t* p = new_combinator();
     init_pascal_statement_parser(&p);
@@ -2707,17 +2707,17 @@ void test_pascal_try_finally(void) {
 
     printf("=== TRY/FINALLY TEST ===\n");
     if (!res.is_success) {
-        printf("Try/finally failed (expected): %s\n", res.value.error->message);
+        printf("Try/finally failed: %s\n", res.value.error->message);
         if (res.value.error->partial_ast) {
             printf("Partial AST:\n");
             print_pascal_ast(res.value.error->partial_ast);
         }
     } else {
-        printf("Try/finally unexpectedly succeeded!\n");
+        printf("Try/finally succeeded!\n");
         print_pascal_ast(res.value.ast);
     }
 
-    TEST_CHECK(!res.is_success);  // Expected to fail
+    TEST_CHECK(res.is_success);
     
     if (res.is_success) {
         free_ast(res.value.ast);
@@ -4386,16 +4386,15 @@ void test_pascal_try_finally_simple(void) {
     
     ParseResult res = parse(input, stmt_parser);
     if (res.is_success) {
-        printf("Try-finally unexpectedly succeeded!\n");
+        printf("Try-finally succeeded!\n");
         print_pascal_ast(res.value.ast);
         free_ast(res.value.ast);
     } else {
-        printf("Try-finally failed (expected): %s\n", res.value.error->message);
+        printf("Try-finally failed: %s\n", res.value.error->message);
         free_error(res.value.error);
     }
     
-    // This should fail - we don't support exception handling yet
-    TEST_CHECK(!res.is_success);
+    TEST_CHECK(res.is_success);
     
     free_combinator(stmt_parser);
     free(input->buffer);
@@ -4444,16 +4443,15 @@ void test_pascal_raise_exception_simple(void) {
     
     ParseResult res = parse(input, stmt_parser);
     if (res.is_success) {
-        printf("Raise exception unexpectedly succeeded!\n");
+        printf("Raise exception succeeded!\n");
         print_pascal_ast(res.value.ast);
         free_ast(res.value.ast);
     } else {
-        printf("Raise exception failed (expected): %s\n", res.value.error->message);
+        printf("Raise exception failed: %s\n", res.value.error->message);
         free_error(res.value.error);
     }
     
-    // This should fail - we don't support raise statements yet
-    TEST_CHECK(!res.is_success);
+    TEST_CHECK(res.is_success);
     
     free_combinator(stmt_parser);
     free(input->buffer);
