@@ -1476,9 +1476,17 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     (*function_stmt_parser)->extra_to_free = function_stmt_parser;
     init_pascal_statement_parser(function_stmt_parser);
     
+    // Simple function body - just BEGIN statements END for now to avoid circular reference issues
+    combinator_t* simple_function_body = seq(new_combinator(), PASCAL_T_BEGIN_BLOCK,
+        token(match_ci("begin")),                    // begin keyword  
+        until(token(match_ci("end")), PASCAL_T_NONE),  // simple content until end
+        token(match_ci("end")),                      // end keyword
+        NULL
+    );
+    
     combinator_t* program_function_body = seq(new_combinator(), PASCAL_T_NONE,
         optional(local_var_section),                 // optional local VAR section for functions
-        lazy(function_stmt_parser),                  // dedicated statement parser for this context
+        simple_function_body,                        // simple function body
         NULL
     );
     
