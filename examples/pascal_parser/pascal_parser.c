@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <strings.h>  // For strcasecmp
 
 // --- Forward Declarations ---
 typedef struct { char* str; } match_args;  // For keyword matching
@@ -81,15 +80,28 @@ combinator_t* cpp_comment() {
         NULL);
 }
 
-// Enhanced whitespace parser that handles both whitespace and Pascal comments
+// Compiler directive parser: {$directive parameter}
+combinator_t* compiler_directive(tag_t tag) {
+    return right(
+        match("{$"),
+        left(
+            until(match("}"), tag),
+            match("}")
+        )
+    );
+}
+
+// Enhanced whitespace parser that handles whitespace, Pascal comments, C++ comments, and compiler directives
 combinator_t* pascal_whitespace() {
     combinator_t* ws_char = satisfy(is_whitespace_char, PASCAL_T_NONE);
     combinator_t* pascal_comment_parser = pascal_comment();
     combinator_t* cpp_comment_parser = cpp_comment();
+    combinator_t* directive = compiler_directive(PASCAL_T_NONE);  // Treat directives as ignorable whitespace
     combinator_t* ws_or_comment = multi(new_combinator(), PASCAL_T_NONE,
         ws_char,
         pascal_comment_parser,
         cpp_comment_parser,
+        directive,  // Include compiler directives in whitespace
         NULL
     );
     return many(ws_or_comment);
@@ -186,17 +198,6 @@ combinator_t* pascal_identifier(tag_t tag) {
     comb->fn = pascal_identifier_fn;
     comb->args = args;
     return comb;
-}
-
-// Compiler directive parser using proper combinators: {$directive parameter}  
-combinator_t* compiler_directive(tag_t tag) {
-    return right(
-        match("{$"),
-        left(
-            until(match("}"), tag),
-            match("}")
-        )
-    );
 }
 
 // Range type parser: start..end (e.g., -1..1)
