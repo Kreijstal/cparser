@@ -970,11 +970,12 @@ static combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
 
 // Removed unused relational_ops() function that had non-boundary-aware match("in")
 
-// Pascal single-quoted string content parser - handles '' escaping
-static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args) {
+// Pascal single-quoted string content parser using combinators - handles '' escaping
+static ParseResult pascal_single_quoted_content_combinator_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
     int start_offset = in->start;
     
+    // Build content by parsing until we hit the closing quote (not doubled)
     while(1) {
         InputState current_state; 
         save_input_state(in, &current_state);
@@ -1029,6 +1030,16 @@ static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args) {
     free(text);
     free(processed_text);
     return make_success(ast);
+}
+
+combinator_t* pascal_single_quoted_content(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = pascal_single_quoted_content_combinator_fn;
+    comb->args = args;
+    return comb;
 }
 
 // Pascal double-quoted string content parser - handles \ escaping  
@@ -1095,17 +1106,6 @@ static ParseResult pascal_double_quoted_content_fn(input_t* in, void* args) {
     free(text);
     free(processed_text);
     return make_success(ast);
-}
-
-// Create combinator for Pascal single-quoted string content
-combinator_t* pascal_single_quoted_content(tag_t tag) {
-    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY; // Reuse existing type for custom parser
-    comb->fn = pascal_single_quoted_content_fn;
-    comb->args = args;
-    return comb;
 }
 
 // Create combinator for Pascal double-quoted string content
@@ -1393,7 +1393,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(pascal_string(PASCAL_T_STRING)),    // Strings ("hello" or 'hello')
-        set_constructor(PASCAL_T_SET, p),         // Set constructors [1, 2, 3]
+        token(set_constructor(PASCAL_T_SET, p)),  // Set constructors [1, 2, 3]
         token(boolean_true),                      // Boolean true
         token(boolean_false),                     // Boolean false
         typecast,                                 // Type casts Integer(x) - try before func_call

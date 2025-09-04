@@ -13,10 +13,16 @@ void test_pascal_string_escapes(void) {
     input1->length = strlen("'it''s a string'");
 
     ParseResult res1 = parse(input1, p);
-    TEST_ASSERT(res1.is_success);
+    if (!res1.is_success) {
+        printf("Parse failed: %s\n", res1.value.error->message);
+        TEST_ASSERT(false);
+        return;
+    }
     TEST_ASSERT(res1.value.ast->typ == PASCAL_T_STRING);
-    TEST_ASSERT(strcmp(res1.value.ast->sym->name, "it's a string") == 0);
     printf("Pascal single quote test: '%s' -> '%s'\n", input1->buffer, res1.value.ast->sym->name);
+    printf("Expected: 'it's a string'\n");
+    printf("Got:      '%s'\n", res1.value.ast->sym->name);
+    TEST_ASSERT(strcmp(res1.value.ast->sym->name, "it's a string") == 0);
 
     free_ast(res1.value.ast);
     free(input1->buffer);

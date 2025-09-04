@@ -25,3 +25,5 @@ build/
 # Example build artifacts
 examples/*/test_pascal
 examples/*/test_pascal_tests
+examples/*/pascal_tests
+examples/*/test_strings
