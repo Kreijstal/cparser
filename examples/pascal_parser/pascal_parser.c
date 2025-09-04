@@ -200,6 +200,79 @@ combinator_t* pascal_identifier(tag_t tag) {
     return comb;
 }
 
+// Keywords that can be used as function names in expressions
+static const char* expression_allowed_keywords[] = {
+    "procedure", "function", "program", "unit",
+    "record", "array", "set", "packed",  // type keywords that can be variable names
+    "object", "class",                   // OOP keywords that can be variable names
+    NULL
+};
+
+// Check if a keyword is allowed as an identifier in expressions
+static bool is_expression_allowed_keyword(const char* str) {
+    for (int i = 0; expression_allowed_keywords[i] != NULL; i++) {
+        if (strcasecmp(str, expression_allowed_keywords[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Pascal identifier parser for expressions - allows certain keywords as function names
+static ParseResult pascal_expression_identifier_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    int start_pos = in->start;
+    char c = read1(in);
+    
+    // Must start with letter or underscore
+    if (c != '_' && !isalpha(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected identifier"));
+    }
+    
+    // Continue with alphanumeric or underscore
+    while (isalnum(c = read1(in)) || c == '_');
+    if (c != EOF) in->start--;
+    
+    // Extract the identifier text
+    int len = in->start - start_pos;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_pos, len);
+    text[len] = '\0';
+    
+    // Check if it's a reserved keyword that's NOT allowed in expressions
+    if (is_pascal_keyword(text) && !is_expression_allowed_keyword(text)) {
+        free(text);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Identifier cannot be a reserved keyword"));
+    }
+    
+    // Create AST node for valid identifier
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    free(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+// Create Pascal expression identifier combinator that allows certain keywords
+combinator_t* pascal_expression_identifier(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_CIDENT;
+    comb->fn = pascal_expression_identifier_fn;
+    comb->args = args;
+    return comb;
+}
+
 // Range type parser: start..end (e.g., -1..1)
 static ParseResult range_type_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
@@ -1136,11 +1209,11 @@ static void post_process_set_operations(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_pascal_expression_parser(combinator_t** p) {
-    // Pascal identifier parser - excludes reserved keywords like BEGIN, END, etc.
-    combinator_t* identifier = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    // Pascal identifier parser - use expression identifier that allows some keywords in expression contexts
+    combinator_t* identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
     
-    // Function name: use Pascal identifier parser that excludes keywords
-    combinator_t* func_name = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    // Function name: use expression identifier parser that allows certain keywords as function names
+    combinator_t* func_name = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
     
     // Function call parser: function name followed by optional argument list
     combinator_t* arg_list = between(
@@ -1204,9 +1277,9 @@ void init_pascal_expression_parser(combinator_t** p) {
         typecast,                                 // Type casts Integer(x) - try before func_call
         array_access,                             // Array access table[i,j] - try before func_call
         func_call,                                // Function calls func(x)
-        tuple,                                    // Tuple constants (a,b,c) - try before identifier
+        between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions - try before tuple
+        tuple,                                    // Tuple constants (a,b,c) - try after parenthesized expressions
         identifier,                               // Identifiers (variables, built-ins)
-        between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions
         NULL
     );
 
@@ -1303,9 +1376,31 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Create the main statement parser pointer for recursive references
     combinator_t** stmt_parser = p;
     
-    // Assignment statement: identifier := expression (no semicolon here)
+    // Left-value parser: accepts identifiers, member access expressions, and array access
+    combinator_t* simple_identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
+    combinator_t* member_access_lval = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // object name
+        token(match(".")),                                            // dot
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // field/property name
+        NULL
+    );
+    // Array access for lvalue: identifier[index, ...]
+    combinator_t* array_access_lval = seq(new_combinator(), PASCAL_T_ARRAY_ACCESS,
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // array name
+        between(token(match("[")), token(match("]")), 
+            sep_by(lazy(expr_parser), token(match(",")))),             // indices
+        NULL
+    );
+    combinator_t* lvalue = multi(new_combinator(), PASCAL_T_NONE,
+        array_access_lval,       // try array access first
+        member_access_lval,      // try member access second
+        simple_identifier,       // then simple identifier
+        NULL
+    );
+    
+    // Assignment statement: lvalue := expression (no semicolon here)
     combinator_t* assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
-        token(pascal_identifier(PASCAL_T_IDENTIFIER)),    // variable name
+        lvalue,                                // left-hand side (identifier or member access)
         token(match(":=")),                    // assignment operator
         lazy(expr_parser),                     // expression
         NULL
@@ -1400,11 +1495,20 @@ void init_pascal_statement_parser(combinator_t** p) {
     );
     
     // Try-finally block: try statements finally statements end
+    // Use more lenient statement parsing that doesn't require semicolons
     combinator_t* try_finally = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
         token(keyword_ci("try")),              // try keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in try block
         token(keyword_ci("finally")),          // finally keyword (case-insensitive) 
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in finally block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in finally block
         token(keyword_ci("end")),              // end keyword (case-insensitive)
         NULL
     );
@@ -1412,9 +1516,17 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Try-except block: try statements except statements end
     combinator_t* try_except = seq(new_combinator(), PASCAL_T_TRY_BLOCK,
         token(keyword_ci("try")),              // try keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in try block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in try block
         token(keyword_ci("except")),           // except keyword (case-insensitive)
-        sep_by(lazy(stmt_parser), token(match(";"))), // statements in except block
+        many(seq(new_combinator(), PASCAL_T_NONE,
+            lazy(stmt_parser),
+            optional(token(match(";"))),       // optional semicolon after each statement
+            NULL
+        )),                                    // statements in except block
         token(keyword_ci("end")),              // end keyword (case-insensitive)
         NULL
     );
@@ -1532,67 +1644,99 @@ void init_pascal_procedure_parser(combinator_t** p) {
     );
 }
 
+// Pascal Method Implementation Parser - for constructor/destructor/procedure implementations
+void init_pascal_method_implementation_parser(combinator_t** p) {
+    // Create statement parser for method bodies
+    combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *stmt_parser = new_combinator();
+    (*stmt_parser)->extra_to_free = stmt_parser;
+    init_pascal_statement_parser(stmt_parser);
+    
+    // Parameter: identifier : type (simplified - just use identifier for type)
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        token(cident(PASCAL_T_IDENTIFIER)),      // parameter name
+        token(match(":")),                       // colon
+        token(cident(PASCAL_T_IDENTIFIER)),      // type name (simplified)
+        NULL
+    );
+    
+    // Parameter list: optional ( param ; param ; ... )
+    combinator_t* param_list = optional(between(
+        token(match("(")),
+        token(match(")")),
+        sep_by(param, token(match(";")))
+    ));
+    
+    // Method name with class: ClassName.MethodName
+    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_NONE,
+        token(cident(PASCAL_T_IDENTIFIER)),      // class name
+        token(match(".")),                       // dot
+        token(cident(PASCAL_T_IDENTIFIER)),      // method name
+        NULL
+    );
+    
+    // Constructor implementation: constructor ClassName.MethodName[(params)]; body
+    combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
+        token(keyword_ci("constructor")),        // constructor keyword
+        method_name_with_class,                  // ClassName.MethodName
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // method body
+        optional(token(match(";"))),             // optional terminating semicolon
+        NULL
+    );
+    
+    // Destructor implementation: destructor ClassName.MethodName[(params)]; body
+    combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
+        token(keyword_ci("destructor")),         // destructor keyword
+        method_name_with_class,                  // ClassName.MethodName
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // method body
+        optional(token(match(";"))),             // optional terminating semicolon
+        NULL
+    );
+    
+    // Procedure implementation: procedure ClassName.MethodName[(params)]; body
+    combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(keyword_ci("procedure")),          // procedure keyword
+        method_name_with_class,                  // ClassName.MethodName
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // method body
+        optional(token(match(";"))),             // optional terminating semicolon
+        NULL
+    );
+    
+    // Method implementation parser: constructor, destructor, or procedure implementation
+    multi(*p, PASCAL_T_NONE,
+        constructor_impl,
+        destructor_impl,
+        procedure_impl,
+        NULL
+    );
+}
+
 // Pascal Complete Program Parser - for full Pascal programs  
 // Custom parser for main block content that parses statements properly
 static ParseResult main_block_content_fn(input_t* in, void* args) {
-    // First, capture content until "end" (like the original hack)
-    int start_offset = in->start;
-    int content_start = in->start;
-    int content_end = -1;
-    
-    // Find the "end" keyword (case-insensitive)
-    while (in->start < in->length) {
-        if (in->start + 3 <= in->length &&
-            strncasecmp(in->buffer + in->start, "end", 3) == 0) {
-            // Check if it's a word boundary
-            if (in->start + 3 == in->length || !isalnum(in->buffer[in->start + 3])) {
-                content_end = in->start;
-                break;
-            }
-        }
-        in->start++;
-    }
-    
-    if (content_end == -1) {
-        return make_failure(in, strdup("Expected 'end' keyword"));
-    }
-    
-    // Extract the content between begin and end
-    int content_len = content_end - content_start;
-    if (content_len == 0) {
-        // Empty main block - return ast_nil
-        in->start = content_end; // Position at "end"
-        return make_success(ast_nil);
-    }
-    
-    // Create input for parsing the main block content
-    input_t* content_input = new_input();
-    content_input->buffer = strndup(in->buffer + content_start, content_len);
-    content_input->length = content_len;
-    content_input->line = in->line;
-    content_input->col = in->col;
+    // Parse statements until we can't parse any more
+    // Don't look for "end" - that's handled by the parent main_block parser
     
     // Create statement parser to parse the content
     combinator_t* stmt_parser = new_combinator();
     init_pascal_statement_parser(&stmt_parser);
     
-    // Parse as many statements as possible
-    combinator_t* stmt_list = sep_end_by(stmt_parser, token(match(";")));
-    ParseResult stmt_result = parse(content_input, stmt_list);
+    // Parse as many statements as possible, separated by semicolons
+    combinator_t* stmt_list = many(seq(new_combinator(), PASCAL_T_NONE,
+        stmt_parser,
+        optional(token(match(";"))),  // optional semicolon after each statement
+        NULL
+    ));
     
-    // Position input at the end of content for the main parser to continue
-    in->start = content_end;
-
-    if (stmt_result.is_success && content_input->start < content_input->length) {
-        free_ast(stmt_result.value.ast);
-        char* err_msg;
-        asprintf(&err_msg, "Syntax error at line %d, col %d", content_input->line, content_input->col);
-        stmt_result = make_failure(content_input, err_msg);
-    }
+    ParseResult stmt_result = parse(in, stmt_list);
     
     // Clean up
-    free(content_input->buffer);
-    free(content_input);
     free_combinator(stmt_list);
     
     return stmt_result;
