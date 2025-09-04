@@ -4593,14 +4593,14 @@ void test_pascal_method_implementation_parsing(void) {
     printf("=== METHOD IMPLEMENTATION PARSING TEST ===\n");
     
     // Test parsing just the method implementation part
-    combinator_t* proc_parser = new_combinator();
-    init_pascal_procedure_parser(&proc_parser);
+    combinator_t* method_parser = new_combinator();
+    init_pascal_method_implementation_parser(&method_parser);
 
     input_t* input = new_input();
     input->buffer = strdup("constructor TMyClass.Create; begin FSomeField := -1 end;");
     input->length = strlen(input->buffer);
 
-    ParseResult res = parse(input, proc_parser);
+    ParseResult res = parse(input, method_parser);
     
     if (res.is_success) {
         printf("Method implementation succeeded!\n");
@@ -4614,7 +4614,7 @@ void test_pascal_method_implementation_parsing(void) {
         free_error(res.value.error);
     }
 
-    free_combinator(proc_parser);
+    free_combinator(method_parser);
     free(input->buffer);
     free(input);
 }
@@ -4706,16 +4706,16 @@ void test_pascal_sample_class_incremental_parsing(void) {
     free(input->buffer);
     free(input);
 
-    // Test 4: Test just destructor with procedure parser
-    printf("Test 4 - destructor with procedure parser: ");
-    combinator_t* proc_parser = new_combinator();
-    init_pascal_procedure_parser(&proc_parser);
+    // Test 4: Test just destructor with method implementation parser
+    printf("Test 4 - destructor with method parser: ");
+    combinator_t* method_parser = new_combinator();
+    init_pascal_method_implementation_parser(&method_parser);
     
     input = new_input();
     input->buffer = strdup("destructor TMyClass.Destroy; begin end;");
     input->length = strlen(input->buffer);
     
-    res = parse(input, proc_parser);
+    res = parse(input, method_parser);
     if (res.is_success) {
         printf("SUCCESS\n");
         free_ast(res.value.ast);
@@ -4724,7 +4724,7 @@ void test_pascal_sample_class_incremental_parsing(void) {
         free_error(res.value.error);
     }
     
-    free_combinator(proc_parser);
+    free_combinator(method_parser);
     free(input->buffer);
     free(input);
 

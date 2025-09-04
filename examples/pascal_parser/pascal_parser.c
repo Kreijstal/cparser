@@ -1603,6 +1603,79 @@ void init_pascal_procedure_parser(combinator_t** p) {
     );
 }
 
+// Pascal Method Implementation Parser - for constructor/destructor/procedure implementations
+void init_pascal_method_implementation_parser(combinator_t** p) {
+    // Create statement parser for method bodies
+    combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *stmt_parser = new_combinator();
+    (*stmt_parser)->extra_to_free = stmt_parser;
+    init_pascal_statement_parser(stmt_parser);
+    
+    // Parameter: identifier : type (simplified - just use identifier for type)
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        token(cident(PASCAL_T_IDENTIFIER)),      // parameter name
+        token(match(":")),                       // colon
+        token(cident(PASCAL_T_IDENTIFIER)),      // type name (simplified)
+        NULL
+    );
+    
+    // Parameter list: optional ( param ; param ; ... )
+    combinator_t* param_list = optional(between(
+        token(match("(")),
+        token(match(")")),
+        sep_by(param, token(match(";")))
+    ));
+    
+    // Method name with class: ClassName.MethodName
+    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_NONE,
+        token(cident(PASCAL_T_IDENTIFIER)),      // class name
+        token(match(".")),                       // dot
+        token(cident(PASCAL_T_IDENTIFIER)),      // method name
+        NULL
+    );
+    
+    // Constructor implementation: constructor ClassName.MethodName[(params)]; body
+    combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
+        token(keyword_ci("constructor")),        // constructor keyword
+        method_name_with_class,                  // ClassName.MethodName
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // method body
+        optional(token(match(";"))),             // optional terminating semicolon
+        NULL
+    );
+    
+    // Destructor implementation: destructor ClassName.MethodName[(params)]; body
+    combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
+        token(keyword_ci("destructor")),         // destructor keyword
+        method_name_with_class,                  // ClassName.MethodName
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // method body
+        optional(token(match(";"))),             // optional terminating semicolon
+        NULL
+    );
+    
+    // Procedure implementation: procedure ClassName.MethodName[(params)]; body
+    combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(keyword_ci("procedure")),          // procedure keyword
+        method_name_with_class,                  // ClassName.MethodName
+        param_list,                              // optional parameter list
+        token(match(";")),                       // semicolon
+        lazy(stmt_parser),                       // method body
+        optional(token(match(";"))),             // optional terminating semicolon
+        NULL
+    );
+    
+    // Method implementation parser: constructor, destructor, or procedure implementation
+    multi(*p, PASCAL_T_NONE,
+        constructor_impl,
+        destructor_impl,
+        procedure_impl,
+        NULL
+    );
+}
+
 // Pascal Complete Program Parser - for full Pascal programs  
 // Custom parser for main block content that parses statements properly
 static ParseResult main_block_content_fn(input_t* in, void* args) {
