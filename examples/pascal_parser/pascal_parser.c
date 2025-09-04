@@ -1374,9 +1374,23 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Create the main statement parser pointer for recursive references
     combinator_t** stmt_parser = p;
     
-    // Assignment statement: identifier := expression (no semicolon here)
+    // Left-value parser: accepts identifiers and member access expressions  
+    combinator_t* simple_identifier = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    combinator_t* member_access_lval = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
+        token(pascal_identifier(PASCAL_T_IDENTIFIER)),     // object name
+        token(match(".")),                                 // dot
+        token(pascal_identifier(PASCAL_T_IDENTIFIER)),     // field/property name
+        NULL
+    );
+    combinator_t* lvalue = multi(new_combinator(), PASCAL_T_NONE,
+        member_access_lval,      // try member access first
+        simple_identifier,       // then simple identifier
+        NULL
+    );
+    
+    // Assignment statement: lvalue := expression (no semicolon here)
     combinator_t* assignment = seq(new_combinator(), PASCAL_T_ASSIGNMENT,
-        token(pascal_identifier(PASCAL_T_IDENTIFIER)),    // variable name
+        lvalue,                                // left-hand side (identifier or member access)
         token(match(":=")),                    // assignment operator
         lazy(expr_parser),                     // expression
         NULL
