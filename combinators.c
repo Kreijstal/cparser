@@ -289,7 +289,7 @@ static ParseResult seq_fn(input_t * in, void * args) {
         if (!res.is_success) {
             restore_input_state(in, &state);
             if (res.value.error->message == NULL) {
-                return wrap_failure_with_ast(in, strdup("Failed to parse sequence."), res, head);
+                return wrap_failure_with_ast(in, "Failed to parse sequence.", res, head);
             }
             return wrap_failure_with_ast(in, res.value.error->message, res, head);
         }

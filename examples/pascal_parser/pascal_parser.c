@@ -6,6 +6,7 @@
 
 // --- Forward Declarations ---
 typedef struct { char* str; } match_args;  // For keyword matching
+typedef struct { tag_t tag; combinator_t** expr_parser; } set_args;  // For set constructor
 extern ast_t* ast_nil;  // From parser.c
 
 // --- Helper Functions ---
@@ -279,14 +280,7 @@ static ParseResult range_type_fn(input_t* in, void* args) {
     InputState state;
     save_input_state(in, &state);
     
-    // Parse start value (can be negative integer or identifier)
-    input_t* temp_input = new_input();
-    temp_input->buffer = in->buffer + in->start;
-    temp_input->length = in->length - in->start;
-    temp_input->line = in->line;
-    temp_input->col = in->col;
-    
-    // Try parsing integer (including negative)
+    // Try parsing integer (including negative) or identifier for start value
     combinator_t* start_parser = multi(new_combinator(), PASCAL_T_NONE,
         integer(PASCAL_T_INTEGER),
         seq(new_combinator(), PASCAL_T_INTEGER,
@@ -296,54 +290,34 @@ static ParseResult range_type_fn(input_t* in, void* args) {
         cident(PASCAL_T_IDENTIFIER),
         NULL);
     
-    ParseResult start_result = parse(temp_input, start_parser);
+    ParseResult start_result = parse(in, start_parser);
     if (!start_result.is_success) {
         free_combinator(start_parser);
-        free(temp_input);
         restore_input_state(in, &state);
         return make_failure(in, strdup("Expected range start value"));
     }
     
-    // Update main input position
-    in->start += temp_input->start;
-    
-    // Skip whitespace
-    while (in->start < in->length && isspace(in->buffer[in->start])) {
-        in->start++;
-    }
-    
-    // Expect ".."
-    if (in->start + 2 > in->length || 
-        in->buffer[in->start] != '.' || in->buffer[in->start + 1] != '.') {
+    // Parse the ".." separator with whitespace handling
+    combinator_t* range_sep = token(match(".."));
+    ParseResult sep_result = parse(in, range_sep);
+    if (!sep_result.is_success) {
         free_ast(start_result.value.ast);
         free_combinator(start_parser);
-        free(temp_input);
+        free_combinator(range_sep);
         restore_input_state(in, &state);
         return make_failure(in, strdup("Expected '..' in range type"));
     }
-    in->start += 2;
+    free_combinator(range_sep);
+    free_ast(sep_result.value.ast);
     
-    // Skip whitespace
-    while (in->start < in->length && isspace(in->buffer[in->start])) {
-        in->start++;
-    }
-    
-    // Parse end value
-    temp_input->buffer = in->buffer + in->start;
-    temp_input->length = in->length - in->start;
-    temp_input->start = 0;
-    
-    ParseResult end_result = parse(temp_input, start_parser);
+    // Parse end value using the same parser
+    ParseResult end_result = parse(in, start_parser);
     if (!end_result.is_success) {
         free_ast(start_result.value.ast);
         free_combinator(start_parser);
-        free(temp_input);
         restore_input_state(in, &state);
         return make_failure(in, strdup("Expected range end value"));
     }
-    
-    // Update main input position
-    in->start += temp_input->start;
     
     // Create range AST
     ast_t* range_ast = new_ast();
@@ -354,7 +328,6 @@ static ParseResult range_type_fn(input_t* in, void* args) {
     range_ast->next = NULL;
     
     free_combinator(start_parser);
-    free(temp_input);
     set_ast_position(range_ast, in);
     return make_success(range_ast);
 }
@@ -768,6 +741,28 @@ static ParseResult real_fn(input_t* in, void* args) {
     while (isdigit(c = read1(in)));
     if (c != EOF) in->start--; // Back up one if not EOF
     
+    // Optional exponent part (e.g., E+10, e-5, E3)
+    c = read1(in);
+    if (c == 'e' || c == 'E') {
+        // Parse optional sign
+        c = read1(in);
+        if (c == '+' || c == '-') {
+            c = read1(in);
+        }
+        
+        // Must have at least one digit after E/e
+        if (!isdigit(c)) {
+            restore_input_state(in, &state);
+            return make_failure(in, strdup("Expected digit after exponent"));
+        }
+        
+        // Parse remaining exponent digits
+        while (isdigit(c = read1(in)));
+        if (c != EOF) in->start--; // Back up one if not EOF
+    } else if (c != EOF) {
+        in->start--; // Back up if we didn't find exponent
+    }
+    
     // Create AST node with the real number value
     int len = in->start - start_pos;
     char* text = (char*)safe_malloc(len + 1);
@@ -881,7 +876,7 @@ static combinator_t* range_operator(tag_t tag) {
 
 // Simplified set constructor parser using existing parse utilities
 static ParseResult set_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
+    set_args* sargs = (set_args*)args;
     InputState state;
     save_input_state(in, &state);
     
@@ -892,7 +887,7 @@ static ParseResult set_fn(input_t* in, void* args) {
     }
     
     ast_t* set_node = new_ast();
-    set_node->typ = pargs->tag;
+    set_node->typ = sargs->tag;
     set_node->sym = NULL;
     set_node->child = NULL;
     set_node->next = NULL;
@@ -910,9 +905,8 @@ static ParseResult set_fn(input_t* in, void* args) {
     }
     if (c != EOF) in->start--; // Back up
     
-    // Parse set elements using expression parser
-    combinator_t* expr_parser = new_combinator();
-    init_pascal_expression_parser(&expr_parser);
+    // Parse set elements using the provided expression parser
+    combinator_t* expr_parser = lazy(sargs->expr_parser);
     
     // Parse comma-separated expressions
     ast_t* first_element = NULL;
@@ -964,8 +958,9 @@ static ParseResult set_fn(input_t* in, void* args) {
 }
 
 static combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
-    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    set_args* args = (set_args*)safe_malloc(sizeof(set_args));
     args->tag = tag;
+    args->expr_parser = expr_parser;
     combinator_t* comb = new_combinator();
     comb->type = P_SATISFY;
     comb->fn = set_fn;
@@ -992,14 +987,33 @@ static ParseResult pascal_string_fn(input_t* in, void* args) {
     int len = 0;
     char c;
     
-    while ((c = read1(in)) != quote_char) {
+    while (true) {
+        c = read1(in);
+        
         if (c == EOF) {
             free(str_val);
             return make_failure(in, strdup("Unterminated string"));
         }
         
+        // Handle Pascal-style escaped single quotes (doubled quotes)
+        if (quote_char == '\'' && c == '\'') {
+            // Check if the next character is also a single quote
+            char next_c = read1(in);
+            if (next_c == '\'') {
+                // This is an escaped single quote, keep the single quote character
+                c = '\'';
+            } else {
+                // This is the end of the string, put back the character and exit loop
+                if (next_c != EOF) in->start--;
+                break;
+            }
+        }
+        // Handle double quote termination
+        else if (quote_char == '"' && c == quote_char) {
+            break;
+        }
         // Handle escape sequences for double quotes
-        if (quote_char == '"' && c == '\\') {
+        else if (quote_char == '"' && c == '\\') {
             c = read1(in);
             if (c == EOF) {
                 free(str_val);
@@ -1271,7 +1285,7 @@ void init_pascal_expression_parser(combinator_t** p) {
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(pascal_string(PASCAL_T_STRING)),    // Strings ("hello" or 'hello')
-        set_constructor(PASCAL_T_SET, NULL),      // Set constructors [1, 2, 3]
+        set_constructor(PASCAL_T_SET, p),         // Set constructors [1, 2, 3]
         token(boolean_true),                      // Boolean true
         token(boolean_false),                     // Boolean false
         typecast,                                 // Type casts Integer(x) - try before func_call

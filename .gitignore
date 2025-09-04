@@ -22,12 +22,6 @@ build/
 *.so
 *.dll
 
-# Specific executables that might be built in-source (should use build/ dir instead)
-/pascal_tests
-/calc_tests  
-/json_tests
-/calculator
-/json_parser_cli
-/pascal_parser_cli
+# Example build artifacts
 examples/*/test_pascal
 examples/*/test_pascal_tests
