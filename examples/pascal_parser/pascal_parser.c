@@ -970,98 +970,206 @@ static combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
 
 // Removed unused relational_ops() function that had non-boundary-aware match("in")
 
-// Pascal string literal parser - supports both single 'text' and double "text" quotes
-static ParseResult pascal_string_fn(input_t* in, void* args) {
+// Pascal single-quoted string content parser - handles '' escaping
+static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
-    InputState state; 
-    save_input_state(in, &state);
+    int start_offset = in->start;
     
-    char quote_char = read1(in);
-    if (quote_char != '"' && quote_char != '\'') {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '\"' or '\\''"));
-    }
-    
-    int capacity = 64;
-    char* str_val = (char*)safe_malloc(capacity);
-    int len = 0;
-    char c;
-    
-    while (true) {
-        c = read1(in);
+    while(1) {
+        InputState current_state; 
+        save_input_state(in, &current_state);
         
+        char c = read1(in);
         if (c == EOF) {
-            free(str_val);
-            return make_failure(in, strdup("Unterminated string"));
+            break; // End of content
         }
         
-        // Handle Pascal-style escaped single quotes (doubled quotes)
-        if (quote_char == '\'' && c == '\'') {
-            // Check if the next character is also a single quote
+        if (c == '\'') {
+            // Check if this is an escaped quote (doubled quote)
             char next_c = read1(in);
             if (next_c == '\'') {
-                // This is an escaped single quote, keep the single quote character
-                c = '\'';
+                // This is an escaped single quote, continue parsing
+                continue;
             } else {
-                // This is the end of the string, put back the character and exit loop
+                // This is the end of the string, put back the character and break
                 if (next_c != EOF) in->start--;
+                restore_input_state(in, &current_state);
                 break;
             }
         }
-        // Handle double quote termination
-        else if (quote_char == '"' && c == quote_char) {
-            break;
-        }
-        // Handle escape sequences for double quotes
-        else if (quote_char == '"' && c == '\\') {
-            c = read1(in);
-            if (c == EOF) {
-                free(str_val);
-                return make_failure(in, strdup("Unterminated string"));
-            }
-            switch (c) {
-                case 'n': c = '\n'; break;
-                case 't': c = '\t'; break;
-                case '"': c = '"'; break;
-                case '\\': c = '\\'; break;
-            }
-        }
-        
-        // Expand buffer if needed
-        if (len + 1 >= capacity) {
-            capacity *= 2;
-            char* new_str_val = realloc(str_val, capacity);
-            if (!new_str_val) {
-                free(str_val);
-                exception("realloc failed");
-            }
-            str_val = new_str_val;
-        }
-        
-        str_val[len++] = c;
     }
     
-    str_val[len] = '\0';
+    int len = in->start - start_offset;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_offset, len);
+    text[len] = '\0';
+    
+    // Process Pascal-style escape sequences (doubled quotes)
+    int processed_len = 0;
+    char* processed_text = (char*)safe_malloc(len + 1);
+    
+    for (int i = 0; i < len; i++) {
+        if (text[i] == '\'' && i + 1 < len && text[i + 1] == '\'') {
+            // This is an escaped single quote - add one quote and skip the next
+            processed_text[processed_len++] = '\'';
+            i++; // Skip the next quote
+        } else {
+            processed_text[processed_len++] = text[i];
+        }
+    }
+    processed_text[processed_len] = '\0';
     
     ast_t* ast = new_ast();
-    ast->typ = pargs->tag;
-    ast->sym = sym_lookup(str_val);
+    ast->typ = pargs->tag; 
+    ast->sym = sym_lookup(processed_text);
     ast->child = NULL;
     ast->next = NULL;
-    free(str_val);
     set_ast_position(ast, in);
     
+    free(text);
+    free(processed_text);
     return make_success(ast);
 }
 
-combinator_t* pascal_string(tag_t tag) {
+// Pascal double-quoted string content parser - handles \ escaping  
+static ParseResult pascal_double_quoted_content_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    int start_offset = in->start;
+    
+    while(1) {
+        char c = read1(in);
+        if (c == EOF) {
+            break; // End of content
+        }
+        
+        if (c == '"') {
+            // End of string - put back the quote and break
+            in->start--;
+            break;
+        }
+        
+        if (c == '\\') {
+            // Skip the escaped character
+            read1(in);
+        }
+    }
+    
+    int len = in->start - start_offset;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_offset, len);
+    text[len] = '\0';
+    
+    // Process C-style escape sequences
+    int processed_len = 0;
+    char* processed_text = (char*)safe_malloc(len + 1);
+    
+    for (int i = 0; i < len; i++) {
+        if (text[i] == '\\' && i + 1 < len) {
+            // Process escape sequence
+            char next = text[i + 1];
+            switch (next) {
+                case 'n': processed_text[processed_len++] = '\n'; break;
+                case 't': processed_text[processed_len++] = '\t'; break;
+                case '"': processed_text[processed_len++] = '"'; break;
+                case '\\': processed_text[processed_len++] = '\\'; break;
+                default: 
+                    // Unknown escape - keep both characters
+                    processed_text[processed_len++] = text[i];
+                    processed_text[processed_len++] = text[i + 1];
+                    break;
+            }
+            i++; // Skip the next character
+        } else {
+            processed_text[processed_len++] = text[i];
+        }
+    }
+    processed_text[processed_len] = '\0';
+    
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(processed_text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    free(text);
+    free(processed_text);
+    return make_success(ast);
+}
+
+// Create combinator for Pascal single-quoted string content
+combinator_t* pascal_single_quoted_content(tag_t tag) {
     prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t* comb = new_combinator();
-    comb->type = P_STRING; // Reuse the same type
-    comb->fn = pascal_string_fn;
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = pascal_single_quoted_content_fn;
     comb->args = args;
     return comb;
+}
+
+// Create combinator for Pascal double-quoted string content
+combinator_t* pascal_double_quoted_content(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = pascal_double_quoted_content_fn;
+    comb->args = args;
+    return comb;
+}
+
+// Map function to extract string content from sequence AST
+static ast_t* extract_string_from_seq(ast_t* seq_ast) {
+    if (!seq_ast || !seq_ast->child) {
+        return seq_ast; // Return as-is if malformed
+    }
+    
+    // The sequence should be: quote, content, quote
+    // We want to return just the content (middle element)
+    ast_t* content = seq_ast->child->next; // Skip first element (opening quote)
+    if (!content) {
+        return seq_ast; // Return as-is if malformed
+    }
+    
+    // Create a copy of the content node
+    ast_t* result = new_ast();
+    result->typ = content->typ;
+    result->sym = content->sym;
+    result->child = copy_ast(content->child);
+    result->next = NULL;
+    result->line = content->line;
+    result->col = content->col;
+    
+    return result;
+}
+
+combinator_t* pascal_string(tag_t tag) {
+    // Create a combinator that extracts just the content from the sequence
+    combinator_t* single_quoted = seq(new_combinator(), PASCAL_T_NONE,
+        match("'"),                               // opening single quote
+        pascal_single_quoted_content(tag),        // content with Pascal escaping  
+        match("'"),                               // closing single quote
+        NULL
+    );
+    
+    combinator_t* double_quoted = seq(new_combinator(), PASCAL_T_NONE,
+        match("\""),                              // opening double quote
+        pascal_double_quoted_content(tag),        // content with C-style escaping
+        match("\""),                              // closing double quote
+        NULL
+    );
+    
+    // Map function to extract just the string content from the sequence
+    combinator_t* single_quoted_mapped = map(single_quoted, extract_string_from_seq);
+    combinator_t* double_quoted_mapped = map(double_quoted, extract_string_from_seq);
+    
+    // Return a multi combinator that tries both alternatives
+    return multi(new_combinator(), PASCAL_T_NONE,
+        single_quoted_mapped,
+        double_quoted_mapped,
+        NULL
+    );
 }
 const char* pascal_tag_to_string(tag_t tag) {
     switch (tag) {
