@@ -25,3 +25,47 @@ bool is_pascal_keyword(const char* str) {
     }
     return false;
 }
+
+// Word-boundary aware case-insensitive keyword matching
+static ParseResult keyword_ci_fn(input_t* in, void* args) {
+    char* str = ((match_args*)args)->str;
+    InputState state;
+    save_input_state(in, &state);
+
+    int len = strlen(str);
+
+    // Match the keyword case-insensitively
+    for (int i = 0; i < len; i++) {
+        char c = read1(in);
+        if (tolower(c) != tolower(str[i])) {
+            restore_input_state(in, &state);
+            char* err_msg;
+            asprintf(&err_msg, "Expected keyword '%s' (case-insensitive)", str);
+            return make_failure(in, err_msg);
+        }
+    }
+
+    // Check for word boundary: next character should not be alphanumeric or underscore
+    if (in->start < in->length) {
+        char next_char = in->buffer[in->start];
+        if (isalnum((unsigned char)next_char) || next_char == '_') {
+            restore_input_state(in, &state);
+            char* err_msg;
+            asprintf(&err_msg, "Expected keyword '%s', not part of identifier", str);
+            return make_failure(in, err_msg);
+        }
+    }
+
+    return make_success(ast_nil);
+}
+
+// Create word-boundary aware case-insensitive keyword parser
+combinator_t* keyword_ci(char* str) {
+    match_args* args = (match_args*)safe_malloc(sizeof(match_args));
+    args->str = str;
+    combinator_t* comb = new_combinator();
+    comb->type = P_CI_KEYWORD;
+    comb->fn = keyword_ci_fn;
+    comb->args = args;
+    return comb;
+}

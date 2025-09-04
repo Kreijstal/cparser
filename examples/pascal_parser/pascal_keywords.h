@@ -2,8 +2,13 @@
 #define PASCAL_KEYWORDS_H
 
 #include <stdbool.h>
+#include "parser.h"
+#include "combinators.h"
+
+typedef struct { char* str; } match_args;
 
 extern const char* pascal_reserved_keywords[];
 bool is_pascal_keyword(const char* str);
+combinator_t* keyword_ci(char* str);
 
 #endif // PASCAL_KEYWORDS_H
