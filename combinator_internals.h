@@ -74,6 +74,12 @@ typedef struct {
 
 typedef struct {
     combinator_t* parser;
+    map_with_context_func func;
+    void* context;
+} map_with_context_args;
+
+typedef struct {
+    combinator_t* parser;
     err_map_func func;
 } errmap_args;
 

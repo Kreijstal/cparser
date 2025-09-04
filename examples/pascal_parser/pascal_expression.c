@@ -2,6 +2,7 @@
 #include "pascal_parser.h"
 #include "pascal_keywords.h"
 #include "pascal_type.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -218,53 +219,12 @@ combinator_t* real_number(tag_t tag) {
 }
 
 // Custom parser for character literals (e.g., 'A', 'x')
-static ParseResult char_fn(input_t* in, void* args) {
-    prim_args* pargs = (prim_args*)args;
-    InputState state;
-    save_input_state(in, &state);
-
-    // Must start with single quote
-    if (read1(in) != '\'') {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected single quote"));
-    }
-
-    // Must have at least one character
-    char char_value = read1(in);
-    if (char_value == EOF) {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Unterminated character literal"));
-    }
-
-    // Must end with single quote
-    if (read1(in) != '\'') {
-        restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected closing single quote"));
-    }
-
-    // Create AST node with the character value
-    char text[2];
-    text[0] = char_value;
-    text[1] = '\0';
-
-    ast_t* ast = new_ast();
-    ast->typ = pargs->tag;
-    ast->sym = sym_lookup(text);
-    ast->child = NULL;
-    ast->next = NULL;
-    set_ast_position(ast, in);
-
-    return make_success(ast);
-}
-
 combinator_t* char_literal(tag_t tag) {
-    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY; // Reuse existing type for custom parser
-    comb->fn = char_fn;
-    comb->args = args;
-    return comb;
+    return between(
+        token(match("'")),
+        token(match("'")),
+        any_char(tag)
+    );
 }
 
 // Custom parser for range expressions (e.g., 'a'..'z', 1..10)
@@ -301,55 +261,33 @@ combinator_t* range_operator(tag_t tag) {
     return comb;
 }
 
-// Simplified set constructor parser using combinators
-static ParseResult set_constructor_fn(input_t* in, void* args) {
-    set_args* sargs = (set_args*)args;
-    tag_t tag = sargs->tag;
-    combinator_t** expr_parser = sargs->expr_parser;
-
-    // A set is a comma-separated list of expressions between square brackets
-    combinator_t* lbracket = token(match("["));
-    combinator_t* rbracket = token(match("]"));
-    combinator_t* comma = token(match(","));
-    combinator_t* set_elements = sep_by(lazy(expr_parser), comma);
-
-    // Use `between` to handle the brackets and get the optional elements
-    combinator_t* set_parser = between(lbracket, rbracket, optional(set_elements));
-
-    // Parse the input
-    ParseResult res = parse(in, set_parser);
-
-    // Clean up the combinators
-    free_combinator(set_parser);
-
-    if (!res.is_success) {
-        return res;
-    }
-
-    // If successful, wrap the resulting list of elements in a PASCAL_T_SET node
+// Map function to create a set node from a list of elements
+static ast_t* map_to_set_node(ast_t* element_list, void* context) {
+    tag_t tag = (tag_t)(intptr_t)context;
     ast_t* set_node = new_ast();
     set_node->typ = tag;
-    if (res.value.ast == ast_nil) {
+    if (element_list == ast_nil) {
         set_node->child = NULL;
     } else {
-        set_node->child = res.value.ast;
+        set_node->child = element_list;
     }
-    set_ast_position(set_node, in);
-
-    return make_success(set_node);
+    return set_node;
 }
 
+// Simplified set constructor parser using combinators
 combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
-    set_args* args = (set_args*)safe_malloc(sizeof(set_args));
-    args->tag = tag;
-    args->expr_parser = expr_parser;
+    // A set is a comma-separated list of expressions between square brackets
+    combinator_t* set_elements = sep_by(lazy(expr_parser), token(match(",")));
 
-    combinator_t* comb = new_combinator();
-    comb->type = P_SATISFY; // Re-use a primitive type for our custom function
-    comb->fn = set_constructor_fn;
-    comb->args = args;
+    // Use `between` to handle the brackets and get the optional elements
+    combinator_t* set_parser = between(
+        token(match("[")),
+        token(match("]")),
+        optional(set_elements)
+    );
 
-    return comb;
+    // Use map_with_context to wrap the element list in a set node with the correct tag
+    return map_with_context(set_parser, map_to_set_node, (void*)(intptr_t)tag);
 }
 
 // Removed unused relational_ops() function that had non-boundary-aware match("in")

@@ -258,6 +258,16 @@ static ParseResult map_fn(input_t * in, void * args) {
     return make_success(new_ast);
 }
 
+static ParseResult map_with_context_fn(input_t * in, void * args) {
+    map_with_context_args* margs = (map_with_context_args*)args;
+    ParseResult res = parse(in, margs->parser);
+    if (!res.is_success) {
+        return res;
+    }
+    ast_t* new_ast = margs->func(res.value.ast, margs->context);
+    return make_success(new_ast);
+}
+
 static ParseResult gseq_fn(input_t * in, void * args) {
     seq_args * sa = (seq_args *) args;
     seq_list * seq = sa->list;
@@ -485,6 +495,18 @@ combinator_t * between(combinator_t* open, combinator_t* close, combinator_t* p)
     combinator_t * comb = new_combinator();
     comb->type = COMB_BETWEEN;
     comb->fn = between_fn;
+    comb->args = (void *) args;
+    return comb;
+}
+
+combinator_t * map_with_context(combinator_t* p, map_with_context_func func, void* context) {
+    map_with_context_args* args = (map_with_context_args*)safe_malloc(sizeof(map_with_context_args));
+    args->parser = p;
+    args->func = func;
+    args->context = context;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_MAP_WITH_CONTEXT;
+    comb->fn = map_with_context_fn;
     comb->args = (void *) args;
     return comb;
 }
