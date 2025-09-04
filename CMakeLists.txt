@@ -68,6 +68,11 @@ if(BUILD_INTEGRATION_TESTS)
     add_library(pascal_parser_lib STATIC
         examples/pascal_parser/pascal_parser.c
         examples/pascal_parser/pascal_parser.h
+        examples/pascal_parser/pascal_keywords.c
+        examples/pascal_parser/pascal_type.c
+        examples/pascal_parser/pascal_expression.c
+        examples/pascal_parser/pascal_statement.c
+        examples/pascal_parser/pascal_declaration.c
     )
     target_link_libraries(pascal_parser_lib PUBLIC parser_lib)
     target_include_directories(pascal_parser_lib PUBLIC ${CMAKE_SOURCE_DIR})

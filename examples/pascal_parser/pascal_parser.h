@@ -3,6 +3,10 @@
 
 #include "parser.h"
 #include "combinators.h"
+#include "pascal_expression.h"
+#include "pascal_statement.h"
+#include "pascal_declaration.h"
+#include "pascal_type.h"
 
 // --- Custom Tags for Pascal Expressions ---
 typedef enum {
@@ -117,12 +121,7 @@ typedef enum {
 } pascal_tag_t;
 
 // --- Function Declarations ---
-void init_pascal_expression_parser(combinator_t** p);
-void init_pascal_statement_parser(combinator_t** p);
 void init_pascal_program_parser(combinator_t** p);
-void init_pascal_procedure_parser(combinator_t** p);
-void init_pascal_method_implementation_parser(combinator_t** p);
-void init_pascal_complete_program_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
 
@@ -133,11 +132,5 @@ combinator_t* pascal_token(combinator_t* p);
 combinator_t* token(combinator_t* p);  // Backward compatibility wrapper
 combinator_t* pascal_identifier(tag_t tag);  // Pascal identifier that excludes reserved keywords
 combinator_t* compiler_directive(tag_t tag);
-combinator_t* range_type(tag_t tag);
-combinator_t* array_type(tag_t tag);
-combinator_t* class_type(tag_t tag);
-
-// --- Utility Functions ---
-ParseResult parse_pascal_expression(input_t* input, combinator_t* parser);
 
 #endif // PASCAL_PARSER_H
