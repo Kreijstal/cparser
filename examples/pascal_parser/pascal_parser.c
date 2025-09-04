@@ -200,6 +200,77 @@ combinator_t* pascal_identifier(tag_t tag) {
     return comb;
 }
 
+// Keywords that can be used as function names in expressions
+static const char* expression_allowed_keywords[] = {
+    "procedure", "function", "program", "unit",
+    NULL
+};
+
+// Check if a keyword is allowed as an identifier in expressions
+static bool is_expression_allowed_keyword(const char* str) {
+    for (int i = 0; expression_allowed_keywords[i] != NULL; i++) {
+        if (strcasecmp(str, expression_allowed_keywords[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Pascal identifier parser for expressions - allows certain keywords as function names
+static ParseResult pascal_expression_identifier_fn(input_t* in, void* args) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    
+    int start_pos = in->start;
+    char c = read1(in);
+    
+    // Must start with letter or underscore
+    if (c != '_' && !isalpha(c)) {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected identifier"));
+    }
+    
+    // Continue with alphanumeric or underscore
+    while (isalnum(c = read1(in)) || c == '_');
+    if (c != EOF) in->start--;
+    
+    // Extract the identifier text
+    int len = in->start - start_pos;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_pos, len);
+    text[len] = '\0';
+    
+    // Check if it's a reserved keyword that's NOT allowed in expressions
+    if (is_pascal_keyword(text) && !is_expression_allowed_keyword(text)) {
+        free(text);
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Identifier cannot be a reserved keyword"));
+    }
+    
+    // Create AST node for valid identifier
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    free(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+    
+    return make_success(ast);
+}
+
+// Create Pascal expression identifier combinator that allows certain keywords
+combinator_t* pascal_expression_identifier(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_CIDENT;
+    comb->fn = pascal_expression_identifier_fn;
+    comb->args = args;
+    return comb;
+}
+
 // Range type parser: start..end (e.g., -1..1)
 static ParseResult range_type_fn(input_t* in, void* args) {
     prim_args* pargs = (prim_args*)args;
@@ -1139,8 +1210,8 @@ void init_pascal_expression_parser(combinator_t** p) {
     // Pascal identifier parser - excludes reserved keywords like BEGIN, END, etc.
     combinator_t* identifier = token(pascal_identifier(PASCAL_T_IDENTIFIER));
     
-    // Function name: use Pascal identifier parser that excludes keywords
-    combinator_t* func_name = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    // Function name: use expression identifier parser that allows certain keywords as function names
+    combinator_t* func_name = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
     
     // Function call parser: function name followed by optional argument list
     combinator_t* arg_list = between(
