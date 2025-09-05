@@ -14,9 +14,9 @@ static bool is_whitespace(char c) {
 //=============================================================================
 
 // Forward declarations
-static ParseResult number_fn(input_t* in, void* args);
-static ParseResult null_core_fn(input_t* in, void* args);
-static ParseResult bool_core_fn(input_t* in, void* args);
+static ParseResult number_fn(input_t* in, void* args, char* parser_name);
+static ParseResult null_core_fn(input_t* in, void* args, char* parser_name);
+static ParseResult bool_core_fn(input_t* in, void* args, char* parser_name);
 
 combinator_t* number(tag_t tag);
 combinator_t* json_null(tag_t tag);
@@ -24,34 +24,34 @@ combinator_t* json_bool(tag_t tag);
 combinator_t* json_string(tag_t tag);
 
 
-static ParseResult number_fn(input_t* in, void* args) {
+static ParseResult number_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
     int start_pos = in->start;
     char c = read1(in);
-    if (!isdigit(c) && c != '-') { restore_input_state(in, &state); return make_failure(in, strdup("Expected a number.")); }
+    if (!isdigit(c) && c != '-') { restore_input_state(in, &state); return make_failure_v2(in, parser_name, strdup("Expected a number."), NULL); }
     if (c == '-') {
         c = read1(in);
-        if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a digit after minus.")); }
+        if (!isdigit(c)) { restore_input_state(in, &state); return make_failure_v2(in, parser_name, strdup("Expected a digit after minus."), NULL); }
     }
     // consume digits
     while (in->start < in->length && isdigit(in->buffer[in->start])) in->start++;
     // check for .
     if (in->start < in->length && in->buffer[in->start] == '.') {
         in->start++; // consume .
-        if (in->start >= in->length || !isdigit(in->buffer[in->start])) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid fractional part.")); }
+        if (in->start >= in->length || !isdigit(in->buffer[in->start])) { restore_input_state(in, &state); return make_failure_v2(in, parser_name, strdup("Invalid fractional part."), NULL); }
         while (in->start < in->length && isdigit(in->buffer[in->start])) in->start++;
     }
     // check for e or E
     if (in->start < in->length && (in->buffer[in->start] == 'e' || in->buffer[in->start] == 'E')) {
         in->start++; // consume e/E
         if (in->start < in->length && (in->buffer[in->start] == '+' || in->buffer[in->start] == '-')) in->start++; // consume +/-
-        if (in->start >= in->length || !isdigit(in->buffer[in->start])) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid exponent part.")); }
+        if (in->start >= in->length || !isdigit(in->buffer[in->start])) { restore_input_state(in, &state); return make_failure_v2(in, parser_name, strdup("Invalid exponent part."), NULL); }
         while (in->start < in->length && isdigit(in->buffer[in->start])) in->start++;
     }
     int len = in->start - start_pos;
-    if (len == 0 || (len == 1 && in->buffer[start_pos] == '-')) { restore_input_state(in, &state); return make_failure(in, strdup("Invalid number.")); }
+    if (len == 0 || (len == 1 && in->buffer[start_pos] == '-')) { restore_input_state(in, &state); return make_failure_v2(in, parser_name, strdup("Invalid number."), NULL); }
     char* text = (char*)safe_malloc(len + 1);
     strncpy(text, in->buffer + start_pos, len);
     text[len] = '\0';
@@ -73,7 +73,7 @@ combinator_t* number(tag_t tag) {
     return right(ws, num);
 }
 
-static ParseResult null_core_fn(input_t* in, void* args) {
+static ParseResult null_core_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     ParseResult result = parse(in, match("null"));
     if (result.is_success) {
@@ -96,7 +96,7 @@ combinator_t* json_null(tag_t tag) {
     return right(ws, null_core);
 }
 
-static ParseResult bool_core_fn(input_t* in, void* args) {
+static ParseResult bool_core_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);

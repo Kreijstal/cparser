@@ -63,10 +63,17 @@ int main(int argc, char *argv[]) {
             free_ast(result.value.ast);
         }
     } else {
-        fprintf(stderr, "Parsing Error at line %d, col %d: %s\n",
+        fprintf(stderr, "Parsing Error at line %d, col %d: ",
                 result.value.error->line,
-                result.value.error->col,
-                result.value.error->message);
+                result.value.error->col);
+        if (result.value.error->parser_name) {
+            fprintf(stderr, "In parser '%s': ", result.value.error->parser_name);
+        }
+        fprintf(stderr, "%s\n", result.value.error->message);
+
+        if (result.value.error->unexpected) {
+            fprintf(stderr, "Unexpected input: \"%s\"\n", result.value.error->unexpected);
+        }
         free_error(result.value.error);
     }
 

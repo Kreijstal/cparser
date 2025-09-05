@@ -8,7 +8,7 @@
 #include <ctype.h>
 
 // Pascal identifier parser that excludes reserved keywords
-static ParseResult pascal_identifier_fn(input_t* in, void* args) {
+static ParseResult pascal_identifier_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -19,7 +19,7 @@ static ParseResult pascal_identifier_fn(input_t* in, void* args) {
     // Must start with letter or underscore
     if (c != '_' && !isalpha(c)) {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected identifier"));
+        return make_failure_v2(in, parser_name, strdup("Expected identifier"), NULL);
     }
 
     // Continue with alphanumeric or underscore
@@ -36,7 +36,7 @@ static ParseResult pascal_identifier_fn(input_t* in, void* args) {
     if (is_pascal_keyword(text)) {
         free(text);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Identifier cannot be a reserved keyword"));
+        return make_failure_v2(in, parser_name, strdup("Identifier cannot be a reserved keyword"), NULL);
     }
 
     // Create AST node for valid identifier (following original cident_fn pattern)
@@ -81,7 +81,7 @@ static bool is_expression_allowed_keyword(const char* str) {
 }
 
 // Pascal identifier parser for expressions - allows certain keywords as function names
-static ParseResult pascal_expression_identifier_fn(input_t* in, void* args) {
+static ParseResult pascal_expression_identifier_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -92,7 +92,7 @@ static ParseResult pascal_expression_identifier_fn(input_t* in, void* args) {
     // Must start with letter or underscore
     if (c != '_' && !isalpha(c)) {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected identifier"));
+        return make_failure_v2(in, parser_name, strdup("Expected identifier"), NULL);
     }
 
     // Continue with alphanumeric or underscore
@@ -109,7 +109,7 @@ static ParseResult pascal_expression_identifier_fn(input_t* in, void* args) {
     if (is_pascal_keyword(text) && !is_expression_allowed_keyword(text)) {
         free(text);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Identifier cannot be a reserved keyword"));
+        return make_failure_v2(in, parser_name, strdup("Identifier cannot be a reserved keyword"), NULL);
     }
 
     // Create AST node for valid identifier
@@ -135,7 +135,7 @@ combinator_t* pascal_expression_identifier(tag_t tag) {
     return comb;
 }
 
-static ParseResult real_fn(input_t* in, void* args) {
+static ParseResult real_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -146,7 +146,7 @@ static ParseResult real_fn(input_t* in, void* args) {
     char c = read1(in);
     if (!isdigit(c)) {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected digit"));
+        return make_failure_v2(in, parser_name, strdup("Expected digit"), NULL);
     }
 
     while (isdigit(c = read1(in)));
@@ -155,14 +155,14 @@ static ParseResult real_fn(input_t* in, void* args) {
     // Must have decimal point
     if (read1(in) != '.') {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected decimal point"));
+        return make_failure_v2(in, parser_name, strdup("Expected decimal point"), NULL);
     }
 
     // Parse fractional part (at least one digit required)
     c = read1(in);
     if (!isdigit(c)) {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected digit after decimal point"));
+        return make_failure_v2(in, parser_name, strdup("Expected digit after decimal point"), NULL);
     }
 
     while (isdigit(c = read1(in)));
@@ -180,7 +180,7 @@ static ParseResult real_fn(input_t* in, void* args) {
         // Must have at least one digit after E/e
         if (!isdigit(c)) {
             restore_input_state(in, &state);
-            return make_failure(in, strdup("Expected digit after exponent"));
+            return make_failure_v2(in, parser_name, strdup("Expected digit after exponent"), NULL);
         }
 
         // Parse remaining exponent digits
@@ -218,16 +218,57 @@ combinator_t* real_number(tag_t tag) {
 }
 
 // Custom parser for character literals (e.g., 'A', 'x')
+static ParseResult char_fn(input_t* in, void* args, char* parser_name) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+
+    // Must start with single quote
+    if (read1(in) != '\'') {
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected single quote"), NULL);
+    }
+
+    // Must have at least one character
+    char char_value = read1(in);
+    if (char_value == EOF) {
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Unterminated character literal"), NULL);
+    }
+
+    // Must end with single quote
+    if (read1(in) != '\'') {
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected closing single quote"), NULL);
+    }
+
+    // Create AST node with the character value
+    char text[2];
+    text[0] = char_value;
+    text[1] = '\0';
+
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+
+    return make_success(ast);
+}
+
 combinator_t* char_literal(tag_t tag) {
-    return between(
-        token(match("'")),
-        token(match("'")),
-        any_char(tag)
-    );
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = char_fn;
+    comb->args = args;
+    return comb;
 }
 
 // Custom parser for range expressions (e.g., 'a'..'z', 1..10)
-static ParseResult range_fn(input_t* in, void* args) {
+static ParseResult range_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -236,7 +277,7 @@ static ParseResult range_fn(input_t* in, void* args) {
     // We just need to consume the ".." token
     if (read1(in) != '.' || read1(in) != '.') {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '..'"));
+        return make_failure_v2(in, parser_name, strdup("Expected '..'"), NULL);
     }
 
     // Create a placeholder AST node - the actual range will be built by the expression parser
@@ -261,7 +302,7 @@ combinator_t* range_operator(tag_t tag) {
 }
 
 // Simplified set constructor parser using existing parse utilities
-static ParseResult set_fn(input_t* in, void* args) {
+static ParseResult set_fn(input_t* in, void* args, char* parser_name) {
     set_args* sargs = (set_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -269,7 +310,7 @@ static ParseResult set_fn(input_t* in, void* args) {
     // Must start with '['
     if (read1(in) != '[') {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '['"));
+        return make_failure_v2(in, parser_name, strdup("Expected '['"), NULL);
     }
 
     ast_t* set_node = new_ast();
@@ -308,7 +349,7 @@ static ParseResult set_fn(input_t* in, void* args) {
             free_ast(set_node);
             free_combinator(expr_parser);
             restore_input_state(in, &state);
-            return make_failure(in, strdup("Expected set element"));
+            return make_failure_v2(in, parser_name, strdup("Expected set element"), NULL);
         }
 
         // Add element to set
@@ -335,7 +376,7 @@ static ParseResult set_fn(input_t* in, void* args) {
             free_ast(set_node);
             free_combinator(expr_parser);
             restore_input_state(in, &state);
-            return make_failure(in, strdup("Expected ',' or ']'"));
+            return make_failure_v2(in, parser_name, strdup("Expected ',' or ']'"), NULL);
         }
     }
 
@@ -357,7 +398,7 @@ combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
 // Removed unused relational_ops() function that had non-boundary-aware match("in")
 
 // Pascal single-quoted string content parser using combinators - handles '' escaping
-static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args) {
+static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     int start_offset = in->start;
 
@@ -429,7 +470,7 @@ combinator_t* pascal_single_quoted_content(tag_t tag) {
 }
 
 // Pascal double-quoted string content parser - handles \ escaping
-static ParseResult pascal_double_quoted_content_fn(input_t* in, void* args) {
+static ParseResult pascal_double_quoted_content_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     int start_offset = in->start;
 
@@ -505,55 +546,24 @@ combinator_t* pascal_double_quoted_content(tag_t tag) {
     return comb;
 }
 
-// Map function to extract string content from sequence AST
-static ast_t* extract_string_from_seq(ast_t* seq_ast) {
-    if (!seq_ast || !seq_ast->child) {
-        return seq_ast; // Return as-is if malformed
-    }
-
-    // The sequence should be: quote, content, quote
-    // We want to return just the content (middle element)
-    ast_t* content = seq_ast->child->next; // Skip first element (opening quote)
-    if (!content) {
-        return seq_ast; // Return as-is if malformed
-    }
-
-    // Create a copy of the content node
-    ast_t* result = new_ast();
-    result->typ = content->typ;
-    result->sym = content->sym;
-    result->child = copy_ast(content->child);
-    result->next = NULL;
-    result->line = content->line;
-    result->col = content->col;
-
-    return result;
-}
+// Pascal string parser using the between combinator for safety
 
 combinator_t* pascal_string(tag_t tag) {
-    // Create a combinator that extracts just the content from the sequence
-    combinator_t* single_quoted = seq(new_combinator(), PASCAL_T_NONE,
-        match("'"),                               // opening single quote
-        pascal_single_quoted_content(tag),        // content with Pascal escaping
-        match("'"),                               // closing single quote
-        NULL
+    combinator_t* single_quoted = between(
+        match("'"),
+        match("'"),
+        pascal_single_quoted_content(tag)
     );
 
-    combinator_t* double_quoted = seq(new_combinator(), PASCAL_T_NONE,
-        match("\""),                              // opening double quote
-        pascal_double_quoted_content(tag),        // content with C-style escaping
-        match("\""),                              // closing double quote
-        NULL
+    combinator_t* double_quoted = between(
+        match("\""),
+        match("\""),
+        pascal_double_quoted_content(tag)
     );
 
-    // Map function to extract just the string content from the sequence
-    combinator_t* single_quoted_mapped = map(single_quoted, extract_string_from_seq);
-    combinator_t* double_quoted_mapped = map(double_quoted, extract_string_from_seq);
-
-    // Return a multi combinator that tries both alternatives
     return multi(new_combinator(), PASCAL_T_NONE,
-        single_quoted_mapped,
-        double_quoted_mapped,
+        single_quoted,
+        double_quoted,
         NULL
     );
 }
@@ -579,7 +589,7 @@ static void post_process_set_operations(ast_t* ast) {
 }
 
 // --- Parser Definition ---
-void init_pascal_expression_parser(combinator_t** p, pascal_expression_parsers* shared_parsers) {
+void init_pascal_expression_parser(combinator_t** p) {
     // Pascal identifier parser - use expression identifier that allows some keywords in expression contexts
     combinator_t* identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
 
@@ -711,21 +721,6 @@ void init_pascal_expression_parser(combinator_t** p, pascal_expression_parsers* 
         NULL
     );
     expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(member_access_op));
-
-    // Standalone member access parser for l-values
-    combinator_t* member_access_standalone = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
-        identifier,
-        token(match(".")),
-        identifier,
-        NULL
-    );
-
-    if (shared_parsers) {
-        shared_parsers->array_access = array_access;
-        shared_parsers->func_call = func_call;
-        shared_parsers->identifier = identifier;
-        shared_parsers->member_access = member_access_standalone;
-    }
 }
 
 // --- Utility Functions ---

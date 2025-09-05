@@ -31,7 +31,7 @@ void init_pascal_procedure_parser(combinator_t** p) {
     combinator_t** expr_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
     *expr_parser = new_combinator();
     (*expr_parser)->extra_to_free = expr_parser;
-    init_pascal_expression_parser(expr_parser, NULL);
+    init_pascal_expression_parser(expr_parser);
 
     // Create statement parser for procedure/function bodies
     combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
@@ -165,7 +165,7 @@ void init_pascal_method_implementation_parser(combinator_t** p) {
 
 // Pascal Complete Program Parser - for full Pascal programs
 // Custom parser for main block content that parses statements properly
-static ParseResult main_block_content_fn(input_t* in, void* args) {
+static ParseResult main_block_content_fn(input_t* in, void* args, char* parser_name) {
     // Parse statements until we can't parse any more
     // Don't look for "end" - that's handled by the parent main_block parser
 
@@ -350,7 +350,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     *nested_proc_or_func = new_combinator();
     (*nested_proc_or_func)->extra_to_free = nested_proc_or_func;
 
-    // Forward declaration for nested functions - these will refer to function_definition and procedure_definition below
+    // Forward declaration for nested functions - these will refer to working_function and working_procedure below
     combinator_t* nested_function_decl = lazy(nested_proc_or_func);
 
     combinator_t* nested_function_body = seq(new_combinator(), PASCAL_T_NONE,
@@ -377,48 +377,6 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         param_list,                                  // optional parameter list
         token(match(";")),                           // semicolon after parameters
         program_function_body,                       // procedure body with terminating semicolon for programs
-        NULL
-    );
-
-    // Function declaration (header only): function name [(params)] : return_type;
-    combinator_t* function_declaration = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(keyword_ci("function")),               // function keyword (with word boundary check)
-        token(cident(PASCAL_T_IDENTIFIER)),          // function name
-        param_list,                                  // optional parameter list
-        return_type,                                 // return type
-        token(match(";")),                           // terminating semicolon (no body)
-        NULL
-    );
-
-    // Procedure declaration (header only): procedure name [(params)];
-    combinator_t* procedure_declaration = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(keyword_ci("procedure")),                // procedure keyword (case-insensitive)
-        token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
-        param_list,                                  // optional parameter list
-        token(match(";")),                           // terminating semicolon (no body)
-        NULL
-    );
-
-    // Function definition (with body): function name [(params)] : return_type ; body ;
-    combinator_t* function_definition = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
-        token(keyword_ci("function")),                 // function keyword (case-insensitive)
-        token(cident(PASCAL_T_IDENTIFIER)),          // function name
-        param_list,                                  // optional parameter list
-        return_type,                                 // return type
-        token(match(";")),                           // semicolon after return type (like standalone functions)
-        program_function_body,                       // function body without terminating semicolon
-        token(match(";")),                           // terminating semicolon after function definition
-        NULL
-    );
-
-    // Procedure definition (with body): procedure name [(params)] ; body ;
-    combinator_t* procedure_definition = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
-        token(keyword_ci("procedure")),                // procedure keyword (case-insensitive)
-        token(cident(PASCAL_T_IDENTIFIER)),          // procedure name
-        param_list,                                  // optional parameter list
-        token(match(";")),                           // semicolon after parameters
-        program_function_body,                       // procedure body without terminating semicolon
-        token(match(";")),                           // terminating semicolon after procedure definition
         NULL
     );
 

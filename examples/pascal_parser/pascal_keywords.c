@@ -28,7 +28,7 @@ bool is_pascal_keyword(const char* str) {
 }
 
 // Word-boundary aware case-insensitive keyword matching
-static ParseResult keyword_ci_fn(input_t* in, void* args) {
+static ParseResult keyword_ci_fn(input_t* in, void* args, char* parser_name) {
     char* str = ((match_args*)args)->str;
     InputState state;
     save_input_state(in, &state);
@@ -42,7 +42,7 @@ static ParseResult keyword_ci_fn(input_t* in, void* args) {
             restore_input_state(in, &state);
             char* err_msg;
             asprintf(&err_msg, "Expected keyword '%s' (case-insensitive)", str);
-            return make_failure(in, err_msg);
+            return make_failure_v2(in, parser_name, err_msg, NULL);
         }
     }
 
@@ -53,7 +53,7 @@ static ParseResult keyword_ci_fn(input_t* in, void* args) {
             restore_input_state(in, &state);
             char* err_msg;
             asprintf(&err_msg, "Expected keyword '%s', not part of identifier", str);
-            return make_failure(in, err_msg);
+            return make_failure_v2(in, parser_name, err_msg, NULL);
         }
     }
 
@@ -78,57 +78,40 @@ typedef struct {
 } keyword_parser_args;
 
 // Custom parser function
-static ParseResult match_keyword_fn(input_t* in, void* args) {
+static ParseResult match_keyword_fn(input_t* in, void* args, char* parser_name) {
     keyword_parser_args* k_args = (keyword_parser_args*)args;
-    InputState state;
-    save_input_state(in, &state);
+    const char* keyword = k_args->keyword;
+    int len = strlen(keyword);
 
-    int len = strlen(k_args->keyword);
-    bool matches = true;
+    if (in->start + len > in->length || strncasecmp(in->buffer + in->start, keyword, len) != 0) {
+        char* err_msg;
+        asprintf(&err_msg, "Expected keyword '%s'", keyword);
+        return make_failure_v2(in, parser_name, err_msg, NULL);
+    }
 
-    // Case-insensitive match
-    for (int j = 0; j < len; j++) {
-        char c = read1(in);
-        if (tolower(c) != k_args->keyword[j]) { // Assuming keyword is all lowercase
-            matches = false;
-            break;
+    if (in->start + len < in->length) {
+        char next_char = in->buffer[in->start + len];
+        if (isalnum(next_char) || next_char == '_') {
+            char* err_msg;
+            asprintf(&err_msg, "Expected keyword '%s', not part of identifier", keyword);
+            return make_failure_v2(in, parser_name, err_msg, NULL);
         }
     }
 
-    if (matches) {
-        // Word boundary check
-        char next_char = read1(in);
-        if (next_char != EOF && (isalnum(next_char) || next_char == '_')) {
-            matches = false;
-        } else {
-            if (next_char != EOF) in->start--;
-        }
+    char* matched_text = (char*)safe_malloc(len + 1);
+    strncpy(matched_text, in->buffer + in->start, len);
+    matched_text[len] = '\0';
+
+    for (int i = 0; i < len; i++) {
+        read1(in); // Advance input to update line/col info
     }
 
-    if (matches) {
-        // On success, create AST node
-        restore_input_state(in, &state);
-        char* matched_text = malloc(len + 1);
-        for (int j = 0; j < len; j++) {
-            matched_text[j] = read1(in);
-        }
-        matched_text[len] = '\0';
-
-        ast_t* ast = new_ast();
-        ast->typ = k_args->tag;
-        ast->sym = sym_lookup(matched_text);
-        ast->child = NULL;
-        ast->next = NULL;
-        free(matched_text);
-        set_ast_position(ast, in);
-        return make_success(ast);
-    }
-
-    // On failure, restore state and return failure
-    restore_input_state(in, &state);
-    char* err_msg;
-    asprintf(&err_msg, "Expected keyword '%s'", k_args->keyword);
-    return make_failure(in, err_msg);
+    ast_t* ast = new_ast();
+    ast->typ = k_args->tag;
+    ast->sym = sym_lookup(matched_text);
+    free(matched_text);
+    set_ast_position(ast, in);
+    return make_success(ast);
 }
 
 // Combinator constructor

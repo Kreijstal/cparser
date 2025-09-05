@@ -7,7 +7,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "parser.h"
-#include "types.h"
 #include "combinator_internals.h"
 
 //=============================================================================
@@ -21,15 +20,15 @@ typedef struct op_t { tag_t tag; combinator_t * comb; struct op_t * next; } op_t
 typedef struct expr_list { op_t * op; expr_fix fix; expr_assoc assoc; combinator_t * comb; struct expr_list * next; } expr_list;
 
 // --- Static Function Forward Declarations ---
-static ParseResult lazy_fn(input_t * in, void * args);
-static ParseResult match_fn(input_t * in, void * args);
-static ParseResult integer_fn(input_t * in, void * args);
-static ParseResult cident_fn(input_t * in, void * args);
-static ParseResult string_fn(input_t * in, void * args);
-static ParseResult until_fn(input_t * in, void * args);
-static ParseResult any_char_fn(input_t * in, void * args);
-static ParseResult satisfy_fn(input_t * in, void * args);
-static ParseResult expr_fn(input_t * in, void * args);
+static ParseResult lazy_fn(input_t * in, void * args, char* parser_name);
+static ParseResult match_fn(input_t * in, void * args, char* parser_name);
+static ParseResult integer_fn(input_t * in, void * args, char* parser_name);
+static ParseResult cident_fn(input_t * in, void * args, char* parser_name);
+static ParseResult string_fn(input_t * in, void * args, char* parser_name);
+static ParseResult until_fn(input_t * in, void * args, char* parser_name);
+static ParseResult any_char_fn(input_t * in, void * args, char* parser_name);
+static ParseResult satisfy_fn(input_t * in, void * args, char* parser_name);
+static ParseResult expr_fn(input_t * in, void * args, char* parser_name);
 static ast_t* ensure_ast_nil_initialized();
 
 
@@ -44,14 +43,20 @@ ParseResult make_success(ast_t* ast) {
     return (ParseResult){ .is_success = true, .value.ast = ast };
 }
 
-ParseResult make_failure(input_t* in, char* message) {
+ParseResult make_failure_v2(input_t* in, char* parser_name, char* message, char* unexpected) {
     ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
     err->line = in->line;
     err->col = in->col;
     err->message = message;
+    err->parser_name = parser_name ? strdup(parser_name) : NULL;
+    err->unexpected = unexpected;
     err->cause = NULL;
     err->partial_ast = NULL;
     return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult make_failure(input_t* in, char* message) {
+    return make_failure_v2(in, NULL, message, NULL);
 }
 
 ParseResult make_failure_with_ast(input_t* in, char* message, ast_t* partial_ast) {
@@ -188,15 +193,6 @@ void init_input_buffer(input_t *in, char *buffer, int length) {
     in->buffer = buffer;
     in->length = length;
     in->start = 0;
-    in->line = 1;
-    in->col = 1;
-    
-    // Count lines in the buffer to set proper line tracking
-    for (int i = 0; i < length; i++) {
-        if (buffer[i] == '\n') {
-            in->line++;
-        }
-    }
     // Reset to beginning for parsing
     in->line = 1;
     in->col = 1;
@@ -241,7 +237,7 @@ combinator_t * new_combinator() {
     return comb;
 }
 
-static ParseResult match_ci_fn(input_t * in, void * args) {
+static ParseResult match_ci_fn(input_t * in, void * args, char* parser_name) {
     char * str = ((match_args *) args)->str;
     InputState state; save_input_state(in, &state);
     for (int i = 0, len = strlen(str); i < len; i++) {
@@ -249,13 +245,14 @@ static ParseResult match_ci_fn(input_t * in, void * args) {
         if (tolower(c) != tolower(str[i])) {
             restore_input_state(in, &state);
             char* err_msg; asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
-            return make_failure(in, err_msg);
+            char* unexpected = strndup(in->buffer + state.start, 10);
+            return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
     return make_success(ensure_ast_nil_initialized());
 }
 
-static ParseResult match_fn(input_t * in, void * args) {
+static ParseResult match_fn(input_t * in, void * args, char* parser_name) {
     char * str = ((match_args *) args)->str;
     InputState state; save_input_state(in, &state);
     for (int i = 0, len = strlen(str); i < len; i++) {
@@ -263,18 +260,23 @@ static ParseResult match_fn(input_t * in, void * args) {
         if (c != str[i]) {
             restore_input_state(in, &state);
             char* err_msg; asprintf(&err_msg, "Expected '%s'", str);
-            return make_failure(in, err_msg);
+            char* unexpected = strndup(in->buffer + state.start, 10);
+            return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
     return make_success(ensure_ast_nil_initialized());
 }
 
-static ParseResult integer_fn(input_t * in, void * args) {
+static ParseResult integer_fn(input_t * in, void * args, char* parser_name) {
    prim_args* pargs = (prim_args*)args;
    InputState state; save_input_state(in, &state);
    int start_pos_ws = in->start;
    char c = read1(in);
-   if (!isdigit(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected a digit.")); }
+   if (!isdigit(c)) {
+       restore_input_state(in, &state);
+       char* unexpected = strndup(in->buffer + state.start, 10);
+       return make_failure_v2(in, parser_name, strdup("Expected a digit."), unexpected);
+   }
    while (isdigit(c = read1(in))) ;
    if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
@@ -288,12 +290,16 @@ static ParseResult integer_fn(input_t * in, void * args) {
    return make_success(ast);
 }
 
-static ParseResult cident_fn(input_t * in, void * args) {
+static ParseResult cident_fn(input_t * in, void * args, char* parser_name) {
    prim_args* pargs = (prim_args*)args;
    InputState state; save_input_state(in, &state);
    int start_pos_ws = in->start;
    char c = read1(in);
-   if (c != '_' && !isalpha(c)) { restore_input_state(in, &state); return make_failure(in, strdup("Expected identifier."));}
+   if (c != '_' && !isalpha(c)) {
+       restore_input_state(in, &state);
+       char* unexpected = strndup(in->buffer + state.start, 10);
+       return make_failure_v2(in, parser_name, strdup("Expected identifier."), unexpected);
+   }
    while (isalnum(c = read1(in)) || c == '_') ;
    if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
@@ -307,18 +313,28 @@ static ParseResult cident_fn(input_t * in, void * args) {
    return make_success(ast);
 }
 
-static ParseResult string_fn(input_t * in, void * args) {
+static ParseResult string_fn(input_t * in, void * args, char* parser_name) {
    prim_args* pargs = (prim_args*)args;
    InputState state; save_input_state(in, &state);
-   if (read1(in) != '"') { restore_input_state(in, &state); return make_failure(in, strdup("Expected '\"'.")); }
+   if (read1(in) != '"') {
+       restore_input_state(in, &state);
+       char* unexpected = strndup(in->buffer + state.start, 10);
+       return make_failure_v2(in, parser_name, strdup("Expected '\"'."), unexpected);
+   }
    int capacity = 64;
    char * str_val = (char *) safe_malloc(capacity);
    int len = 0; char c;
    while ((c = read1(in)) != '"') {
-      if (c == EOF) { free(str_val); return make_failure(in, strdup("Unterminated string.")); }
+      if (c == EOF) {
+          free(str_val);
+          return make_failure_v2(in, parser_name, strdup("Unterminated string."), NULL);
+      }
       if (c == '\\') {
          c = read1(in);
-         if (c == EOF) { free(str_val); return make_failure(in, strdup("Unterminated string.")); }
+         if (c == EOF) {
+             free(str_val);
+             return make_failure_v2(in, parser_name, strdup("Unterminated string."), NULL);
+         }
          switch (c) {
             case 'n': c = '\n'; break; case 't': c = '\t'; break;
             case '"': c = '"'; break; case '\\': c = '\\'; break;
@@ -340,13 +356,13 @@ static ParseResult string_fn(input_t * in, void * args) {
    return make_success(ast);
 }
 
-static ParseResult any_char_fn(input_t * in, void * args) {
+static ParseResult any_char_fn(input_t * in, void * args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state; save_input_state(in, &state);
     char c = read1(in);
     if (c == EOF) {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected any character, but found EOF."));
+        return make_failure_v2(in, parser_name, strdup("Expected any character, but found EOF."), NULL);
     }
     char str[2] = {c, '\0'};
     ast_t* ast = new_ast();
@@ -358,13 +374,14 @@ static ParseResult any_char_fn(input_t * in, void * args) {
     return make_success(ast);
 }
 
-static ParseResult satisfy_fn(input_t * in, void * args) {
+static ParseResult satisfy_fn(input_t * in, void * args, char* parser_name) {
     satisfy_args* sargs = (satisfy_args*)args;
     InputState state; save_input_state(in, &state);
     char c = read1(in);
     if (c == EOF || !sargs->pred(c)) {
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Predicate not satisfied."));
+        char* unexpected = strndup(in->buffer + state.start, 10);
+        return make_failure_v2(in, parser_name, strdup("Predicate not satisfied."), unexpected);
     }
     char str[2] = {c, '\0'};
     ast_t* ast = new_ast();
@@ -376,7 +393,7 @@ static ParseResult satisfy_fn(input_t * in, void * args) {
     return make_success(ast);
 }
 
-static ParseResult until_fn(input_t* in, void* args) {
+static ParseResult until_fn(input_t* in, void* args, char* parser_name) {
     until_args* uargs = (until_args*)args;
     int start_offset = in->start;
     while(1) {
@@ -400,9 +417,9 @@ static ParseResult until_fn(input_t* in, void* args) {
     return make_success(ast);
 }
 
-static ParseResult expr_fn(input_t * in, void * args) {
+static ParseResult expr_fn(input_t * in, void * args, char* parser_name) {
    expr_list * list = (expr_list *) args;
-   if (list == NULL) return make_failure(in, strdup("Invalid expression grammar."));
+   if (list == NULL) return make_failure_v2(in, parser_name, strdup("Invalid expression grammar."), NULL);
    if (list->fix == EXPR_BASE) return parse(in, list->comb);
    if (list->fix == EXPR_PREFIX) {
        op_t* op = list->op;
@@ -411,7 +428,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
            ParseResult op_res = parse(in, op->comb);
            if (op_res.is_success) {
                free_ast(op_res.value.ast);
-               ParseResult rhs_res = expr_fn(in, args);
+               ParseResult rhs_res = expr_fn(in, args, parser_name);
                if (!rhs_res.is_success) return rhs_res;
                return make_success(ast1(op->tag, rhs_res.value.ast));
            }
@@ -419,7 +436,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
            restore_input_state(in, &state);
        }
    }
-   ParseResult res = expr_fn(in, (void *) list->next);
+   ParseResult res = expr_fn(in, (void *) list->next, parser_name);
    if (!res.is_success) return res;
    ast_t* lhs = res.value.ast;
    if (list->fix == EXPR_INFIX) {
@@ -432,7 +449,7 @@ static ParseResult expr_fn(input_t * in, void * args) {
                if (op_res.is_success) {
                    tag_t op_tag = op->tag;
                    free_ast(op_res.value.ast);
-                   ParseResult rhs_res = expr_fn(in, (void *) list->next);
+                   ParseResult rhs_res = expr_fn(in, (void *) list->next, parser_name);
                    if (!rhs_res.is_success) {
                        ast_t* rhs_partial_ast = rhs_res.value.error ? rhs_res.value.error->partial_ast : NULL;
                        if (rhs_res.value.error) {
@@ -454,24 +471,29 @@ static ParseResult expr_fn(input_t * in, void * args) {
    return make_success(lhs);
 }
 
-static ParseResult lazy_fn(input_t * in, void * args) {
+static ParseResult lazy_fn(input_t * in, void * args, char* parser_name) {
     lazy_args* largs = (lazy_args*)args;
     if (largs == NULL || largs->parser_ptr == NULL || *largs->parser_ptr == NULL) {
         fprintf(stderr, "Lazy parser not initialized or pointer is NULL.\n");
         exception("Lazy parser not initialized.");
     }
-    if ((*largs->parser_ptr)->fn == NULL) {
-        fprintf(stderr, "Lazy parser's fn is NULL for parser at %p\n", *largs->parser_ptr);
+    combinator_t* lazy_parser = *largs->parser_ptr;
+    if (lazy_parser->fn == NULL) {
+        fprintf(stderr, "Lazy parser's fn is NULL for parser at %p\n", lazy_parser);
         exception("Lazy parser's fn is NULL.");
     }
-    return parse(in, *largs->parser_ptr);
+    // If the lazy parser has no name, give it the name of the lazy combinator
+    if (lazy_parser->name == NULL && parser_name != NULL) {
+        lazy_parser->name = strdup(parser_name);
+    }
+    return parse(in, lazy_parser);
 }
 
-static ParseResult eoi_fn(input_t * in, void * args) {
+static ParseResult eoi_fn(input_t * in, void * args, char* parser_name) {
     if (in->start == in->length) {
         return make_success(ast_nil);
     }
-    return make_failure(in, strdup("Expected end of input."));
+    return make_failure_v2(in, parser_name, strdup("Expected end of input."), NULL);
 }
 
 //=============================================================================
@@ -580,7 +602,7 @@ void expr_altern(combinator_t * exp, int prec, tag_t tag, combinator_t * comb) {
 //=============================================================================
 ParseResult parse(input_t * in, combinator_t * comb) {
     if (!comb || !comb->fn) exception("Attempted to parse with a NULL or uninitialized combinator.");
-    return comb->fn(in, (void *)comb->args);
+    return comb->fn(in, (void *)comb->args, comb->name);
 }
 
 combinator_t * lazy(combinator_t** parser_ptr) {
@@ -698,12 +720,6 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
             case COMB_EXPECT: {
                 expect_args* args = (expect_args*)comb->args;
                 free_combinator_recursive(args->comb, visited);
-                free(args);
-                break;
-            }
-            case COMB_MAP_WITH_CONTEXT: {
-                map_with_context_args* args = (map_with_context_args*)comb->args;
-                free_combinator_recursive(args->parser, visited);
                 free(args);
                 break;
             }
