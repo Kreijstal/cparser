@@ -4,6 +4,15 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+// Initialize ast_nil if not already initialized
+static ast_t* ensure_ast_nil_initialized() {
+    if (ast_nil == NULL) {
+        ast_nil = new_ast();
+        ast_nil->typ = 0;
+    }
+    return ast_nil;
+}
+
 // --- Static Function Forward Declarations ---
 static ParseResult expect_fn(input_t * in, void * args);
 static ParseResult seq_fn(input_t * in, void * args);
@@ -20,10 +29,25 @@ static ParseResult sep_end_by_fn(input_t * in, void * args);
 static ParseResult chainl1_fn(input_t * in, void * args);
 static ParseResult succeed_fn(input_t * in, void * args);
 static ParseResult map_fn(input_t * in, void * args);
+static ParseResult map_with_context_fn(input_t * in, void * args);
 static ParseResult errmap_fn(input_t * in, void * args);
 static ParseResult many_fn(input_t * in, void * args);
 
 // --- _fn Implementations ---
+
+static ParseResult optional_fn(input_t * in, void * args) {
+    optional_args* oargs = (optional_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+    ParseResult res = parse(in, oargs->p);
+    if (res.is_success) {
+        return res;
+    }
+    // If it fails, we restore the input and return success with a nil AST.
+    restore_input_state(in, &state);
+    free_error(res.value.error);
+    return make_success(ensure_ast_nil_initialized());
+}
 
 static ParseResult pnot_fn(input_t * in, void * args) {
     not_args* nargs = (not_args*)args;
@@ -86,6 +110,7 @@ static ParseResult sep_by_fn(input_t * in, void * args) {
 
     ParseResult res = parse(in, sargs->p);
     if (!res.is_success) {
+        free_error(res.value.error);
         return make_success(ast_nil);
     }
     head = tail = res.value.ast;
@@ -118,6 +143,7 @@ static ParseResult sep_end_by_fn(input_t * in, void * args) {
 
     ParseResult res = parse(in, sargs->p);
     if (!res.is_success) {
+        free_error(res.value.error);
         return make_success(ast_nil);
     }
     head = tail = res.value.ast;
@@ -233,6 +259,16 @@ static ParseResult map_fn(input_t * in, void * args) {
     return make_success(new_ast);
 }
 
+static ParseResult map_with_context_fn(input_t * in, void * args) {
+    map_with_context_args* margs = (map_with_context_args*)args;
+    ParseResult res = parse(in, margs->parser);
+    if (!res.is_success) {
+        return res;
+    }
+    ast_t* new_ast = margs->func(res.value.ast, margs->context);
+    return make_success(new_ast);
+}
+
 static ParseResult gseq_fn(input_t * in, void * args) {
     seq_args * sa = (seq_args *) args;
     seq_list * seq = sa->list;
@@ -247,7 +283,7 @@ static ParseResult gseq_fn(input_t * in, void * args) {
         seq = seq->next;
     }
     ast_t* result_child = head ? head : ast_nil;
-    if (sa->typ == T_NONE) {
+    if (sa->typ == 0) {
         return make_success(result_child);
     } else {
         return make_success(ast1(sa->typ, result_child));
@@ -261,7 +297,13 @@ static ParseResult seq_fn(input_t * in, void * args) {
     ast_t * head = NULL, * tail = NULL;
     while (seq != NULL) {
         ParseResult res = parse(in, seq->comb);
-        if (!res.is_success) { free_ast(head); restore_input_state(in, &state); return res; }
+        if (!res.is_success) {
+            restore_input_state(in, &state);
+            if (res.value.error->message == NULL) {
+                return wrap_failure_with_ast(in, "Failed to parse sequence.", res, head);
+            }
+            return wrap_failure_with_ast(in, res.value.error->message, res, head);
+        }
         if (res.value.ast != ast_nil) {
             if (head == NULL) head = tail = res.value.ast;
             else { tail->next = res.value.ast; while(tail->next) tail = tail->next; }
@@ -269,7 +311,7 @@ static ParseResult seq_fn(input_t * in, void * args) {
         seq = seq->next;
     }
     ast_t* result_child = head ? head : ast_nil;
-    if (sa->typ == T_NONE) {
+    if (sa->typ == 0) {
         return make_success(result_child);
     } else {
         return make_success(ast1(sa->typ, result_child));
@@ -286,7 +328,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
     // Initialize res with the failure of the first alternative, in case all fail.
     res = parse(in, seq->comb);
     if (res.is_success) {
-        if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+        if (sa->typ != 0) res.value.ast = ast1(sa->typ, res.value.ast);
         return res;
     }
 
@@ -300,7 +342,7 @@ static ParseResult multi_fn(input_t * in, void * args) {
         seq = seq->next;
         res = parse(in, seq->comb);
         if (res.is_success) {
-            if (sa->typ != T_NONE) res.value.ast = ast1(sa->typ, res.value.ast);
+            if (sa->typ != 0) res.value.ast = ast1(sa->typ, res.value.ast);
             return res;
         }
     }
@@ -332,8 +374,7 @@ static ParseResult left_fn(input_t * in, void * args) {
     ParseResult r2 = parse(in, pargs->p2);
     if (!r2.is_success) {
         restore_input_state(in, &state);
-        free_ast(r1.value.ast);
-        return r2;
+        return wrap_failure_with_ast(in, "left combinator failed on second parser", r2, r1.value.ast);
     }
     free_ast(r2.value.ast);
     return r1;
@@ -459,6 +500,18 @@ combinator_t * between(combinator_t* open, combinator_t* close, combinator_t* p)
     return comb;
 }
 
+combinator_t * map_with_context(combinator_t* p, map_with_context_func func, void* context) {
+    map_with_context_args* args = (map_with_context_args*)safe_malloc(sizeof(map_with_context_args));
+    args->parser = p;
+    args->func = func;
+    args->context = context;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_MAP_WITH_CONTEXT;
+    comb->fn = map_with_context_fn;
+    comb->args = (void *) args;
+    return comb;
+}
+
 combinator_t * errmap(combinator_t* p, err_map_func func) {
     errmap_args* args = (errmap_args*)safe_malloc(sizeof(errmap_args));
     args->parser = p;
@@ -529,5 +582,15 @@ combinator_t * many(combinator_t* p) {
     comb->type = COMB_MANY;
     comb->fn = many_fn;
     comb->args = (void *) p;
+    return comb;
+}
+
+combinator_t * optional(combinator_t* p) {
+    optional_args* args = (optional_args*)safe_malloc(sizeof(optional_args));
+    args->p = p;
+    combinator_t * comb = new_combinator();
+    comb->type = COMB_OPTIONAL;
+    comb->fn = optional_fn;
+    comb->args = (void *) args;
     return comb;
 }

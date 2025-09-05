@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "parser.h"
+#include "types.h"
 #include "combinator_internals.h"
 
 //=============================================================================
@@ -15,7 +16,7 @@
 
 // --- Argument Structs ---
 typedef struct { char * str; } match_args;
-typedef struct { combinator_t* delimiter; } until_args;
+typedef struct { combinator_t* delimiter; tag_t tag; } until_args;
 typedef struct op_t { tag_t tag; combinator_t * comb; struct op_t * next; } op_t;
 typedef struct expr_list { op_t * op; expr_fix fix; expr_assoc assoc; combinator_t * comb; struct expr_list * next; } expr_list;
 
@@ -25,17 +26,18 @@ static ParseResult match_fn(input_t * in, void * args);
 static ParseResult integer_fn(input_t * in, void * args);
 static ParseResult cident_fn(input_t * in, void * args);
 static ParseResult string_fn(input_t * in, void * args);
+static ParseResult until_fn(input_t * in, void * args);
 static ParseResult any_char_fn(input_t * in, void * args);
 static ParseResult satisfy_fn(input_t * in, void * args);
-static ParseResult until_fn(input_t* in, void* args);
 static ParseResult expr_fn(input_t * in, void * args);
+static ast_t* ensure_ast_nil_initialized();
 
 
 //=============================================================================
 // GLOBAL STATE & HELPER FUNCTIONS
 //=============================================================================
 
-ast_t * ast_nil;
+ast_t * ast_nil = NULL;
 
 // --- Result & Error Helpers ---
 ParseResult make_success(ast_t* ast) {
@@ -48,7 +50,51 @@ ParseResult make_failure(input_t* in, char* message) {
     err->col = in->col;
     err->message = message;
     err->cause = NULL;
+    err->partial_ast = NULL;
     return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult make_failure_with_ast(input_t* in, char* message, ast_t* partial_ast) {
+    ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
+    err->line = in->line;
+    err->col = in->col;
+    err->message = message;
+    err->cause = NULL;
+    err->partial_ast = partial_ast;
+    return (ParseResult){ .is_success = false, .value.error = err };
+}
+
+ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult original_result, ast_t* partial_ast) {
+    if (original_result.is_success) {
+        return original_result;
+    }
+    
+    // Validate input parameters
+    if (original_result.value.error == NULL) {
+        return make_failure(in, "Cannot wrap NULL error");
+    }
+    
+    if (message == NULL) {
+        return make_failure(in, "Cannot wrap with NULL message");
+    }
+    
+    ParseError* original_error = original_result.value.error;
+    ParseError* new_err = (ParseError*)safe_malloc(sizeof(ParseError));
+    if (new_err == NULL) {
+        return make_failure(in, "Memory allocation failed for error wrapper");
+    }
+    
+    new_err->line = in->line;
+    new_err->col = in->col;
+    new_err->message = strdup(message);
+    if (new_err->message == NULL) {
+        free(new_err);
+        return make_failure(in, "Memory allocation failed for error message");
+    }
+    new_err->cause = original_error;
+    new_err->partial_ast = partial_ast;
+    
+    return (ParseResult){ .is_success = false, .value.error = new_err };
 }
 
 ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
@@ -57,6 +103,7 @@ ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
     err->col = in->col;
     err->message = message;
     err->cause = cause.value.error;
+    err->partial_ast = NULL;
     return (ParseResult){ .is_success = false, .value.error = err };
 }
 
@@ -83,11 +130,21 @@ void exception(const char * err) {
 
 ast_t * new_ast() {
     ast_t* ast = (ast_t *) safe_malloc(sizeof(ast_t));
-    ast->typ = T_NONE;
+    ast->typ = 0; // Default tag
     ast->child = NULL;
     ast->next = NULL;
     ast->sym = NULL;
+    ast->line = 0;
+    ast->col = 0;
     return ast;
+}
+
+// Set AST node position from current input state
+void set_ast_position(ast_t* ast, input_t* in) {
+    if (ast != NULL && in != NULL) {
+        ast->line = in->line;
+        ast->col = in->col;
+    }
 }
 
 ast_t* ast1(tag_t typ, ast_t* a1) {
@@ -98,7 +155,7 @@ ast_t* ast1(tag_t typ, ast_t* a1) {
 
 ast_t* copy_ast(ast_t* orig) {
     if (orig == NULL) return NULL;
-    if (orig == ast_nil) return ast_nil;
+    if (orig == ensure_ast_nil_initialized()) return ensure_ast_nil_initialized();
     ast_t* new = new_ast();
     new->typ = orig->typ;
     new->sym = orig->sym ? sym_lookup(orig->sym->name) : NULL;
@@ -124,6 +181,25 @@ input_t * new_input() {
     input_t * in = (input_t *) safe_malloc(sizeof(input_t));
     in->buffer = NULL; in->alloc = 0; in->length = 0; in->start = 0; in->line = 1; in->col = 1;
     return in;
+}
+
+// Initialize input buffer with proper line/column tracking
+void init_input_buffer(input_t *in, char *buffer, int length) {
+    in->buffer = buffer;
+    in->length = length;
+    in->start = 0;
+    in->line = 1;
+    in->col = 1;
+    
+    // Count lines in the buffer to set proper line tracking
+    for (int i = 0; i < length; i++) {
+        if (buffer[i] == '\n') {
+            in->line++;
+        }
+    }
+    // Reset to beginning for parsing
+    in->line = 1;
+    in->col = 1;
 }
 
 char read1(input_t * in) {
@@ -165,6 +241,20 @@ combinator_t * new_combinator() {
     return comb;
 }
 
+static ParseResult match_ci_fn(input_t * in, void * args) {
+    char * str = ((match_args *) args)->str;
+    InputState state; save_input_state(in, &state);
+    for (int i = 0, len = strlen(str); i < len; i++) {
+        char c = read1(in);
+        if (tolower(c) != tolower(str[i])) {
+            restore_input_state(in, &state);
+            char* err_msg; asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
+            return make_failure(in, err_msg);
+        }
+    }
+    return make_success(ensure_ast_nil_initialized());
+}
+
 static ParseResult match_fn(input_t * in, void * args) {
     char * str = ((match_args *) args)->str;
     InputState state; save_input_state(in, &state);
@@ -176,10 +266,11 @@ static ParseResult match_fn(input_t * in, void * args) {
             return make_failure(in, err_msg);
         }
     }
-    return make_success(ast_nil);
+    return make_success(ensure_ast_nil_initialized());
 }
 
 static ParseResult integer_fn(input_t * in, void * args) {
+   prim_args* pargs = (prim_args*)args;
    InputState state; save_input_state(in, &state);
    int start_pos_ws = in->start;
    char c = read1(in);
@@ -191,12 +282,14 @@ static ParseResult integer_fn(input_t * in, void * args) {
    strncpy(text, in->buffer + start_pos_ws, len);
    text[len] = '\0';
    ast_t * ast = new_ast();
-   ast->typ = T_INT; ast->sym = sym_lookup(text); free(text);
+   ast->typ = pargs->tag; ast->sym = sym_lookup(text); free(text);
    ast->child = NULL; ast->next = NULL;
+   set_ast_position(ast, in);
    return make_success(ast);
 }
 
 static ParseResult cident_fn(input_t * in, void * args) {
+   prim_args* pargs = (prim_args*)args;
    InputState state; save_input_state(in, &state);
    int start_pos_ws = in->start;
    char c = read1(in);
@@ -208,12 +301,14 @@ static ParseResult cident_fn(input_t * in, void * args) {
    strncpy(text, in->buffer + start_pos_ws, len);
    text[len] = '\0';
    ast_t * ast = new_ast();
-   ast->typ = T_IDENT; ast->sym = sym_lookup(text); free(text);
+   ast->typ = pargs->tag; ast->sym = sym_lookup(text); free(text);
    ast->child = NULL; ast->next = NULL;
+   set_ast_position(ast, in);
    return make_success(ast);
 }
 
 static ParseResult string_fn(input_t * in, void * args) {
+   prim_args* pargs = (prim_args*)args;
    InputState state; save_input_state(in, &state);
    if (read1(in) != '"') { restore_input_state(in, &state); return make_failure(in, strdup("Expected '\"'.")); }
    int capacity = 64;
@@ -239,12 +334,14 @@ static ParseResult string_fn(input_t * in, void * args) {
    }
    str_val[len] = '\0';
    ast_t * ast = new_ast();
-   ast->typ = T_STRING; ast->sym = sym_lookup(str_val); free(str_val);
+   ast->typ = pargs->tag; ast->sym = sym_lookup(str_val); free(str_val);
    ast->child = NULL; ast->next = NULL;
+   set_ast_position(ast, in);
    return make_success(ast);
 }
 
 static ParseResult any_char_fn(input_t * in, void * args) {
+    prim_args* pargs = (prim_args*)args;
     InputState state; save_input_state(in, &state);
     char c = read1(in);
     if (c == EOF) {
@@ -253,10 +350,11 @@ static ParseResult any_char_fn(input_t * in, void * args) {
     }
     char str[2] = {c, '\0'};
     ast_t* ast = new_ast();
-    ast->typ = T_STRING;
+    ast->typ = pargs->tag;
     ast->sym = sym_lookup(str);
     ast->child = NULL;
     ast->next = NULL;
+    set_ast_position(ast, in);
     return make_success(ast);
 }
 
@@ -270,10 +368,11 @@ static ParseResult satisfy_fn(input_t * in, void * args) {
     }
     char str[2] = {c, '\0'};
     ast_t* ast = new_ast();
-    ast->typ = T_STRING;
+    ast->typ = sargs->tag;
     ast->sym = sym_lookup(str);
     ast->child = NULL;
     ast->next = NULL;
+    set_ast_position(ast, in);
     return make_success(ast);
 }
 
@@ -284,7 +383,7 @@ static ParseResult until_fn(input_t* in, void* args) {
         InputState current_state; save_input_state(in, &current_state);
         ParseResult res = parse(in, uargs->delimiter);
         if (res.is_success) {
-            if (res.value.ast != ast_nil) free_ast(res.value.ast);
+            if (res.value.ast != ensure_ast_nil_initialized()) free_ast(res.value.ast);
             restore_input_state(in, &current_state); break;
         }
         free_error(res.value.error);
@@ -296,7 +395,8 @@ static ParseResult until_fn(input_t* in, void* args) {
     strncpy(text, in->buffer + start_offset, len);
     text[len] = '\0';
     ast_t* ast = new_ast();
-    ast->typ = T_STRING; ast->sym = sym_lookup(text); free(text);
+    ast->typ = uargs->tag; ast->sym = sym_lookup(text); free(text);
+    set_ast_position(ast, in);
     return make_success(ast);
 }
 
@@ -333,7 +433,14 @@ static ParseResult expr_fn(input_t * in, void * args) {
                    tag_t op_tag = op->tag;
                    free_ast(op_res.value.ast);
                    ParseResult rhs_res = expr_fn(in, (void *) list->next);
-                   if (!rhs_res.is_success) { free_ast(lhs); return rhs_res; }
+                   if (!rhs_res.is_success) {
+                       ast_t* rhs_partial_ast = rhs_res.value.error ? rhs_res.value.error->partial_ast : NULL;
+                       if (rhs_res.value.error) {
+                           rhs_res.value.error->partial_ast = NULL;
+                       }
+                       ast_t* new_partial_ast = ast2(op_tag, lhs, rhs_partial_ast);
+                       return wrap_failure_with_ast(in, "Failed to parse right-hand side of infix operator", rhs_res, new_partial_ast);
+                   }
                    lhs = ast2(op_tag, lhs, rhs_res.value.ast);
                    found_op = true;
                    break;
@@ -350,9 +457,21 @@ static ParseResult expr_fn(input_t * in, void * args) {
 static ParseResult lazy_fn(input_t * in, void * args) {
     lazy_args* largs = (lazy_args*)args;
     if (largs == NULL || largs->parser_ptr == NULL || *largs->parser_ptr == NULL) {
+        fprintf(stderr, "Lazy parser not initialized or pointer is NULL.\n");
         exception("Lazy parser not initialized.");
     }
+    if ((*largs->parser_ptr)->fn == NULL) {
+        fprintf(stderr, "Lazy parser's fn is NULL for parser at %p\n", *largs->parser_ptr);
+        exception("Lazy parser's fn is NULL.");
+    }
     return parse(in, *largs->parser_ptr);
+}
+
+static ParseResult eoi_fn(input_t * in, void * args) {
+    if (in->start == in->length) {
+        return make_success(ast_nil);
+    }
+    return make_failure(in, strdup("Expected end of input."));
 }
 
 //=============================================================================
@@ -365,43 +484,66 @@ combinator_t * match(char * str) {
     combinator_t * comb = new_combinator();
     comb->type = P_MATCH; comb->fn = match_fn; comb->args = args; return comb;
 }
-combinator_t * integer() {
+combinator_t * match_ci(char * str) {
+    match_args * args = (match_args*)safe_malloc(sizeof(match_args));
+    args->str = str;
     combinator_t * comb = new_combinator();
-    comb->type = P_INTEGER; comb->fn = integer_fn; comb->args = NULL; return comb;
+    comb->type = P_CI_KEYWORD; comb->fn = match_ci_fn; comb->args = args; return comb;
 }
-combinator_t * cident() {
+combinator_t * integer(tag_t tag) {
+    prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
     combinator_t * comb = new_combinator();
-    comb->type = P_CIDENT; comb->fn = cident_fn; comb->args = NULL; return comb;
+    comb->type = P_INTEGER; comb->fn = integer_fn; comb->args = args; return comb;
 }
-combinator_t * string() {
+combinator_t * cident(tag_t tag) {
+    prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t * comb = new_combinator();
+    comb->type = P_CIDENT; comb->fn = cident_fn; comb->args = args; return comb;
+}
+combinator_t * string(tag_t tag) {
+    prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
     combinator_t * comb = new_combinator();
     comb->type = P_STRING;
     comb->fn = string_fn;
+    comb->args = args;
+    return comb;
+}
+combinator_t * eoi() {
+    combinator_t * comb = new_combinator();
+    comb->type = P_EOI;
+    comb->fn = eoi_fn;
     comb->args = NULL;
     return comb;
 }
 
-combinator_t * satisfy(char_predicate pred) {
+combinator_t * satisfy(char_predicate pred, tag_t tag) {
     satisfy_args* args = (satisfy_args*)safe_malloc(sizeof(satisfy_args));
     args->pred = pred;
+    args->tag = tag;
     combinator_t * comb = new_combinator();
     comb->type = P_SATISFY;
     comb->fn = satisfy_fn;
     comb->args = (void*)args;
     return comb;
 }
-combinator_t* until(combinator_t* p) {
+combinator_t* until(combinator_t* p, tag_t tag) {
     until_args* args = (until_args*)safe_malloc(sizeof(until_args));
     args->delimiter = p;
+    args->tag = tag;
     combinator_t* comb = new_combinator();
     comb->type = P_UNTIL; comb->fn = until_fn; comb->args = args; return comb;
 }
 
-combinator_t * any_char() {
+combinator_t * any_char(tag_t tag) {
+    prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
     combinator_t * comb = new_combinator();
     comb->type = P_ANY_CHAR;
     comb->fn = any_char_fn;
-    comb->args = NULL;
+    comb->args = args;
     return comb;
 }
 combinator_t * expr(combinator_t * exp, combinator_t * base) {
@@ -459,74 +601,32 @@ void free_error(ParseError* err) {
     if (err == NULL) return;
     free(err->message);
     free_error(err->cause);
+    if (err->partial_ast != NULL) {
+        free_ast(err->partial_ast);
+    }
     free(err);
 }
 
 void free_ast(ast_t* ast) {
-    if (ast == NULL || ast == ast_nil) return;
+    if (ast == NULL || ast == ensure_ast_nil_initialized()) return;
     free_ast(ast->child);
     free_ast(ast->next);
     if (ast->sym) { free(ast->sym->name); free(ast->sym); }
     free(ast);
 }
 
-static const char* tag_to_string(tag_t tag) {
-    switch (tag) {
-        case T_NONE: return "NONE";
-        case T_INT: return "INT";
-        case T_IDENT: return "IDENT";
-        case T_ASSIGN: return "ASSIGN";
-        case T_SEQ: return "SEQ";
-        case T_ADD: return "ADD";
-        case T_SUB: return "SUB";
-        case T_MUL: return "MUL";
-        case T_DIV: return "DIV";
-        case T_NEG: return "NEG";
-        case T_STRING: return "STRING";
-        default: return "UNKNOWN";
+// Initialize ast_nil if not already initialized
+static ast_t* ensure_ast_nil_initialized() {
+    if (ast_nil == NULL) {
+        ast_nil = new_ast();
+        ast_nil->typ = 0;
     }
+    return ast_nil;
 }
 
-static void print_ast_recursive(ast_t* ast, int indent) {
-    if (ast == NULL || ast == ast_nil) {
-        return;
-    }
-
-    // Print indentation
-    for (int i = 0; i < indent; i++) {
-        printf("  ");
-    }
-
-    // Print node type
-    printf("(%s", tag_to_string(ast->typ));
-
-    // Print symbol if it exists
-    if (ast->sym) {
-        printf(" %s", ast->sym->name);
-    }
-
-    // Print children
-    if (ast->child) {
-        printf("\n");
-        print_ast_recursive(ast->child, indent + 1);
-    }
-
-    printf(")");
-
-    // Print siblings
-    if (ast->next) {
-        printf("\n");
-        print_ast_recursive(ast->next, indent);
-    }
-}
-
-void parser_print_ast(ast_t* ast) {
-    print_ast_recursive(ast, 0);
-    printf("\n");
-}
 
 void parser_walk_ast(ast_t* ast, ast_visitor_fn visitor, void* context) {
-    if (ast == NULL || ast == ast_nil) {
+    if (ast == NULL || ast == ensure_ast_nil_initialized()) {
         return;
     }
 
@@ -591,12 +691,25 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
 
     if (comb->args != NULL) {
         switch (comb->type) {
+            case P_CI_KEYWORD:
             case P_MATCH:
                 free((match_args*)comb->args);
                 break;
             case COMB_EXPECT: {
                 expect_args* args = (expect_args*)comb->args;
                 free_combinator_recursive(args->comb, visited);
+                free(args);
+                break;
+            }
+            case COMB_MAP_WITH_CONTEXT: {
+                map_with_context_args* args = (map_with_context_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
+                free(args);
+                break;
+            }
+            case COMB_OPTIONAL: {
+                optional_args* args = (optional_args*)comb->args;
+                free_combinator_recursive(args->p, visited);
                 free(args);
                 break;
             }

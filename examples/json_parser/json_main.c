@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     in->length = strlen(argv[1]);
 
     ast_nil = new_ast();
-    ast_nil->typ = T_NONE;
+    ast_nil->typ = JSON_T_NONE;
 
     ParseResult result = parse(in, parser);
 

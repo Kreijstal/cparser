@@ -20,10 +20,10 @@ typedef struct input_t input_t;
 typedef struct ParseResult ParseResult;
 
 // AST node types
-typedef enum {
-    T_NONE, T_INT, T_IDENT, T_ASSIGN, T_SEQ,
-    T_ADD, T_SUB, T_MUL, T_DIV, T_NEG, T_STRING
-} tag_t;
+typedef unsigned int tag_t;
+
+// --- Argument Structs ---
+typedef struct { tag_t tag; } prim_args;
 
 // Symbol
 typedef struct sym_t {
@@ -36,6 +36,8 @@ struct ast_t {
    ast_t * child;
    ast_t * next;
    sym_t * sym;
+   int line;
+   int col;
 };
 
 // Input stream
@@ -54,6 +56,7 @@ typedef struct ParseError {
     int col;
     char* message;
     struct ParseError* cause;
+    ast_t* partial_ast;
 } ParseError;
 
 struct ParseResult {
@@ -66,11 +69,12 @@ struct ParseResult {
 
 // Main parser struct
 typedef enum {
-    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY,
+    P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY, P_CI_KEYWORD,
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
-    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP,
-    COMB_LAZY
+    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_MAP_WITH_CONTEXT, COMB_ERRMAP,
+    COMB_LAZY,
+    P_EOI
 } parser_type_t;
 
 typedef ParseResult (*comb_fn)(input_t *in, void *args);
@@ -94,6 +98,8 @@ typedef ParseError * (*err_map_func)(ParseError *err);
 // For satisfy
 typedef bool (*char_predicate)(char);
 
+// Partial AST error wrapping
+ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult original_result, ast_t* partial_ast);
 
 //=============================================================================
 // Global Variables
@@ -111,13 +117,14 @@ ParseResult parse(input_t * in, combinator_t * comb);
 
 // --- Primitive Parser Constructors ---
 combinator_t * match(char * str);
+combinator_t * match_ci(char * str);
 combinator_t * match_raw(char * str);
-combinator_t * integer();
-combinator_t * cident();
-combinator_t * string();
-combinator_t * until(combinator_t* p);
-combinator_t * any_char();
-combinator_t * satisfy(char_predicate pred);
+combinator_t * integer(tag_t tag);
+combinator_t * cident(tag_t tag);
+combinator_t * string(tag_t tag);
+combinator_t * until(combinator_t* p, tag_t tag);
+combinator_t * any_char(tag_t tag);
+combinator_t * satisfy(char_predicate pred, tag_t tag);
 combinator_t * eoi();
 
 // --- Combinator Constructors ---
@@ -134,13 +141,14 @@ void expr_altern(combinator_t * exp, int prec, tag_t tag, combinator_t * comb);
 // --- Input Stream Helpers ---
 input_t * new_input();
 char read1(input_t * in);
+void set_ast_position(ast_t* ast, input_t* in);
+void init_input_buffer(input_t *in, char *buffer, int length);
 
 // --- AST Helpers ---
 typedef void (*ast_visitor_fn)(ast_t* node, void* context);
 void parser_walk_ast(ast_t* ast, ast_visitor_fn visitor, void* context);
 ast_t* new_ast();
 void free_ast(ast_t* ast);
-void parser_print_ast(ast_t* ast);
 void free_error(ParseError* err);
 ast_t* ast1(tag_t typ, ast_t* a1);
 ast_t* ast2(tag_t typ, ast_t* a1, ast_t* a2);

@@ -2,6 +2,7 @@
 #define COMBINATOR_INTERNALS_H
 
 #include "parser.h"
+#include "types.h"
 
 // --- Argument Structs for Combinators ---
 
@@ -39,6 +40,10 @@ typedef struct {
 } peek_args;
 
 typedef struct {
+    combinator_t* p;
+} optional_args;
+
+typedef struct {
     combinator_t* open;
     combinator_t* close;
     combinator_t* p;
@@ -70,11 +75,18 @@ typedef struct {
 
 typedef struct {
     combinator_t* parser;
+    map_with_context_func func;
+    void* context;
+} map_with_context_args;
+
+typedef struct {
+    combinator_t* parser;
     err_map_func func;
 } errmap_args;
 
 typedef struct {
     char_predicate pred;
+    tag_t tag;
 } satisfy_args;
 
 typedef struct {
