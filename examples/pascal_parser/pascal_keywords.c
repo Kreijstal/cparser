@@ -86,7 +86,7 @@ static ParseResult match_keyword_fn(input_t* in, void* args, char* parser_name) 
     if (in->start + len > in->length || strncasecmp(in->buffer + in->start, keyword, len) != 0) {
         char* err_msg;
         asprintf(&err_msg, "Expected keyword '%s'", keyword);
-        return make_failure(in, err_msg);
+        return make_failure_v2(in, parser_name, err_msg, NULL);
     }
 
     if (in->start + len < in->length) {
@@ -94,7 +94,7 @@ static ParseResult match_keyword_fn(input_t* in, void* args, char* parser_name) 
         if (isalnum(next_char) || next_char == '_') {
             char* err_msg;
             asprintf(&err_msg, "Expected keyword '%s', not part of identifier", keyword);
-            return make_failure(in, err_msg);
+            return make_failure_v2(in, parser_name, err_msg, NULL);
         }
     }
 
