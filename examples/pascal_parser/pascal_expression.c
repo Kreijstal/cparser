@@ -689,11 +689,6 @@ void init_pascal_expression_parser(combinator_t** p) {
     expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
     expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
 
-    // Multi-character operators (added last = tried first in expr parser)
-    expr_altern(*p, 3, PASCAL_T_NE, token(match("<>")));
-    expr_altern(*p, 3, PASCAL_T_GE, token(match(">=")));
-    expr_altern(*p, 3, PASCAL_T_LE, token(match("<=")));
-
     // Precedence 4: Range operator (..)
     expr_insert(*p, 4, PASCAL_T_RANGE, EXPR_INFIX, ASSOC_LEFT, token(match("..")));
 
@@ -726,10 +721,6 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
     expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(member_access_op));
-
-    // Range operator (..) - SECOND insertion to override member access priority
-    // (Multi-character operators added last = tried first in expr parser)
-    expr_altern(*p, 4, PASCAL_T_RANGE, token(match("..")));
 }
 
 // --- Utility Functions ---

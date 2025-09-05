@@ -420,14 +420,15 @@ combinator_t * seq(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
 
     // Allocate and generate the name
     char* name_buffer = (char*)safe_malloc(total_name_len + 1);
-    strcpy(name_buffer, "sequence of ");
+    char* p = name_buffer;
+    p += sprintf(p, "sequence of ");
     current = head;
     for (int i = 0; i < count; i++) {
         if (current->comb->name) {
-            strcat(name_buffer, current->comb->name);
+            p += sprintf(p, "%s", current->comb->name);
         }
         if (i < count - 1) {
-            strcat(name_buffer, ", ");
+            p += sprintf(p, ", ");
         }
         current = current->next;
     }
@@ -467,14 +468,15 @@ combinator_t * multi(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
 
     // Allocate and generate the name
     char* name_buffer = (char*)safe_malloc(total_name_len + 1);
-    strcpy(name_buffer, "any of ");
+    char* p = name_buffer;
+    p += sprintf(p, "any of ");
     current = head;
     for (int i = 0; i < count; i++) {
         if (current->comb->name) {
-            strcat(name_buffer, current->comb->name);
+            p += sprintf(p, "%s", current->comb->name);
         }
         if (i < count - 1) {
-            strcat(name_buffer, ", ");
+            p += sprintf(p, ", ");
         }
         current = current->next;
     }
@@ -554,14 +556,15 @@ combinator_t * gseq(combinator_t * ret, tag_t typ, combinator_t * c1, ...) {
 
     // Allocate and generate the name
     char* name_buffer = (char*)safe_malloc(total_name_len + 1);
-    strcpy(name_buffer, "gseq of ");
+    char* p = name_buffer;
+    p += sprintf(p, "gseq of ");
     current = head;
     for (int i = 0; i < count; i++) {
         if (current->comb->name) {
-            strcat(name_buffer, current->comb->name);
+            p += sprintf(p, "%s", current->comb->name);
         }
         if (i < count - 1) {
-            strcat(name_buffer, ", ");
+            p += sprintf(p, ", ");
         }
         current = current->next;
     }
