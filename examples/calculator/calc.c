@@ -14,7 +14,15 @@ static void print_ast_indented(ast_t* ast, int depth);
 static void print_error_with_partial_ast(ParseError* error) {
     if (error == NULL) return;
 
-    printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
+    printf("Error at line %d, col %d: ", error->line, error->col);
+    if (error->parser_name) {
+        printf("In parser '%s': ", error->parser_name);
+    }
+    printf("%s\n", error->message);
+
+    if (error->unexpected) {
+        printf("Unexpected input: \"%s\"\n", error->unexpected);
+    }
 
     if (error->partial_ast != NULL) {
         printf("Partial AST:\n");

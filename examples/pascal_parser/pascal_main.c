@@ -11,7 +11,15 @@ static void print_error_with_partial_ast(ParseError* error);
 static void print_error_with_partial_ast(ParseError* error) {
     if (error == NULL) return;
 
-    printf("Error at line %d, col %d: %s\n", error->line, error->col, error->message);
+    printf("Error at line %d, col %d: ", error->line, error->col);
+    if (error->parser_name) {
+        printf("In parser '%s': ", error->parser_name);
+    }
+    printf("%s\n", error->message);
+
+    if (error->unexpected) {
+        printf("Unexpected input: \"%s\"\n", error->unexpected);
+    }
 
     if (error->partial_ast != NULL) {
         printf("Partial AST:\n");
@@ -58,7 +66,7 @@ int main(int argc, char *argv[]) {
     }
 
     combinator_t *parser = new_combinator();
-    init_pascal_expression_parser(&parser, NULL);
+    init_pascal_expression_parser(&parser);
 
     input_t *in = new_input();
     in->buffer = expr_str;

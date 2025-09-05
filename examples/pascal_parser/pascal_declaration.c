@@ -31,7 +31,7 @@ void init_pascal_procedure_parser(combinator_t** p) {
     combinator_t** expr_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
     *expr_parser = new_combinator();
     (*expr_parser)->extra_to_free = expr_parser;
-    init_pascal_expression_parser(expr_parser, NULL);
+    init_pascal_expression_parser(expr_parser);
 
     // Create statement parser for procedure/function bodies
     combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
@@ -165,7 +165,7 @@ void init_pascal_method_implementation_parser(combinator_t** p) {
 
 // Pascal Complete Program Parser - for full Pascal programs
 // Custom parser for main block content that parses statements properly
-static ParseResult main_block_content_fn(input_t* in, void* args) {
+static ParseResult main_block_content_fn(input_t* in, void* args, char* parser_name) {
     // Parse statements until we can't parse any more
     // Don't look for "end" - that's handled by the parent main_block parser
 

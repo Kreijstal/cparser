@@ -7,7 +7,7 @@
 #include <ctype.h>
 
 // Range type parser: start..end (e.g., -1..1)
-static ParseResult range_type_fn(input_t* in, void* args) {
+static ParseResult range_type_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -26,7 +26,7 @@ static ParseResult range_type_fn(input_t* in, void* args) {
     if (!start_result.is_success) {
         free_combinator(start_parser);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected range start value"));
+        return make_failure_v2(in, parser_name, strdup("Expected range start value"), NULL);
     }
 
     // Parse the ".." separator with whitespace handling
@@ -37,7 +37,7 @@ static ParseResult range_type_fn(input_t* in, void* args) {
         free_combinator(start_parser);
         free_combinator(range_sep);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '..' in range type"));
+        return make_failure_v2(in, parser_name, strdup("Expected '..' in range type"), NULL);
     }
     free_combinator(range_sep);
     free_ast(sep_result.value.ast);
@@ -48,7 +48,7 @@ static ParseResult range_type_fn(input_t* in, void* args) {
         free_ast(start_result.value.ast);
         free_combinator(start_parser);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected range end value"));
+        return make_failure_v2(in, parser_name, strdup("Expected range end value"), NULL);
     }
 
     // Create range AST
@@ -74,7 +74,7 @@ combinator_t* range_type(tag_t tag) {
 }
 
 // Array type parser: ARRAY[range1,range2,...] OF element_type
-static ParseResult array_type_fn(input_t* in, void* args) {
+static ParseResult array_type_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -85,7 +85,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
     if (!array_res.is_success) {
         free_combinator(array_keyword);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected 'array'"));
+        return make_failure_v2(in, parser_name, strdup("Expected 'array'"), NULL);
     }
     free_ast(array_res.value.ast);
     free_combinator(array_keyword);
@@ -96,7 +96,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
     if (!open_res.is_success) {
         free_combinator(open_bracket);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected '[' after 'array'"));
+        return make_failure_v2(in, parser_name, strdup("Expected '[' after 'array'"), NULL);
     }
     free_ast(open_res.value.ast);
     free_combinator(open_bracket);
@@ -115,7 +115,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
     } else {
         free_combinator(index_list);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected array indices"));
+        return make_failure_v2(in, parser_name, strdup("Expected array indices"), NULL);
     }
     free_combinator(index_list);
 
@@ -126,7 +126,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
         free_ast(indices_ast);
         free_combinator(close_bracket);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected ']'"));
+        return make_failure_v2(in, parser_name, strdup("Expected ']'"), NULL);
     }
     free_ast(close_res.value.ast);
     free_combinator(close_bracket);
@@ -138,7 +138,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
         free_ast(indices_ast);
         free_combinator(of_keyword);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected 'OF' after array indices"));
+        return make_failure_v2(in, parser_name, strdup("Expected 'OF' after array indices"), NULL);
     }
     free_ast(of_res.value.ast);
     free_combinator(of_keyword);
@@ -153,7 +153,7 @@ static ParseResult array_type_fn(input_t* in, void* args) {
         free_ast(indices_ast);
         free_combinator(element_type);
         restore_input_state(in, &state);
-        return make_failure(in, strdup("Expected element type after 'OF'"));
+        return make_failure_v2(in, parser_name, strdup("Expected element type after 'OF'"), NULL);
     }
     free_combinator(element_type);
 

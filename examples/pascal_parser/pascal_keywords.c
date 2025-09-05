@@ -28,7 +28,7 @@ bool is_pascal_keyword(const char* str) {
 }
 
 // Word-boundary aware case-insensitive keyword matching
-static ParseResult keyword_ci_fn(input_t* in, void* args) {
+static ParseResult keyword_ci_fn(input_t* in, void* args, char* parser_name) {
     char* str = ((match_args*)args)->str;
     InputState state;
     save_input_state(in, &state);
@@ -42,7 +42,7 @@ static ParseResult keyword_ci_fn(input_t* in, void* args) {
             restore_input_state(in, &state);
             char* err_msg;
             asprintf(&err_msg, "Expected keyword '%s' (case-insensitive)", str);
-            return make_failure(in, err_msg);
+            return make_failure_v2(in, parser_name, err_msg, NULL);
         }
     }
 
@@ -53,7 +53,7 @@ static ParseResult keyword_ci_fn(input_t* in, void* args) {
             restore_input_state(in, &state);
             char* err_msg;
             asprintf(&err_msg, "Expected keyword '%s', not part of identifier", str);
-            return make_failure(in, err_msg);
+            return make_failure_v2(in, parser_name, err_msg, NULL);
         }
     }
 
@@ -78,7 +78,7 @@ typedef struct {
 } keyword_parser_args;
 
 // Custom parser function
-static ParseResult match_keyword_fn(input_t* in, void* args) {
+static ParseResult match_keyword_fn(input_t* in, void* args, char* parser_name) {
     keyword_parser_args* k_args = (keyword_parser_args*)args;
     InputState state;
     save_input_state(in, &state);
@@ -128,7 +128,7 @@ static ParseResult match_keyword_fn(input_t* in, void* args) {
     restore_input_state(in, &state);
     char* err_msg;
     asprintf(&err_msg, "Expected keyword '%s'", k_args->keyword);
-    return make_failure(in, err_msg);
+    return make_failure_v2(in, parser_name, err_msg, NULL);
 }
 
 // Combinator constructor

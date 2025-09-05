@@ -55,6 +55,8 @@ typedef struct ParseError {
     int line;
     int col;
     char* message;
+    char* parser_name;
+    char* unexpected;
     struct ParseError* cause;
     ast_t* partial_ast;
 } ParseError;
@@ -72,18 +74,19 @@ typedef enum {
     P_MATCH, P_MATCH_RAW, P_INTEGER, P_CIDENT, P_STRING, P_UNTIL, P_SUCCEED, P_ANY_CHAR, P_SATISFY, P_CI_KEYWORD,
     COMB_EXPECT, COMB_SEQ, COMB_MULTI, COMB_FLATMAP, COMB_MANY, COMB_EXPR,
     COMB_OPTIONAL, COMB_SEP_BY, COMB_LEFT, COMB_RIGHT, COMB_NOT, COMB_PEEK,
-    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_MAP_WITH_CONTEXT, COMB_ERRMAP,
+    COMB_GSEQ, COMB_BETWEEN, COMB_SEP_END_BY, COMB_CHAINL1, COMB_MAP, COMB_ERRMAP,
     COMB_LAZY,
     P_EOI
 } parser_type_t;
 
-typedef ParseResult (*comb_fn)(input_t *in, void *args);
+typedef ParseResult (*comb_fn)(input_t *in, void *args, char* parser_name);
 
 struct combinator_t {
     parser_type_t type;
     comb_fn fn;
     void * args;
     void * extra_to_free;
+    char* name;
 };
 
 // For flatMap
@@ -163,6 +166,7 @@ void save_input_state(input_t* in, InputState* state);
 void restore_input_state(input_t* in, InputState* state);
 ParseResult make_success(ast_t* ast);
 ParseResult make_failure(input_t* in, char* message);
+ParseResult make_failure_v2(input_t* in, char* parser_name, char* message, char* unexpected);
 ParseResult wrap_failure(input_t* in, char* message, ParseResult cause);
 
 // --- Helper Function Prototypes ---
