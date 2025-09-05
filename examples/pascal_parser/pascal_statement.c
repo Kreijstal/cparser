@@ -15,33 +15,20 @@ static combinator_t* asm_body(tag_t tag) {
 // --- Pascal Statement Parser Implementation ---
 void init_pascal_statement_parser(combinator_t** p) {
     // First create the expression parser to use within statements
+    pascal_expression_parsers shared_parsers;
     combinator_t** expr_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
     *expr_parser = new_combinator();
     (*expr_parser)->extra_to_free = expr_parser;
-    init_pascal_expression_parser(expr_parser);
+    init_pascal_expression_parser(expr_parser, &shared_parsers);
 
     // Create the main statement parser pointer for recursive references
     combinator_t** stmt_parser = p;
 
     // Left-value parser: accepts identifiers, member access expressions, and array access
-    combinator_t* simple_identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
-    combinator_t* member_access_lval = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
-        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // object name
-        token(match(".")),                                            // dot
-        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // field/property name
-        NULL
-    );
-    // Array access for lvalue: identifier[index, ...]
-    combinator_t* array_access_lval = seq(new_combinator(), PASCAL_T_ARRAY_ACCESS,
-        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),     // array name
-        between(token(match("[")), token(match("]")),
-            sep_by(lazy(expr_parser), token(match(",")))),             // indices
-        NULL
-    );
     combinator_t* lvalue = multi(new_combinator(), PASCAL_T_NONE,
-        array_access_lval,       // try array access first
-        member_access_lval,      // try member access second
-        simple_identifier,       // then simple identifier
+        shared_parsers.array_access,
+        shared_parsers.member_access,
+        shared_parsers.identifier,
         NULL
     );
 

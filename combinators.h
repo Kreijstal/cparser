@@ -2,6 +2,7 @@
 #define COMBINATORS_H
 
 #include "parser.h"
+#include "types.h"
 
 //=============================================================================
 // Combinator Constructors
@@ -24,7 +25,7 @@ combinator_t * sep_end_by(combinator_t* p, combinator_t* sep);
 combinator_t * chainl1(combinator_t* p, combinator_t* op);
 combinator_t * succeed(ast_t* ast);
 combinator_t * map(combinator_t* p, map_func func);
-combinator_t * map_with_context(combinator_t* p, map_with_context_func func, void* context);
 combinator_t * errmap(combinator_t* p, err_map_func func);
+combinator_t * map_with_context(combinator_t* p, map_with_context_func func, void* context);
 
 #endif // COMBINATORS_H

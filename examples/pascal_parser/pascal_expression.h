@@ -6,7 +6,14 @@
 
 typedef struct { tag_t tag; combinator_t** expr_parser; } set_args;
 
-void init_pascal_expression_parser(combinator_t** p);
+typedef struct {
+    combinator_t* array_access;
+    combinator_t* func_call;
+    combinator_t* identifier;
+    combinator_t* member_access;
+} pascal_expression_parsers;
+
+void init_pascal_expression_parser(combinator_t** p, pascal_expression_parsers* shared_parsers);
 ParseResult parse_pascal_expression(input_t* input, combinator_t* parser);
 combinator_t* pascal_identifier(tag_t tag);
 combinator_t* pascal_expression_identifier(tag_t tag);

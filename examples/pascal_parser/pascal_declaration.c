@@ -31,7 +31,7 @@ void init_pascal_procedure_parser(combinator_t** p) {
     combinator_t** expr_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
     *expr_parser = new_combinator();
     (*expr_parser)->extra_to_free = expr_parser;
-    init_pascal_expression_parser(expr_parser);
+    init_pascal_expression_parser(expr_parser, NULL);
 
     // Create statement parser for procedure/function bodies
     combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));

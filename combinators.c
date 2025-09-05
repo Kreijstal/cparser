@@ -29,6 +29,7 @@ static ParseResult sep_end_by_fn(input_t * in, void * args);
 static ParseResult chainl1_fn(input_t * in, void * args);
 static ParseResult succeed_fn(input_t * in, void * args);
 static ParseResult map_fn(input_t * in, void * args);
+static ParseResult map_with_context_fn(input_t * in, void * args);
 static ParseResult errmap_fn(input_t * in, void * args);
 static ParseResult many_fn(input_t * in, void * args);
 

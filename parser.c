@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "parser.h"
+#include "types.h"
 #include "combinator_internals.h"
 
 //=============================================================================
@@ -697,6 +698,12 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
             case COMB_EXPECT: {
                 expect_args* args = (expect_args*)comb->args;
                 free_combinator_recursive(args->comb, visited);
+                free(args);
+                break;
+            }
+            case COMB_MAP_WITH_CONTEXT: {
+                map_with_context_args* args = (map_with_context_args*)comb->args;
+                free_combinator_recursive(args->parser, visited);
                 free(args);
                 break;
             }

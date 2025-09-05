@@ -2,7 +2,6 @@
 #include "pascal_parser.h"
 #include "pascal_keywords.h"
 #include "pascal_type.h"
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -261,33 +260,98 @@ combinator_t* range_operator(tag_t tag) {
     return comb;
 }
 
-// Map function to create a set node from a list of elements
-static ast_t* map_to_set_node(ast_t* element_list, void* context) {
-    tag_t tag = (tag_t)(intptr_t)context;
-    ast_t* set_node = new_ast();
-    set_node->typ = tag;
-    if (element_list == ast_nil) {
-        set_node->child = NULL;
-    } else {
-        set_node->child = element_list;
+// Simplified set constructor parser using existing parse utilities
+static ParseResult set_fn(input_t* in, void* args) {
+    set_args* sargs = (set_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+
+    // Must start with '['
+    if (read1(in) != '[') {
+        restore_input_state(in, &state);
+        return make_failure(in, strdup("Expected '['"));
     }
-    return set_node;
+
+    ast_t* set_node = new_ast();
+    set_node->typ = sargs->tag;
+    set_node->sym = NULL;
+    set_node->child = NULL;
+    set_node->next = NULL;
+    set_ast_position(set_node, in);
+
+    // Skip whitespace manually
+    char c;
+    while (isspace(c = read1(in)));
+    if (c != EOF) in->start--;
+
+    // Check for empty set
+    c = read1(in);
+    if (c == ']') {
+        return make_success(set_node);
+    }
+    if (c != EOF) in->start--; // Back up
+
+    // Parse set elements using the provided expression parser
+    combinator_t* expr_parser = lazy(sargs->expr_parser);
+
+    // Parse comma-separated expressions
+    ast_t* first_element = NULL;
+    ast_t* current_element = NULL;
+
+    while (true) {
+        // Skip whitespace
+        while (isspace(c = read1(in)));
+        if (c != EOF) in->start--;
+
+        ParseResult elem_result = parse(in, expr_parser);
+        if (!elem_result.is_success) {
+            free_ast(set_node);
+            free_combinator(expr_parser);
+            restore_input_state(in, &state);
+            return make_failure(in, strdup("Expected set element"));
+        }
+
+        // Add element to set
+        if (!first_element) {
+            first_element = elem_result.value.ast;
+            current_element = elem_result.value.ast;
+            set_node->child = elem_result.value.ast;
+        } else {
+            current_element->next = elem_result.value.ast;
+            current_element = elem_result.value.ast;
+        }
+
+        // Skip whitespace
+        while (isspace(c = read1(in)));
+        if (c != EOF) in->start--;
+
+        // Check for comma or closing bracket
+        c = read1(in);
+        if (c == ']') {
+            break;
+        } else if (c == ',') {
+            continue; // Parse next element
+        } else {
+            free_ast(set_node);
+            free_combinator(expr_parser);
+            restore_input_state(in, &state);
+            return make_failure(in, strdup("Expected ',' or ']'"));
+        }
+    }
+
+    free_combinator(expr_parser);
+    return make_success(set_node);
 }
 
-// Simplified set constructor parser using combinators
 combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
-    // A set is a comma-separated list of expressions between square brackets
-    combinator_t* set_elements = sep_by(lazy(expr_parser), token(match(",")));
-
-    // Use `between` to handle the brackets and get the optional elements
-    combinator_t* set_parser = between(
-        token(match("[")),
-        token(match("]")),
-        optional(set_elements)
-    );
-
-    // Use map_with_context to wrap the element list in a set node with the correct tag
-    return map_with_context(set_parser, map_to_set_node, (void*)(intptr_t)tag);
+    set_args* args = (set_args*)safe_malloc(sizeof(set_args));
+    args->tag = tag;
+    args->expr_parser = expr_parser;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY;
+    comb->fn = set_fn;
+    comb->args = args;
+    return comb;
 }
 
 // Removed unused relational_ops() function that had non-boundary-aware match("in")
@@ -515,7 +579,7 @@ static void post_process_set_operations(ast_t* ast) {
 }
 
 // --- Parser Definition ---
-void init_pascal_expression_parser(combinator_t** p) {
+void init_pascal_expression_parser(combinator_t** p, pascal_expression_parsers* shared_parsers) {
     // Pascal identifier parser - use expression identifier that allows some keywords in expression contexts
     combinator_t* identifier = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
 
@@ -648,6 +712,20 @@ void init_pascal_expression_parser(combinator_t** p) {
     );
     expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(member_access_op));
 
+    // Standalone member access parser for l-values
+    combinator_t* member_access_standalone = seq(new_combinator(), PASCAL_T_MEMBER_ACCESS,
+        identifier,
+        token(match(".")),
+        identifier,
+        NULL
+    );
+
+    if (shared_parsers) {
+        shared_parsers->array_access = array_access;
+        shared_parsers->func_call = func_call;
+        shared_parsers->identifier = identifier;
+        shared_parsers->member_access = member_access_standalone;
+    }
 }
 
 // --- Utility Functions ---

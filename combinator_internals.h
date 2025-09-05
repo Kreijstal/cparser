@@ -2,6 +2,7 @@
 #define COMBINATOR_INTERNALS_H
 
 #include "parser.h"
+#include "types.h"
 
 // --- Argument Structs for Combinators ---
 

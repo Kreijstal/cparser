@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     }
 
     combinator_t *parser = new_combinator();
-    init_pascal_expression_parser(&parser);
+    init_pascal_expression_parser(&parser, NULL);
 
     input_t *in = new_input();
     in->buffer = expr_str;
