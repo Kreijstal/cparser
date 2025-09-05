@@ -25,6 +25,14 @@ void init_pascal_program_parser(combinator_t** p) {
     );
 }
 
+// Dummy parser for unit declarations - to be implemented
+void init_pascal_unit_parser(combinator_t** p) {
+    // This is a placeholder. For the failing test, we can just have
+    // a parser that fails on any input. We'll use a primitive that is
+    // guaranteed to fail on the test input.
+    *p = match("this_is_a_dummy_string_that_will_cause_failure");
+}
+
 // Pascal Procedure/Function Declaration Parser
 void init_pascal_procedure_parser(combinator_t** p) {
     // Create expression parser for default values and type references
