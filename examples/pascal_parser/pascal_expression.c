@@ -546,55 +546,24 @@ combinator_t* pascal_double_quoted_content(tag_t tag) {
     return comb;
 }
 
-// Map function to extract string content from sequence AST
-static ast_t* extract_string_from_seq(ast_t* seq_ast) {
-    if (!seq_ast || !seq_ast->child) {
-        return seq_ast; // Return as-is if malformed
-    }
-
-    // The sequence should be: quote, content, quote
-    // We want to return just the content (middle element)
-    ast_t* content = seq_ast->child->next; // Skip first element (opening quote)
-    if (!content) {
-        return seq_ast; // Return as-is if malformed
-    }
-
-    // Create a copy of the content node
-    ast_t* result = new_ast();
-    result->typ = content->typ;
-    result->sym = content->sym;
-    result->child = copy_ast(content->child);
-    result->next = NULL;
-    result->line = content->line;
-    result->col = content->col;
-
-    return result;
-}
+// Pascal string parser using the between combinator for safety
 
 combinator_t* pascal_string(tag_t tag) {
-    // Create a combinator that extracts just the content from the sequence
-    combinator_t* single_quoted = seq(new_combinator(), PASCAL_T_NONE,
-        match("'"),                               // opening single quote
-        pascal_single_quoted_content(tag),        // content with Pascal escaping
-        match("'"),                               // closing single quote
-        NULL
+    combinator_t* single_quoted = between(
+        match("'"),
+        match("'"),
+        pascal_single_quoted_content(tag)
     );
 
-    combinator_t* double_quoted = seq(new_combinator(), PASCAL_T_NONE,
-        match("\""),                              // opening double quote
-        pascal_double_quoted_content(tag),        // content with C-style escaping
-        match("\""),                              // closing double quote
-        NULL
+    combinator_t* double_quoted = between(
+        match("\""),
+        match("\""),
+        pascal_double_quoted_content(tag)
     );
 
-    // Map function to extract just the string content from the sequence
-    combinator_t* single_quoted_mapped = map(single_quoted, extract_string_from_seq);
-    combinator_t* double_quoted_mapped = map(double_quoted, extract_string_from_seq);
-
-    // Return a multi combinator that tries both alternatives
     return multi(new_combinator(), PASCAL_T_NONE,
-        single_quoted_mapped,
-        double_quoted_mapped,
+        single_quoted,
+        double_quoted,
         NULL
     );
 }

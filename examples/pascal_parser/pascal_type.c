@@ -291,19 +291,8 @@ combinator_t* class_type(tag_t tag) {
         NULL
     );
 
-    // Comment handling - simple line comment parser
-    combinator_t* line_comment = seq(new_combinator(), PASCAL_T_COMMENT,
-        match("//"),
-        until(match("\n"), PASCAL_T_STRING),
-        NULL
-    );
-
     // Skip comments and whitespace in class body
-    combinator_t* class_element = multi(new_combinator(), PASCAL_T_NONE,
-        class_member,
-        line_comment,
-        NULL
-    );
+    combinator_t* class_element = class_member;
 
     // Access sections: private, public, protected, published
     combinator_t* access_keyword = multi(new_combinator(), PASCAL_T_ACCESS_MODIFIER,

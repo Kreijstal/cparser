@@ -193,15 +193,6 @@ void init_input_buffer(input_t *in, char *buffer, int length) {
     in->buffer = buffer;
     in->length = length;
     in->start = 0;
-    in->line = 1;
-    in->col = 1;
-    
-    // Count lines in the buffer to set proper line tracking
-    for (int i = 0; i < length; i++) {
-        if (buffer[i] == '\n') {
-            in->line++;
-        }
-    }
     // Reset to beginning for parsing
     in->line = 1;
     in->col = 1;
