@@ -249,7 +249,7 @@ static ParseResult match_ci_fn(input_t * in, void * args, char* parser_name) {
         if (tolower(c) != tolower(str[i])) {
             restore_input_state(in, &state);
             char* unexpected = strndup(in->buffer + state.start, 10);
-            char* err_msg; asprintf(&err_msg, "Parser '%s' expected '%s' (case-insensitive) but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
+            char* err_msg; asprintf(&err_msg, "Parser '%s' Expected '%s' (case-insensitive) but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
@@ -264,7 +264,7 @@ static ParseResult match_fn(input_t * in, void * args, char* parser_name) {
         if (c != str[i]) {
             restore_input_state(in, &state);
             char* unexpected = strndup(in->buffer + state.start, 10);
-            char* err_msg; asprintf(&err_msg, "Parser '%s' expected '%s' but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
+            char* err_msg; asprintf(&err_msg, "Parser '%s' Expected '%s' but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
@@ -508,30 +508,35 @@ combinator_t * match(char * str) {
     match_args * args = (match_args*)safe_malloc(sizeof(match_args));
     args->str = str;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("match");
     comb->type = P_MATCH; comb->fn = match_fn; comb->args = args; return comb;
 }
 combinator_t * match_ci(char * str) {
     match_args * args = (match_args*)safe_malloc(sizeof(match_args));
     args->str = str;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("match_ci");
     comb->type = P_CI_KEYWORD; comb->fn = match_ci_fn; comb->args = args; return comb;
 }
 combinator_t * integer(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("integer");
     comb->type = P_INTEGER; comb->fn = integer_fn; comb->args = args; return comb;
 }
 combinator_t * cident(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("cident");
     comb->type = P_CIDENT; comb->fn = cident_fn; comb->args = args; return comb;
 }
 combinator_t * string(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("string");
     comb->type = P_STRING;
     comb->fn = string_fn;
     comb->args = args;
@@ -539,6 +544,7 @@ combinator_t * string(tag_t tag) {
 }
 combinator_t * eoi() {
     combinator_t * comb = new_combinator();
+    comb->name = strdup("eoi");
     comb->type = P_EOI;
     comb->fn = eoi_fn;
     comb->args = NULL;
@@ -550,6 +556,7 @@ combinator_t * satisfy(char_predicate pred, tag_t tag) {
     args->pred = pred;
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("satisfy");
     comb->type = P_SATISFY;
     comb->fn = satisfy_fn;
     comb->args = (void*)args;
@@ -567,6 +574,7 @@ combinator_t * any_char(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("any_char");
     comb->type = P_ANY_CHAR;
     comb->fn = any_char_fn;
     comb->args = args;
@@ -712,6 +720,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
         return;
     }
 
+    if (comb->name) {
+        free(comb->name);
+        comb->name = NULL;
+    }
     if (comb->extra_to_free) {
         free(comb->extra_to_free);
         comb->extra_to_free = NULL;
