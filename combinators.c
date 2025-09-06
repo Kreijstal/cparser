@@ -75,7 +75,14 @@ static ParseResult expect_fn(input_t * in, void * args, char* parser_name) {
     expect_args * eargs = (expect_args *) args;
     ParseResult res = parse(in, eargs->comb);
     if (res.is_success) return res;
-    return wrap_failure(in, strdup(eargs->msg), res);
+
+    char* final_message;
+    if (res.value.error && res.value.error->unexpected) {
+        asprintf(&final_message, "%s but found '%s'", eargs->msg, res.value.error->unexpected);
+    } else {
+        final_message = strdup(eargs->msg);
+    }
+    return wrap_failure(in, final_message, parser_name, res);
 }
 
 static ParseResult between_fn(input_t * in, void * args, char* parser_name) {
@@ -202,7 +209,7 @@ static ParseResult chainl1_fn(input_t * in, void * args, char* parser_name) {
             restore_input_state(in, &state);
             free_ast(left);
             // The op succeeded, so there is no error to free in op_res
-            return wrap_failure(in, strdup("Expected operand after operator in chainl1"), right_res);
+            return wrap_failure(in, strdup("Expected operand after operator in chainl1"), parser_name, right_res);
         }
         ast_t* right = right_res.value.ast;
         left = ast2(op_tag, left, right);

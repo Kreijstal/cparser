@@ -133,6 +133,15 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
 
+    // With statement: with expression do statement
+    combinator_t* with_stmt = seq(new_combinator(), PASCAL_T_WITH_STMT,
+        token(keyword_ci("with")),               // with keyword (case-insensitive)
+        lazy(expr_parser),                     // expression
+        token(keyword_ci("do")),                 // do keyword (case-insensitive)
+        lazy(stmt_parser),                     // body statement
+        NULL
+    );
+
     // ASM block: asm ... end
     combinator_t* asm_stmt = seq(new_combinator(), PASCAL_T_ASM_BLOCK,
         token(match("asm")),                   // asm keyword
@@ -192,6 +201,9 @@ void init_pascal_statement_parser(combinator_t** p) {
         NULL
     );
 
+    // Exit statement: exit
+    combinator_t* exit_stmt = token(create_keyword_parser("exit", PASCAL_T_EXIT_STMT));
+
     // Main statement parser: try different types of statements (order matters!)
     // Note: VAR sections are handled by the complete program parser context
     multi(*stmt_parser, PASCAL_T_NONE,
@@ -200,10 +212,12 @@ void init_pascal_statement_parser(combinator_t** p) {
         try_except,                           // try-except blocks
         raise_stmt,                           // raise statements
         inherited_stmt,                       // inherited statements
+        exit_stmt,                            // exit statements
         asm_stmt,                             // inline assembly blocks
         if_stmt,                              // if statements
         for_stmt,                             // for statements
         while_stmt,                           // while statements
+        with_stmt,                            // with statements
         assignment,                            // assignment statements
         expr_stmt,                            // expression statements (must be last)
         NULL

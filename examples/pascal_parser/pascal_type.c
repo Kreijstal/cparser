@@ -340,3 +340,12 @@ combinator_t* type_name(tag_t tag) {
         NULL
     );
 }
+
+// Pointer type parser: ^TypeName
+combinator_t* pointer_type(tag_t tag) {
+    return seq(new_combinator(), tag,
+        token(match("^")),
+        pascal_identifier(PASCAL_T_IDENTIFIER),
+        NULL
+    );
+}
