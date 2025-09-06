@@ -71,12 +71,31 @@ void init_pascal_program_parser(combinator_t** p) {
     );
 }
 
-// Dummy parser for unit declarations - to be implemented
+// Pascal Unit Parser
 void init_pascal_unit_parser(combinator_t** p) {
-    // This is a placeholder. For the failing test, we can just have
-    // a parser that fails on any input. We'll use a primitive that is
-    // guaranteed to fail on the test input.
-    *p = match("this_is_a_dummy_string_that_will_cause_failure");
+    // Interface section: for now, just the keyword
+    combinator_t* interface_section = seq(new_combinator(), PASCAL_T_INTERFACE_SECTION,
+        token(keyword_ci("interface")),
+        NULL
+    );
+
+    // Implementation section: for now, just the keyword
+    combinator_t* implementation_section = seq(new_combinator(), PASCAL_T_IMPLEMENTATION_SECTION,
+        token(keyword_ci("implementation")),
+        NULL
+    );
+
+    // Unit declaration: unit name; interface ... implementation ... end.
+    seq(*p, PASCAL_T_UNIT_DECL,
+        token(keyword_ci("unit")),
+        token(cident(PASCAL_T_IDENTIFIER)),
+        token(match(";")),
+        interface_section,
+        implementation_section,
+        token(keyword_ci("end")),
+        token(match(".")),
+        NULL
+    );
 }
 
 // Pascal Procedure/Function Declaration Parser
@@ -168,7 +187,7 @@ void init_pascal_method_implementation_parser(combinator_t** p) {
     ));
 
     // Method name with class: ClassName.MethodName
-    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_NONE,
+    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_QUALIFIED_IDENTIFIER,
         token(cident(PASCAL_T_IDENTIFIER)),      // class name
         token(match(".")),                       // dot
         token(cident(PASCAL_T_IDENTIFIER)),      // method name

@@ -1560,8 +1560,8 @@ void test_pascal_method_implementation(void) {
         TEST_ASSERT(current != NULL);
         TEST_ASSERT(current->typ == PASCAL_T_METHOD_IMPL);
 
-        // The second child of the METHOD_IMPL node should be the QUALIFIED_IDENTIFIER node.
-        ast_t* qualified_id_node = current->child->next;
+        // The first child of the METHOD_IMPL node should be the QUALIFIED_IDENTIFIER node.
+        ast_t* qualified_id_node = current->child;
         TEST_ASSERT(qualified_id_node != NULL);
         TEST_ASSERT(qualified_id_node->typ == PASCAL_T_QUALIFIED_IDENTIFIER);
 
@@ -1572,8 +1572,8 @@ void test_pascal_method_implementation(void) {
         TEST_ASSERT(class_name_node->typ == PASCAL_T_IDENTIFIER);
         TEST_ASSERT(strcmp(class_name_node->sym->name, "TMyObject") == 0);
 
-        // Third child (skipping the dot) is the MethodName.
-        ast_t* method_name_node = class_name_node->next->next;
+        // Second child is the MethodName.
+        ast_t* method_name_node = class_name_node->next;
         TEST_ASSERT(method_name_node != NULL);
         TEST_ASSERT(method_name_node->typ == PASCAL_T_IDENTIFIER);
         TEST_ASSERT(strcmp(method_name_node->sym->name, "MyMethod") == 0);
