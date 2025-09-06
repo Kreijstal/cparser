@@ -73,25 +73,42 @@ void init_pascal_program_parser(combinator_t** p) {
 
 // Pascal Unit Parser
 void init_pascal_unit_parser(combinator_t** p) {
-    // Interface section: for now, just the keyword
+    combinator_t** stmt_parser = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *stmt_parser = new_combinator();
+    (*stmt_parser)->extra_to_free = stmt_parser;
+    init_pascal_statement_parser(stmt_parser);
+
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        token(cident(PASCAL_T_IDENTIFIER)), token(match(":")), token(cident(PASCAL_T_IDENTIFIER)), NULL);
+    combinator_t* param_list = optional(between(
+        token(match("(")), token(match(")")), sep_by(param, token(match(";")))));
+
+    combinator_t* procedure_header = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), param_list, token(match(";")), NULL);
+
+    combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+        token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list), token(match(";")),
+        lazy(stmt_parser), optional(token(match(";"))), NULL);
+
+    combinator_t* interface_declarations = many(procedure_header);
+    combinator_t* implementation_definitions = many(procedure_impl);
+
     combinator_t* interface_section = seq(new_combinator(), PASCAL_T_INTERFACE_SECTION,
-        token(keyword_ci("interface")),
-        NULL
-    );
+        token(keyword_ci("interface")), interface_declarations, NULL);
 
-    // Implementation section: for now, just the keyword
     combinator_t* implementation_section = seq(new_combinator(), PASCAL_T_IMPLEMENTATION_SECTION,
-        token(keyword_ci("implementation")),
-        NULL
-    );
+        token(keyword_ci("implementation")), implementation_definitions, NULL);
 
-    // Unit declaration: unit name; interface ... implementation ... end.
+    combinator_t* stmt_list_for_init = sep_end_by(lazy(stmt_parser), token(match(";")));
+    combinator_t* initialization_block = right(token(keyword_ci("begin")), stmt_list_for_init);
+
     seq(*p, PASCAL_T_UNIT_DECL,
         token(keyword_ci("unit")),
         token(cident(PASCAL_T_IDENTIFIER)),
         token(match(";")),
         interface_section,
         implementation_section,
+        optional(initialization_block),
         token(keyword_ci("end")),
         token(match(".")),
         NULL

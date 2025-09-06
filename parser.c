@@ -244,8 +244,8 @@ static ParseResult match_ci_fn(input_t * in, void * args, char* parser_name) {
         char c = read1(in);
         if (tolower(c) != tolower(str[i])) {
             restore_input_state(in, &state);
-            char* err_msg; asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
             char* unexpected = strndup(in->buffer + state.start, 10);
+            char* err_msg; asprintf(&err_msg, "Parser '%s' expected '%s' (case-insensitive) but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
@@ -259,8 +259,8 @@ static ParseResult match_fn(input_t * in, void * args, char* parser_name) {
         char c = read1(in);
         if (c != str[i]) {
             restore_input_state(in, &state);
-            char* err_msg; asprintf(&err_msg, "Expected '%s'", str);
             char* unexpected = strndup(in->buffer + state.start, 10);
+            char* err_msg; asprintf(&err_msg, "Parser '%s' expected '%s' but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
