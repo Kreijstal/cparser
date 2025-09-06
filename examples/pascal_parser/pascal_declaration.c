@@ -9,6 +9,52 @@
 #include <string.h>
 #include <ctype.h>
 
+// Bring in the global sentinel value for an empty AST node
+extern ast_t* ast_nil;
+
+// Custom parser for main block content that parses statements properly
+static ParseResult main_block_content_fn(input_t* in, void* args, char* parser_name) {
+    // Parse statements until we can't parse any more
+    // Don't look for "end" - that's handled by the parent main_block parser
+
+    // Create statement parser to parse the content
+    combinator_t* stmt_parser = new_combinator();
+    init_pascal_statement_parser(&stmt_parser);
+
+    // Parse as many statements as possible, separated by semicolons
+    combinator_t* stmt_list = many(seq(new_combinator(), PASCAL_T_NONE,
+        stmt_parser,
+        optional(token(match(";"))),  // optional semicolon after each statement
+        NULL
+    ));
+
+    ParseResult stmt_result = parse(in, stmt_list);
+
+    // Clean up
+    free_combinator(stmt_list);
+
+    return stmt_result;
+}
+
+static combinator_t* main_block_content(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = main_block_content_fn;
+    return comb;
+}
+
+// Helper function to wrap the content of a begin-end block in a PASCAL_T_MAIN_BLOCK node
+static ast_t* build_main_block_ast(ast_t* ast) {
+    ast_t* block_node = new_ast();
+    block_node->typ = PASCAL_T_MAIN_BLOCK;
+    // If the parsed content is the nil sentinel, the block is empty.
+    block_node->child = (ast == ast_nil) ? NULL : ast;
+    return block_node;
+}
+
+
 // Pascal Program/Terminated Statement Parser - for standalone statements with semicolons
 void init_pascal_program_parser(combinator_t** p) {
     // Create the base statement parser
@@ -172,48 +218,15 @@ void init_pascal_method_implementation_parser(combinator_t** p) {
 }
 
 // Pascal Complete Program Parser - for full Pascal programs
-// Custom parser for main block content that parses statements properly
-static ParseResult main_block_content_fn(input_t* in, void* args, char* parser_name) {
-    // Parse statements until we can't parse any more
-    // Don't look for "end" - that's handled by the parent main_block parser
-
-    // Create statement parser to parse the content
-    combinator_t* stmt_parser = new_combinator();
-    init_pascal_statement_parser(&stmt_parser);
-
-    // Parse as many statements as possible, separated by semicolons
-    combinator_t* stmt_list = many(seq(new_combinator(), PASCAL_T_NONE,
-        stmt_parser,
-        optional(token(match(";"))),  // optional semicolon after each statement
-        NULL
-    ));
-
-    ParseResult stmt_result = parse(in, stmt_list);
-
-    // Clean up
-    free_combinator(stmt_list);
-
-    return stmt_result;
-}
-
-static combinator_t* main_block_content(tag_t tag) {
-    combinator_t* comb = new_combinator();
-    prim_args* args = safe_malloc(sizeof(prim_args));
-    args->tag = tag;
-    comb->args = args;
-    comb->fn = main_block_content_fn;
-    return comb;
-}
-
 void init_pascal_complete_program_parser(combinator_t** p) {
-    // Enhanced main block parser that tries proper statement parsing first, falls back to hack
-    combinator_t* enhanced_main_block_content = main_block_content(PASCAL_T_NONE);
-    combinator_t* main_block = seq(new_combinator(), PASCAL_T_MAIN_BLOCK,
-        token(keyword_ci("begin")),                     // begin keyword (with word boundary check)
-        enhanced_main_block_content,                 // properly parsed content (or fallback to raw text)
-        token(keyword_ci("end")),                       // end keyword (with word boundary check)
-        NULL
+    // Use `between` to parse the content inside `begin` and `end`, then `map` to wrap it.
+    combinator_t* main_block_content_parser = main_block_content(PASCAL_T_NONE);
+    combinator_t* main_block_body = between(
+        token(keyword_ci("begin")),
+        token(keyword_ci("end")),
+        main_block_content_parser
     );
+    combinator_t* main_block = map(main_block_body, build_main_block_ast);
 
     // Program parameter list: (identifier, identifier, ...)
     combinator_t* program_param = token(cident(PASCAL_T_IDENTIFIER));
@@ -417,14 +430,14 @@ void init_pascal_complete_program_parser(combinator_t** p) {
 
     // Object Pascal method implementations (constructor/destructor/procedure with class.method syntax)
     // These are Object Pascal extensions, not standard Pascal
-    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_NONE,
+    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_QUALIFIED_IDENTIFIER,
         token(cident(PASCAL_T_IDENTIFIER)),          // class name
         token(match(".")),                           // dot
         token(cident(PASCAL_T_IDENTIFIER)),          // method name
         NULL
     );
 
-    combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
+    combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
         token(keyword_ci("constructor")),              // constructor keyword (with word boundary check)
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
@@ -434,7 +447,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_DESTRUCTOR_DECL,
+    combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
         token(keyword_ci("destructor")),               // destructor keyword (with word boundary check)
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list
@@ -444,7 +457,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         NULL
     );
 
-    combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
+    combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
         token(keyword_ci("procedure")),              // procedure keyword (with word boundary check)
         method_name_with_class,                      // ClassName.MethodName
         param_list,                                  // optional parameter list

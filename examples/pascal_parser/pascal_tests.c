@@ -1560,10 +1560,23 @@ void test_pascal_method_implementation(void) {
         TEST_ASSERT(current != NULL);
         TEST_ASSERT(current->typ == PASCAL_T_METHOD_IMPL);
 
-        // Check the method name
-        ast_t* method_name = current->child;
-        TEST_ASSERT(method_name->typ == PASCAL_T_IDENTIFIER);
-        TEST_ASSERT(strcmp(method_name->sym->name, "TMyObject.MyMethod") == 0);
+        // The second child of the METHOD_IMPL node should be the QUALIFIED_IDENTIFIER node.
+        ast_t* qualified_id_node = current->child->next;
+        TEST_ASSERT(qualified_id_node != NULL);
+        TEST_ASSERT(qualified_id_node->typ == PASCAL_T_QUALIFIED_IDENTIFIER);
+
+        // Now, check the children of the QUALIFIED_IDENTIFIER node.
+        // First child is the ClassName.
+        ast_t* class_name_node = qualified_id_node->child;
+        TEST_ASSERT(class_name_node != NULL);
+        TEST_ASSERT(class_name_node->typ == PASCAL_T_IDENTIFIER);
+        TEST_ASSERT(strcmp(class_name_node->sym->name, "TMyObject") == 0);
+
+        // Third child (skipping the dot) is the MethodName.
+        ast_t* method_name_node = class_name_node->next->next;
+        TEST_ASSERT(method_name_node != NULL);
+        TEST_ASSERT(method_name_node->typ == PASCAL_T_IDENTIFIER);
+        TEST_ASSERT(strcmp(method_name_node->sym->name, "MyMethod") == 0);
 
         free_ast(res.value.ast);
     } else {
@@ -1655,7 +1668,18 @@ void test_pascal_include_directive(void) {
 
     if (res.is_success) {
         // The main block should be empty, as the include was ignored.
-        ast_t* main_block = res.value.ast->child->next;
+        ast_t* program_decl = res.value.ast;
+        ast_t* main_block = NULL;
+        ast_t* current = program_decl->child;
+        while(current) {
+            if (current->typ == PASCAL_T_MAIN_BLOCK) {
+                main_block = current;
+                break;
+            }
+            current = current->next;
+        }
+
+        TEST_ASSERT(main_block != NULL);
         TEST_ASSERT(main_block->child == NULL);
 
         free_ast(res.value.ast);
