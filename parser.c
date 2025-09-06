@@ -104,15 +104,15 @@ ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult origin
     return (ParseResult){ .is_success = false, .value.error = new_err };
 }
 
-ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
+ParseResult wrap_failure(input_t* in, char* message, char* parser_name, ParseResult cause) {
     ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
     err->line = in->line;
     err->col = in->col;
     err->message = message;
     err->cause = cause.value.error;
     err->partial_ast = NULL;
-    err->parser_name = NULL;
-    err->unexpected = NULL;
+    err->parser_name = parser_name ? strdup(parser_name) : NULL;
+    err->unexpected = NULL; // The unexpected token is now part of the message in expect_fn
     return (ParseResult){ .is_success = false, .value.error = err };
 }
 

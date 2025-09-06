@@ -167,7 +167,7 @@ void restore_input_state(input_t* in, InputState* state);
 ParseResult make_success(ast_t* ast);
 ParseResult make_failure(input_t* in, char* message);
 ParseResult make_failure_v2(input_t* in, char* parser_name, char* message, char* unexpected);
-ParseResult wrap_failure(input_t* in, char* message, ParseResult cause);
+ParseResult wrap_failure(input_t* in, char* message, char* parser_name, ParseResult cause);
 
 // --- Helper Function Prototypes ---
 void* safe_malloc(size_t size);

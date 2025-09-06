@@ -82,15 +82,19 @@ void print_calculator_ast(ast_t* ast) {
 
 // --- Parser Definition ---
 void init_calculator_parser(combinator_t** p) {
-    combinator_t *factor = multi(new_combinator(), CALC_T_NONE,
-        token(integer(CALC_T_INT)),
-        between(token(match("(")), token(match(")")), lazy(p)),
+    combinator_t *factor = expect(multi(new_combinator(), CALC_T_NONE,
+        expect(token(integer(CALC_T_INT)), "Expected an integer"),
+        between(
+            expect(token(match("(")), "Expected '('"),
+            expect(token(match(")")), "Expected ')'"),
+            lazy(p)
+        ),
         NULL
-    );
+    ), "Expected a number or a parenthesized expression");
     expr(*p, factor);
-    expr_insert(*p, 0, CALC_T_ADD, EXPR_INFIX, ASSOC_LEFT, token(match("+")));
-    expr_altern(*p, 0, CALC_T_SUB, token(match("-")));
-    expr_insert(*p, 1, CALC_T_MUL, EXPR_INFIX, ASSOC_LEFT, token(match("*")));
-    expr_altern(*p, 1, CALC_T_DIV, token(match("/")));
-    expr_insert(*p, 2, CALC_T_NEG, EXPR_PREFIX, ASSOC_NONE, token(match("-")));
+    expr_insert(*p, 0, CALC_T_ADD, EXPR_INFIX, ASSOC_LEFT, expect(token(match("+")), "Expected '+' operator"));
+    expr_altern(*p, 0, CALC_T_SUB, expect(token(match("-")), "Expected '-' operator"));
+    expr_insert(*p, 1, CALC_T_MUL, EXPR_INFIX, ASSOC_LEFT, expect(token(match("*")), "Expected '*' operator"));
+    expr_altern(*p, 1, CALC_T_DIV, expect(token(match("/")), "Expected '/' operator"));
+    expr_insert(*p, 2, CALC_T_NEG, EXPR_PREFIX, ASSOC_NONE, expect(token(match("-")), "Expected '-' for negation"));
 }
