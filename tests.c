@@ -25,7 +25,9 @@ static void print_ast_indented(ast_t* ast, int depth) {
         case TEST_T_SUB: printf("SUB"); break;
         case TEST_T_MUL: printf("MUL"); break;
         case TEST_T_DIV: printf("DIV"); break;
-        default: printf("UNKNOWN(%d)", ast->typ); break;
+        default:
+            fprintf(stderr, "FATAL: Unknown AST node type: %d in %s at %s:%d\n", ast->typ, __func__, __FILE__, __LINE__);
+            abort();
     }
     printf("\n");
     

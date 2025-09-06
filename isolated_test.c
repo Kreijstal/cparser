@@ -32,9 +32,9 @@ int main() {
         free_ast(res.value.ast);
     } else {
         printf("Parsing failed.\n");
-        if (res.value.error != NULL) {
-            printf("  Parser name: %s\n", res.value.error->parser_name ? res.value.error->parser_name : "N/A");
-            printf("  Error: %s\n", res.value.error->message);
+        /* HARDENED: Removed NULL check. An error is guaranteed on failure. */
+        printf("  Parser name: %s\n", res.value.error->parser_name ? res.value.error->parser_name : "N/A");
+        printf("  Error: %s\n", res.value.error->message);
             if (res.value.error->unexpected) {
                 printf("  Unexpected input: '%.10s...'\n", res.value.error->unexpected);
             }

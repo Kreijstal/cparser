@@ -126,15 +126,20 @@ void restore_input_state(input_t* in, InputState* state) {
 }
 
 // --- Public Helpers ---
+/* HARDENED: Changed exit(1) to abort() for immediate crash. */
 void* safe_malloc(size_t size) {
     void* ptr = malloc(size);
-    if (!ptr) { fprintf(stderr, "Fatal: malloc failed.\n"); exit(1); }
+    if (!ptr) {
+        fprintf(stderr, "FATAL: safe_malloc failed to allocate %zu bytes at %s:%d\n", size, __FILE__, __LINE__);
+        abort();
+    }
     return ptr;
 }
 
+/* HARDENED: Changed exit(1) to abort() for immediate crash. */
 void exception(const char * err) {
-   fprintf(stderr, "Fatal Error: %s\n", err);
-   exit(1);
+   fprintf(stderr, "FATAL: %s at %s:%d\n", err, __FILE__, __LINE__);
+   abort();
 }
 
 ast_t * new_ast() {

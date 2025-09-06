@@ -17,10 +17,12 @@ static combinator_t* token(combinator_t* p) {
 }
 
 // --- Evaluation ---
+/* HARDENED: Abort on division by zero. */
+/* HARDENED: Abort on unknown AST node type. */
 long eval(ast_t *ast) {
     if (!ast) {
-        fprintf(stderr, "Error: trying to evaluate a NULL AST node.\n");
-        return 0;
+        fprintf(stderr, "FATAL: trying to evaluate a NULL AST node in %s at %s:%d\n", __func__, __FILE__, __LINE__);
+        abort();
     }
     switch (ast->typ) {
         case CALC_T_INT: return atol(ast->sym->name);
@@ -30,15 +32,15 @@ long eval(ast_t *ast) {
         case CALC_T_DIV: {
             long divisor = eval(ast->child->next);
             if (divisor == 0) {
-                fprintf(stderr, "Runtime Error: Division by zero.\n");
-                exit(1);
+                fprintf(stderr, "FATAL: Division by zero in %s at %s:%d\n", __func__, __FILE__, __LINE__);
+                abort();
             }
             return eval(ast->child) / divisor;
         }
         case CALC_T_NEG: return -eval(ast->child);
         default:
-            fprintf(stderr, "Runtime Error: Unknown AST node type: %d\n", ast->typ);
-            return 0;
+            fprintf(stderr, "FATAL: Unknown AST node type: %d in %s at %s:%d\n", ast->typ, __func__, __FILE__, __LINE__);
+            abort();
     }
 }
 
