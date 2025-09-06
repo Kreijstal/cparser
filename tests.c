@@ -252,7 +252,7 @@ void test_errmap_combinator(void) {
 
     TEST_ASSERT(!res.is_success);
     TEST_ASSERT(strcmp(res.value.error->message, "In custom context") == 0);
-    TEST_ASSERT(strstr(res.value.error->cause->message, "Expected 'hello'") != NULL);
+    TEST_ASSERT(strstr(res.value.error->cause->message, "expected 'hello'") != NULL);
 
     free_error(res.value.error);
     free_combinator(p);

@@ -98,6 +98,8 @@ ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult origin
     }
     new_err->cause = original_error;
     new_err->partial_ast = partial_ast;
+    new_err->parser_name = NULL;
+    new_err->unexpected = NULL;
     
     return (ParseResult){ .is_success = false, .value.error = new_err };
 }
@@ -109,6 +111,8 @@ ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
     err->message = message;
     err->cause = cause.value.error;
     err->partial_ast = NULL;
+    err->parser_name = NULL;
+    err->unexpected = NULL;
     return (ParseResult){ .is_success = false, .value.error = err };
 }
 
@@ -621,6 +625,8 @@ combinator_t * lazy(combinator_t** parser_ptr) {
 
 void free_error(ParseError* err) {
     if (err == NULL) return;
+    if (err->parser_name) free(err->parser_name);
+    if (err->unexpected) free(err->unexpected);
     free(err->message);
     free_error(err->cause);
     if (err->partial_ast != NULL) {
