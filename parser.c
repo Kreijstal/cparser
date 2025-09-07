@@ -254,7 +254,10 @@ static ParseResult match_ci_fn(input_t * in, void * args, char* parser_name) {
         if (tolower(c) != tolower(str[i])) {
             restore_input_state(in, &state);
             char* unexpected = strndup(in->buffer + state.start, 10);
-            char* err_msg; asprintf(&err_msg, "Parser '%s' Expected '%s' (case-insensitive) but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
+            char* err_msg;
+            if (asprintf(&err_msg, "Parser '%s' Expected '%s' (case-insensitive) but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected) < 0) {
+                err_msg = strdup("Expected token (case-insensitive)");
+            }
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
@@ -269,7 +272,10 @@ static ParseResult match_fn(input_t * in, void * args, char* parser_name) {
         if (c != str[i]) {
             restore_input_state(in, &state);
             char* unexpected = strndup(in->buffer + state.start, 10);
-            char* err_msg; asprintf(&err_msg, "Parser '%s' Expected '%s' but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected);
+            char* err_msg;
+            if (asprintf(&err_msg, "Parser '%s' Expected '%s' but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected) < 0) {
+                err_msg = strdup("Expected token");
+            }
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }

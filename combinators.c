@@ -78,7 +78,9 @@ static ParseResult expect_fn(input_t * in, void * args, char* parser_name) {
 
     char* final_message;
     if (res.value.error && res.value.error->unexpected) {
-        asprintf(&final_message, "%s but found '%s'", eargs->msg, res.value.error->unexpected);
+        if (asprintf(&final_message, "%s but found '%s'", eargs->msg, res.value.error->unexpected) < 0) {
+            final_message = strdup(eargs->msg);
+        }
     } else {
         final_message = strdup(eargs->msg);
     }
