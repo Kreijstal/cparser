@@ -41,7 +41,6 @@ int main() {
             printf("  at line: %d, col: %d\n", res.value.error->line, res.value.error->col);
             free_error(res.value.error);
         }
-    }
 
     free_combinator(p);
     free(input->buffer);
