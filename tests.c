@@ -25,7 +25,9 @@ static void print_ast_indented(ast_t* ast, int depth) {
         case TEST_T_SUB: printf("SUB"); break;
         case TEST_T_MUL: printf("MUL"); break;
         case TEST_T_DIV: printf("DIV"); break;
-        default: printf("UNKNOWN(%d)", ast->typ); break;
+        default:
+            fprintf(stderr, "FATAL: Unknown AST node type: %d in %s at %s:%d\n", ast->typ, __func__, __FILE__, __LINE__);
+            abort();
     }
     printf("\n");
     
@@ -252,7 +254,7 @@ void test_errmap_combinator(void) {
 
     TEST_ASSERT(!res.is_success);
     TEST_ASSERT(strcmp(res.value.error->message, "In custom context") == 0);
-    TEST_ASSERT(strcmp(res.value.error->cause->message, "Expected 'hello'") == 0);
+    TEST_ASSERT(strstr(res.value.error->cause->message, "Expected 'hello'") != NULL);
 
     free_error(res.value.error);
     free_combinator(p);

@@ -75,7 +75,16 @@ static ParseResult expect_fn(input_t * in, void * args, char* parser_name) {
     expect_args * eargs = (expect_args *) args;
     ParseResult res = parse(in, eargs->comb);
     if (res.is_success) return res;
-    return wrap_failure(in, strdup(eargs->msg), res);
+
+    char* final_message;
+    if (res.value.error && res.value.error->unexpected) {
+        if (asprintf(&final_message, "%s but found '%s'", eargs->msg, res.value.error->unexpected) < 0) {
+            final_message = strdup(eargs->msg);
+        }
+    } else {
+        final_message = strdup(eargs->msg);
+    }
+    return wrap_failure(in, final_message, parser_name, res);
 }
 
 static ParseResult between_fn(input_t * in, void * args, char* parser_name) {
@@ -202,7 +211,7 @@ static ParseResult chainl1_fn(input_t * in, void * args, char* parser_name) {
             restore_input_state(in, &state);
             free_ast(left);
             // The op succeeded, so there is no error to free in op_res
-            return wrap_failure(in, strdup("Expected operand after operator in chainl1"), right_res);
+            return wrap_failure(in, strdup("Expected operand after operator in chainl1"), parser_name, right_res);
         }
         ast_t* right = right_res.value.ast;
         left = ast2(op_tag, left, right);
@@ -311,8 +320,12 @@ static ParseResult seq_fn(input_t * in, void * args, char* parser_name) {
 static ParseResult multi_fn(input_t * in, void * args, char* parser_name) {
     seq_args * sa = (seq_args *) args;
     seq_list * seq = sa->list;
+    /* HARDENED: A multi-parser should always have alternatives by design. */
     if (seq == NULL) {
-        return make_failure_v2(in, parser_name, strdup("multi parser has no alternatives."), NULL);
+        fprintf(stderr,
+            "FATAL: %s (%s:%d) multi-parser called with no alternatives\n",
+            __func__, __FILE__, __LINE__);
+        abort();
     }
     ParseResult res;
     // Initialize res with the failure of the first alternative, in case all fail.
@@ -346,9 +359,12 @@ static ParseResult flatMap_fn(input_t * in, void * args, char* parser_name) {
     ParseResult res = parse(in, fm_args->parser);
     if (!res.is_success) return res;
     combinator_t * next_parser = fm_args->func(res.value.ast);
+    /* HARDENED: A flatMap function must not return a NULL parser. */
     if (next_parser == NULL) {
-        restore_input_state(in, &state);
-        return make_failure_v2(in, parser_name, strdup("flatMap function returned NULL parser."), NULL);
+        fprintf(stderr,
+            "FATAL: %s (%s:%d) flatMap function returned a NULL parser\n",
+            __func__, __FILE__, __LINE__);
+        abort();
     }
     ParseResult final_res = parse(in, next_parser);
     free_combinator(next_parser);

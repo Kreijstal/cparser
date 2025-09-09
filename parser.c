@@ -98,17 +98,21 @@ ParseResult wrap_failure_with_ast(input_t* in, char* message, ParseResult origin
     }
     new_err->cause = original_error;
     new_err->partial_ast = partial_ast;
+    new_err->parser_name = NULL;
+    new_err->unexpected = NULL;
     
     return (ParseResult){ .is_success = false, .value.error = new_err };
 }
 
-ParseResult wrap_failure(input_t* in, char* message, ParseResult cause) {
+ParseResult wrap_failure(input_t* in, char* message, char* parser_name, ParseResult cause) {
     ParseError* err = (ParseError*)safe_malloc(sizeof(ParseError));
     err->line = in->line;
     err->col = in->col;
     err->message = message;
     err->cause = cause.value.error;
     err->partial_ast = NULL;
+    err->parser_name = parser_name ? strdup(parser_name) : NULL;
+    err->unexpected = NULL; // The unexpected token is now part of the message in expect_fn
     return (ParseResult){ .is_success = false, .value.error = err };
 }
 
@@ -122,15 +126,20 @@ void restore_input_state(input_t* in, InputState* state) {
 }
 
 // --- Public Helpers ---
+/* HARDENED: Changed exit(1) to abort() for immediate crash. */
 void* safe_malloc(size_t size) {
     void* ptr = malloc(size);
-    if (!ptr) { fprintf(stderr, "Fatal: malloc failed.\n"); exit(1); }
+    if (!ptr) {
+        fprintf(stderr, "FATAL: safe_malloc failed to allocate %zu bytes at %s:%d\n", size, __FILE__, __LINE__);
+        abort();
+    }
     return ptr;
 }
 
+/* HARDENED: Changed exit(1) to abort() for immediate crash. */
 void exception(const char * err) {
-   fprintf(stderr, "Fatal Error: %s\n", err);
-   exit(1);
+   fprintf(stderr, "FATAL: %s at %s:%d\n", err, __FILE__, __LINE__);
+   abort();
 }
 
 ast_t * new_ast() {
@@ -244,8 +253,11 @@ static ParseResult match_ci_fn(input_t * in, void * args, char* parser_name) {
         char c = read1(in);
         if (tolower(c) != tolower(str[i])) {
             restore_input_state(in, &state);
-            char* err_msg; asprintf(&err_msg, "Expected '%s' (case-insensitive)", str);
             char* unexpected = strndup(in->buffer + state.start, 10);
+            char* err_msg;
+            if (asprintf(&err_msg, "Parser '%s' Expected '%s' (case-insensitive) but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected) < 0) {
+                err_msg = strdup("Expected token (case-insensitive)");
+            }
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
@@ -259,8 +271,11 @@ static ParseResult match_fn(input_t * in, void * args, char* parser_name) {
         char c = read1(in);
         if (c != str[i]) {
             restore_input_state(in, &state);
-            char* err_msg; asprintf(&err_msg, "Expected '%s'", str);
             char* unexpected = strndup(in->buffer + state.start, 10);
+            char* err_msg;
+            if (asprintf(&err_msg, "Parser '%s' Expected '%s' but found '%.10s...'", parser_name ? parser_name : "N/A", str, unexpected) < 0) {
+                err_msg = strdup("Expected token");
+            }
             return make_failure_v2(in, parser_name, err_msg, unexpected);
         }
     }
@@ -504,30 +519,35 @@ combinator_t * match(char * str) {
     match_args * args = (match_args*)safe_malloc(sizeof(match_args));
     args->str = str;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("match");
     comb->type = P_MATCH; comb->fn = match_fn; comb->args = args; return comb;
 }
 combinator_t * match_ci(char * str) {
     match_args * args = (match_args*)safe_malloc(sizeof(match_args));
     args->str = str;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("match_ci");
     comb->type = P_CI_KEYWORD; comb->fn = match_ci_fn; comb->args = args; return comb;
 }
 combinator_t * integer(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("integer");
     comb->type = P_INTEGER; comb->fn = integer_fn; comb->args = args; return comb;
 }
 combinator_t * cident(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("cident");
     comb->type = P_CIDENT; comb->fn = cident_fn; comb->args = args; return comb;
 }
 combinator_t * string(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("string");
     comb->type = P_STRING;
     comb->fn = string_fn;
     comb->args = args;
@@ -535,6 +555,7 @@ combinator_t * string(tag_t tag) {
 }
 combinator_t * eoi() {
     combinator_t * comb = new_combinator();
+    comb->name = strdup("eoi");
     comb->type = P_EOI;
     comb->fn = eoi_fn;
     comb->args = NULL;
@@ -546,6 +567,7 @@ combinator_t * satisfy(char_predicate pred, tag_t tag) {
     args->pred = pred;
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("satisfy");
     comb->type = P_SATISFY;
     comb->fn = satisfy_fn;
     comb->args = (void*)args;
@@ -563,6 +585,7 @@ combinator_t * any_char(tag_t tag) {
     prim_args * args = (prim_args*)safe_malloc(sizeof(prim_args));
     args->tag = tag;
     combinator_t * comb = new_combinator();
+    comb->name = strdup("any_char");
     comb->type = P_ANY_CHAR;
     comb->fn = any_char_fn;
     comb->args = args;
@@ -621,6 +644,8 @@ combinator_t * lazy(combinator_t** parser_ptr) {
 
 void free_error(ParseError* err) {
     if (err == NULL) return;
+    if (err->parser_name) free(err->parser_name);
+    if (err->unexpected) free(err->unexpected);
     free(err->message);
     free_error(err->cause);
     if (err->partial_ast != NULL) {
@@ -706,6 +731,10 @@ void free_combinator_recursive(combinator_t* comb, visited_node** visited) {
         return;
     }
 
+    if (comb->name) {
+        free(comb->name);
+        comb->name = NULL;
+    }
     if (comb->extra_to_free) {
         free(comb->extra_to_free);
         comb->extra_to_free = NULL;

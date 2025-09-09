@@ -70,6 +70,7 @@ typedef enum {
     PASCAL_T_END_BLOCK,
     PASCAL_T_FOR_STMT,
     PASCAL_T_WHILE_STMT,
+    PASCAL_T_WITH_STMT,
     PASCAL_T_DO,
     PASCAL_T_TO,
     PASCAL_T_DOWNTO,
@@ -80,6 +81,7 @@ typedef enum {
     PASCAL_T_EXCEPT_BLOCK,
     PASCAL_T_RAISE_STMT,
     PASCAL_T_INHERITED_STMT,
+    PASCAL_T_EXIT_STMT,
     PASCAL_T_ON_CLAUSE,
     // Program structure types
     PASCAL_T_PROGRAM_DECL,
@@ -96,6 +98,7 @@ typedef enum {
     PASCAL_T_TYPE_SECTION,
     PASCAL_T_TYPE_DECL,
     PASCAL_T_RANGE_TYPE,
+    PASCAL_T_POINTER_TYPE,
     PASCAL_T_ARRAY_TYPE,
     PASCAL_T_CLASS_TYPE,
     PASCAL_T_CLASS_MEMBER,
@@ -107,6 +110,8 @@ typedef enum {
     PASCAL_T_PUBLISHED_SECTION,
     PASCAL_T_FIELD_DECL,
     PASCAL_T_METHOD_DECL,
+    PASCAL_T_METHOD_IMPL,
+    PASCAL_T_QUALIFIED_IDENTIFIER,
     PASCAL_T_PROPERTY_DECL,
     PASCAL_T_CONSTRUCTOR_DECL,
     PASCAL_T_DESTRUCTOR_DECL,
@@ -116,12 +121,17 @@ typedef enum {
     // Const section types
     PASCAL_T_CONST_SECTION,
     PASCAL_T_CONST_DECL,
+    // Unit-related types
+    PASCAL_T_UNIT_DECL,
+    PASCAL_T_INTERFACE_SECTION,
+    PASCAL_T_IMPLEMENTATION_SECTION,
     // Field width specifier for formatted output
     PASCAL_T_FIELD_WIDTH
 } pascal_tag_t;
 
 // --- Function Declarations ---
 void init_pascal_program_parser(combinator_t** p);
+void init_pascal_unit_parser(combinator_t** p);
 void print_pascal_ast(ast_t* ast);
 const char* pascal_tag_to_string(tag_t tag);
 

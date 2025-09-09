@@ -186,7 +186,9 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_CONST_DECL: return "CONST_DECL";
         // Field width specifier
         case PASCAL_T_FIELD_WIDTH: return "FIELD_WIDTH";
-        default: return "UNKNOWN";
+        default:
+            fprintf(stderr, "FATAL: Unknown Pascal AST node type: %d in %s at %s:%d\n", tag, __func__, __FILE__, __LINE__);
+            abort();
     }
 }
 
