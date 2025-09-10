@@ -349,3 +349,26 @@ combinator_t* pointer_type(tag_t tag) {
         NULL
     );
 }
+
+// Record type parser: record field_list end
+combinator_t* record_type(tag_t tag) {
+    // Field declaration: field_name: type_name;
+    combinator_t* field_name = token(pascal_identifier(PASCAL_T_IDENTIFIER));
+    combinator_t* field_type = token(pascal_identifier(PASCAL_T_IDENTIFIER)); // simplified for now
+    combinator_t* field_decl = seq(new_combinator(), PASCAL_T_FIELD_DECL,
+        field_name,                                // field name
+        token(match(":")),                         // colon
+        field_type,                               // field type
+        NULL
+    );
+    
+    // Field list: field_decl; field_decl; ...
+    combinator_t* field_list = sep_by(field_decl, token(match(";")));
+    
+    return seq(new_combinator(), tag,
+        token(keyword_ci("record")),               // record keyword
+        field_list,                               // field declarations
+        token(keyword_ci("end")),                  // end keyword
+        NULL
+    );
+}
