@@ -341,6 +341,76 @@ combinator_t* type_name(tag_t tag) {
     );
 }
 
+// Record type parser: RECORD field1: type1; field2: type2; ... END
+static ParseResult record_type_fn(input_t* in, void* args, char* parser_name) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+
+    // Parse "RECORD" keyword (case insensitive)
+    combinator_t* record_keyword = token(keyword_ci("record"));
+    ParseResult record_res = parse(in, record_keyword);
+    if (!record_res.is_success) {
+        free_combinator(record_keyword);
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected 'record'"), NULL);
+    }
+    free_ast(record_res.value.ast);
+    free_combinator(record_keyword);
+
+    // Field declaration: field_name: Type;
+    combinator_t* field_name = token(cident(PASCAL_T_IDENTIFIER));
+    combinator_t* field_type = token(cident(PASCAL_T_IDENTIFIER)); // simplified type for now
+    combinator_t* field_decl = seq(new_combinator(), PASCAL_T_FIELD_DECL,
+        field_name,
+        token(match(":")),
+        field_type,
+        token(match(";")),
+        NULL
+    );
+
+    // Parse field list - many field declarations
+    combinator_t* field_list = many(field_decl);
+    ParseResult fields_res = parse(in, field_list);
+    ast_t* fields_ast = NULL;
+    if (fields_res.is_success) {
+        fields_ast = fields_res.value.ast;
+    }
+    // Note: Empty record is allowed in Pascal, so we don't require fields
+    free_combinator(field_list);
+
+    // Parse "END" keyword
+    combinator_t* end_keyword = token(keyword_ci("end"));
+    ParseResult end_res = parse(in, end_keyword);
+    if (!end_res.is_success) {
+        if (fields_ast) free_ast(fields_ast);
+        free_combinator(end_keyword);
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected 'end' after record fields"), NULL);
+    }
+    free_ast(end_res.value.ast);
+    free_combinator(end_keyword);
+
+    // Build AST
+    ast_t* record_ast = new_ast();
+    record_ast->typ = pargs->tag;
+    record_ast->sym = NULL;
+    record_ast->child = fields_ast;
+    record_ast->next = NULL;
+
+    set_ast_position(record_ast, in);
+    return make_success(record_ast);
+}
+
+combinator_t* record_type(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = record_type_fn;
+    return comb;
+}
+
 // Pointer type parser: ^TypeName
 combinator_t* pointer_type(tag_t tag) {
     return seq(new_combinator(), tag,

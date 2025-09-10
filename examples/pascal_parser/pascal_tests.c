@@ -1727,6 +1727,74 @@ void test_pascal_forward_declared_function(void) {
     free(input);
 }
 
+void test_pascal_record_type(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "type\n"
+                   "  TMyRecord = record\n"
+                   "    field1: integer;\n"
+                   "    field2: string;\n"
+                   "    field3: real;\n"
+                   "  end;\n"
+                   "begin\n"
+                   "end.\n";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+
+    if (res.is_success) {
+        // Find the type section
+        ast_t* program_decl = res.value.ast;
+        TEST_ASSERT(program_decl->typ == PASCAL_T_PROGRAM_DECL);
+
+        // Find type section
+        ast_t* current = program_decl->child;
+        while(current && current->typ != PASCAL_T_TYPE_SECTION) {
+            current = current->next;
+        }
+        TEST_ASSERT(current != NULL);
+        TEST_ASSERT(current->typ == PASCAL_T_TYPE_SECTION);
+
+        // Find type declaration
+        ast_t* type_decl = current->child;
+        TEST_ASSERT(type_decl->typ == PASCAL_T_TYPE_DECL);
+        
+        // Check type name
+        ast_t* type_name = type_decl->child;
+        TEST_ASSERT(type_name->typ == PASCAL_T_IDENTIFIER);
+        TEST_ASSERT(strcmp(type_name->sym->name, "TMyRecord") == 0);
+
+        // Check record type
+        ast_t* type_spec = type_name->next;
+        TEST_ASSERT(type_spec->typ == PASCAL_T_TYPE_SPEC);
+        
+        ast_t* record_type = type_spec->child;
+        TEST_ASSERT(record_type->typ == PASCAL_T_RECORD_TYPE);
+
+        // Check record fields
+        ast_t* field1 = record_type->child;
+        TEST_ASSERT(field1->typ == PASCAL_T_FIELD_DECL);
+        
+        ast_t* field1_name = field1->child;
+        TEST_ASSERT(field1_name->typ == PASCAL_T_IDENTIFIER);
+        TEST_ASSERT(strcmp(field1_name->sym->name, "field1") == 0);
+
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1777,6 +1845,7 @@ TEST_LIST = {
     { "test_pascal_function_no_params", test_pascal_function_no_params },
     { "test_pascal_function_multiple_params", test_pascal_function_multiple_params },
     // Failing tests for missing features
+    { "test_pascal_record_type", test_pascal_record_type },
     { "test_pascal_unit_declaration", test_pascal_unit_declaration },
     { "test_pascal_pointer_type_declaration", test_pascal_pointer_type_declaration },
     { "test_pascal_method_implementation", test_pascal_method_implementation },

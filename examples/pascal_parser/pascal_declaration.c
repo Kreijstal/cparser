@@ -276,6 +276,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     combinator_t* var_identifier_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* type_spec = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
         class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end
+        record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
         pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^TMyObject
         range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1
