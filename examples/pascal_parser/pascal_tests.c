@@ -2017,6 +2017,60 @@ void test_pascal_case_statement_char_labels(void) {
     free(input);
 }
 
+void test_pascal_paren_star_comment(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+    input_t* input = new_input();
+    input->buffer = strdup("(* this is a comment *) 42");
+    input->length = strlen(input->buffer);
+    ParseResult res = parse(input, p);
+    TEST_ASSERT(res.is_success); // This should fail
+    if (!res.is_success) {
+        free_error(res.value.error);
+    } else {
+        free_ast(res.value.ast);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_hex_literal(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+    input_t* input = new_input();
+    input->buffer = strdup("$FF");
+    input->length = strlen(input->buffer);
+    ParseResult res = parse(input, p);
+    TEST_ASSERT(res.is_success); // This should fail
+    if (!res.is_success) {
+        free_error(res.value.error);
+    } else {
+        free_ast(res.value.ast);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_case_range_label(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+    input_t* input = new_input();
+    input->buffer = strdup("case i of 'a'..'z': write(i) end");
+    input->length = strlen(input->buffer);
+    ParseResult res = parse(input, p);
+    TEST_ASSERT(res.is_success); // This should fail
+    if (!res.is_success) {
+        free_error(res.value.error);
+    } else {
+        free_ast(res.value.ast);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -2081,5 +2135,8 @@ TEST_LIST = {
     { "test_pascal_case_statement_multiple_labels", test_pascal_case_statement_multiple_labels },
     { "test_pascal_case_statement_with_else", test_pascal_case_statement_with_else },
     { "test_pascal_case_statement_char_labels", test_pascal_case_statement_char_labels },
+    { "test_pascal_paren_star_comment", test_pascal_paren_star_comment },
+    { "test_pascal_hex_literal", test_pascal_hex_literal },
+    { "test_pascal_case_range_label", test_pascal_case_range_label },
     { NULL, NULL }
 };
