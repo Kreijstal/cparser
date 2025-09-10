@@ -151,6 +151,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_END_BLOCK: return "END_BLOCK";
         case PASCAL_T_FOR_STMT: return "FOR_STMT";
         case PASCAL_T_WHILE_STMT: return "WHILE_STMT";
+        case PASCAL_T_WITH_STMT: return "WITH_STMT";
         case PASCAL_T_DO: return "DO";
         case PASCAL_T_TO: return "TO";
         case PASCAL_T_DOWNTO: return "DOWNTO";
@@ -166,6 +167,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_EXCEPT_BLOCK: return "EXCEPT_BLOCK";
         case PASCAL_T_RAISE_STMT: return "RAISE_STMT";
         case PASCAL_T_INHERITED_STMT: return "INHERITED_STMT";
+        case PASCAL_T_EXIT_STMT: return "EXIT_STMT";
         case PASCAL_T_ON_CLAUSE: return "ON_CLAUSE";
         case PASCAL_T_PROGRAM_DECL: return "PROGRAM_DECL";
         case PASCAL_T_PROGRAM_HEADER: return "PROGRAM_HEADER";
@@ -180,7 +182,9 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TYPE_SECTION: return "TYPE_SECTION";
         case PASCAL_T_TYPE_DECL: return "TYPE_DECL";
         case PASCAL_T_RANGE_TYPE: return "RANGE_TYPE";
+        case PASCAL_T_POINTER_TYPE: return "POINTER_TYPE";
         case PASCAL_T_ARRAY_TYPE: return "ARRAY_TYPE";
+        case PASCAL_T_RECORD_TYPE: return "RECORD_TYPE";
         case PASCAL_T_CLASS_TYPE: return "CLASS_TYPE";
         case PASCAL_T_CLASS_MEMBER: return "CLASS_MEMBER";
         case PASCAL_T_ACCESS_MODIFIER: return "ACCESS_MODIFIER";
@@ -191,6 +195,8 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_PUBLISHED_SECTION: return "PUBLISHED_SECTION";
         case PASCAL_T_FIELD_DECL: return "FIELD_DECL";
         case PASCAL_T_METHOD_DECL: return "METHOD_DECL";
+        case PASCAL_T_METHOD_IMPL: return "METHOD_IMPL";
+        case PASCAL_T_QUALIFIED_IDENTIFIER: return "QUALIFIED_IDENTIFIER";
         case PASCAL_T_PROPERTY_DECL: return "PROPERTY_DECL";
         case PASCAL_T_CONSTRUCTOR_DECL: return "CONSTRUCTOR_DECL";
         case PASCAL_T_DESTRUCTOR_DECL: return "DESTRUCTOR_DECL";
@@ -200,6 +206,10 @@ const char* pascal_tag_to_string(tag_t tag) {
         // Const section types
         case PASCAL_T_CONST_SECTION: return "CONST_SECTION";
         case PASCAL_T_CONST_DECL: return "CONST_DECL";
+        // Unit-related types
+        case PASCAL_T_UNIT_DECL: return "UNIT_DECL";
+        case PASCAL_T_INTERFACE_SECTION: return "INTERFACE_SECTION";
+        case PASCAL_T_IMPLEMENTATION_SECTION: return "IMPLEMENTATION_SECTION";
         // Field width specifier
         case PASCAL_T_FIELD_WIDTH: return "FIELD_WIDTH";
         default:

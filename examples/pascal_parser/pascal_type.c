@@ -317,8 +317,16 @@ combinator_t* class_type(tag_t tag) {
         NULL
     ));
 
+    // Optional parent class specification: (ParentClassName)
+    combinator_t* parent_class = optional(between(
+        token(match("(")),
+        token(match(")")),
+        token(cident(PASCAL_T_IDENTIFIER))
+    ));
+
     combinator_t* class_parser = seq(new_combinator(), tag,
         token(keyword_ci("class")),
+        parent_class,  // optional parent class
         class_body_parser,
         token(keyword_ci("end")),
         NULL

@@ -78,6 +78,77 @@ void init_pascal_unit_parser(combinator_t** p) {
     (*stmt_parser)->extra_to_free = stmt_parser;
     init_pascal_statement_parser(stmt_parser);
 
+    // Uses section: uses unit1, unit2, unit3;
+    combinator_t* uses_unit = token(cident(PASCAL_T_USES_UNIT));
+    combinator_t* uses_section = seq(new_combinator(), PASCAL_T_USES_SECTION,
+        token(keyword_ci("uses")),                      // uses keyword (with word boundary check)
+        sep_by(uses_unit, token(match(","))),        // unit names separated by commas
+        token(match(";")),                           // semicolon
+        NULL
+    );
+
+    // Const section: const name : type = value; ...
+    // For now, we'll create a simplified const parser that accepts basic values
+    // plus a fallback for complex expressions
+    combinator_t* simple_const_value = multi(new_combinator(), PASCAL_T_NONE,
+        token(integer(PASCAL_T_INTEGER)),
+        token(string(PASCAL_T_STRING)),
+        token(cident(PASCAL_T_IDENTIFIER)),
+        NULL
+    );
+
+    combinator_t* complex_const_value = until(match(";"), PASCAL_T_STRING);
+
+    combinator_t* const_value = multi(new_combinator(), PASCAL_T_NONE,
+        simple_const_value,
+        complex_const_value,  // fallback for complex literals
+        NULL
+    );
+
+    combinator_t* const_decl = seq(new_combinator(), PASCAL_T_CONST_DECL,
+        token(cident(PASCAL_T_IDENTIFIER)),          // constant name
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(match(":")),                       // optional type specification
+            token(cident(PASCAL_T_TYPE_SPEC)),       // type name
+            NULL
+        )),
+        token(match("=")),                           // equals sign
+        const_value,                                 // constant value (simplified for now)
+        token(match(";")),                           // semicolon
+        NULL
+    );
+
+    combinator_t* const_section = seq(new_combinator(), PASCAL_T_CONST_SECTION,
+        token(keyword_ci("const")),                     // const keyword (with word boundary check)
+        many(const_decl),                            // multiple const declarations
+        NULL
+    );
+
+    // Type section: type name = TypeDefinition; ...
+    combinator_t* type_definition = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
+        class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end (try first)
+        record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
+        array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
+        range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
+        pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
+        token(pascal_identifier(PASCAL_T_IDENTIFIER)),  // simple type names (excludes keywords)
+        NULL
+    );
+    
+    combinator_t* type_decl = seq(new_combinator(), PASCAL_T_TYPE_DECL,
+        token(cident(PASCAL_T_IDENTIFIER)),          // type name (can use cident since type names are not keywords)
+        token(match("=")),                           // equals sign
+        type_definition,                             // type definition
+        optional(token(match(";"))),                 // semicolon (optional for last decl)
+        NULL
+    );
+
+    combinator_t* type_section = seq(new_combinator(), PASCAL_T_TYPE_SECTION,
+        token(keyword_ci("type")),                      // type keyword (with word boundary check)
+        many(type_decl),                             // multiple type declarations
+        NULL
+    );
+
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
         token(cident(PASCAL_T_IDENTIFIER)), token(match(":")), token(cident(PASCAL_T_IDENTIFIER)), NULL);
     combinator_t* param_list = optional(between(
@@ -86,11 +157,25 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* procedure_header = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), param_list, token(match(";")), NULL);
 
+    combinator_t* function_header = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+        token(keyword_ci("function")), token(cident(PASCAL_T_IDENTIFIER)), param_list, 
+        token(match(":")), token(cident(PASCAL_T_RETURN_TYPE)), token(match(";")), NULL);
+
     combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list), token(match(";")),
         lazy(stmt_parser), optional(token(match(";"))), NULL);
 
-    combinator_t* interface_declarations = many(procedure_header);
+    // Interface section declarations: uses, const, type, procedure/function headers
+    combinator_t* interface_declaration = multi(new_combinator(), PASCAL_T_NONE,
+        uses_section,
+        const_section,
+        type_section,
+        procedure_header,
+        function_header,
+        NULL
+    );
+    
+    combinator_t* interface_declarations = many(interface_declaration);
     combinator_t* implementation_definitions = many(procedure_impl);
 
     combinator_t* interface_section = seq(new_combinator(), PASCAL_T_INTERFACE_SECTION,
