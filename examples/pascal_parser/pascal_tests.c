@@ -1524,6 +1524,38 @@ void test_pascal_pointer_type_declaration(void) {
     free(input);
 }
 
+void test_pascal_case_statement(void) {
+    combinator_t* p = new_combinator();
+    // A case statement is a statement, so we use the statement parser
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    // A simple case statement
+    char* statement = "case i of 1: x := 1; 2: x := 2; else x := 3; end";
+    input->buffer = strdup(statement);
+    input->length = strlen(statement);
+
+    ParseResult res = parse(input, p);
+
+    // This test is expected to fail because case statements are not implemented.
+    // The assertion will fail, which is the desired outcome for now.
+    TEST_ASSERT(res.is_success);
+
+    if (res.is_success) {
+        // If it ever succeeds, we would check the AST structure here.
+        // For now, this part is unreachable.
+        // TEST_ASSERT(res.value.ast->typ == PASCAL_T_CASE_STMT);
+        free_ast(res.value.ast);
+    } else {
+        // This is the expected path. We must free the error.
+        free_error(res.value.error);
+    }
+
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 void test_pascal_method_implementation(void) {
     combinator_t* p = new_combinator();
     init_pascal_complete_program_parser(&p);
@@ -1727,6 +1759,38 @@ void test_pascal_forward_declared_function(void) {
     free(input);
 }
 
+void test_pascal_record_type(void) {
+    combinator_t* p = new_combinator();
+    // Type declarations are parsed as part of a complete program
+    init_pascal_complete_program_parser(&p);
+
+    input_t* input = new_input();
+    char* program = "program Test;\n"
+                   "type\n"
+                   "  TMyRec = record a: integer; b: char; end;\n"
+                   "begin\n"
+                   "end.\n";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+
+    ParseResult res = parse(input, p);
+
+    // This test is expected to fail because record types are not implemented.
+    TEST_ASSERT(res.is_success);
+
+    if (res.is_success) {
+        // If it ever succeeds, we would check the AST structure here.
+        free_ast(res.value.ast);
+    } else {
+        // Expected path
+        free_error(res.value.error);
+    }
+
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1784,5 +1848,7 @@ TEST_LIST = {
     { "test_pascal_exit_statement", test_pascal_exit_statement },
     { "test_pascal_include_directive", test_pascal_include_directive },
     { "test_pascal_forward_declared_function", test_pascal_forward_declared_function },
+    { "test_pascal_case_statement", test_pascal_case_statement },
+    { "test_pascal_record_type", test_pascal_record_type },
     { NULL, NULL }
 };
