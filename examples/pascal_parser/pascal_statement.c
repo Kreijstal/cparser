@@ -205,12 +205,43 @@ void init_pascal_statement_parser(combinator_t** p) {
     combinator_t* exit_stmt = token(create_keyword_parser("exit", PASCAL_T_EXIT_STMT));
 
     // Case statement: case expression of label1: stmt1; label2: stmt2; [else stmt;] end
-    // Start with a very simple implementation first
-    combinator_t* simple_case_stmt = seq(new_combinator(), PASCAL_T_CASE_STMT,
-        token(keyword_ci("case")),             // case keyword (case-insensitive)
-        lazy(expr_parser),                     // expression to match
-        token(keyword_ci("of")),               // of keyword (case-insensitive)
-        token(keyword_ci("end")),              // end keyword (case-insensitive)
+    // Now implement the full case statement properly
+    // Use non-lazy expression parser for case labels to avoid conflicts
+    combinator_t** case_label_expr = (combinator_t**)safe_malloc(sizeof(combinator_t*));
+    *case_label_expr = new_combinator();
+    (*case_label_expr)->extra_to_free = case_label_expr;
+    init_pascal_expression_parser(case_label_expr);
+    
+    combinator_t* case_label = multi(new_combinator(), PASCAL_T_CASE_LABEL,
+        token(integer(PASCAL_T_INTEGER)),      // integer literals
+        token(char_literal(PASCAL_T_CHAR)),    // character literals 
+        token(cident(PASCAL_T_IDENTIFIER)),    // identifier constants
+        NULL
+    );
+    
+    combinator_t* case_label_list = seq(new_combinator(), PASCAL_T_CASE_LABEL_LIST,
+        sep_by(case_label, token(match(","))), // labels separated by commas
+        NULL
+    );
+    
+    combinator_t* case_branch = seq(new_combinator(), PASCAL_T_CASE_BRANCH,
+        case_label_list,                       // case labels
+        token(match(":")),                     // colon
+        lazy(stmt_parser),                     // statement
+        NULL
+    );
+    
+    combinator_t* case_stmt = seq(new_combinator(), PASCAL_T_CASE_STMT,
+        token(keyword_ci("case")),             // case keyword
+        lazy(expr_parser),                     // case expression
+        token(keyword_ci("of")),               // of keyword
+        sep_by(case_branch, token(match(";"))), // case branches separated by semicolons
+        optional(seq(new_combinator(), PASCAL_T_ELSE, // optional else clause
+            token(keyword_ci("else")),         // else keyword
+            lazy(stmt_parser),                 // else statement
+            NULL
+        )),
+        token(keyword_ci("end")),              // end keyword
         NULL
     );
 
@@ -220,7 +251,7 @@ void init_pascal_statement_parser(combinator_t** p) {
         begin_end_block,                      // compound statements (must come before expr_stmt)
         try_finally,                          // try-finally blocks
         try_except,                           // try-except blocks
-        simple_case_stmt,                     // case statements (before other keyword statements)
+        case_stmt,                            // case statements (before other keyword statements)
         raise_stmt,                           // raise statements
         inherited_stmt,                       // inherited statements
         exit_stmt,                            // exit statements
