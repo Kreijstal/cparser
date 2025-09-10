@@ -205,25 +205,23 @@ void init_pascal_statement_parser(combinator_t** p) {
     combinator_t* exit_stmt = token(create_keyword_parser("exit", PASCAL_T_EXIT_STMT));
 
     // Case statement: case expression of label1: stmt1; label2: stmt2; [else stmt;] end
-    // Now implement the full case statement properly
+    // Enhanced case label parser that handles ranges
+    combinator_t* simple_case_value = multi(new_combinator(), PASCAL_T_NONE,
+        integer(PASCAL_T_INTEGER),
+        char_literal(PASCAL_T_CHAR), 
+        cident(PASCAL_T_IDENTIFIER),
+        NULL);
+    
+    // Range case label: value..value
+    combinator_t* range_case_label = seq(new_combinator(), PASCAL_T_RANGE,
+        simple_case_value,
+        token(match("..")),
+        simple_case_value,
+        NULL);
+    
     combinator_t* case_label = multi(new_combinator(), PASCAL_T_CASE_LABEL,
-        token(integer(PASCAL_T_INTEGER)),      // integer literals
-        token(char_literal(PASCAL_T_CHAR)),    // character literals 
-        token(cident(PASCAL_T_IDENTIFIER)),    // identifier constants
-        // Allow ranges by parsing them as expressions using the existing range operator
-        seq(new_combinator(), PASCAL_T_RANGE,
-            token(multi(new_combinator(), PASCAL_T_NONE,
-                integer(PASCAL_T_INTEGER),
-                char_literal(PASCAL_T_CHAR),
-                cident(PASCAL_T_IDENTIFIER),
-                NULL)),
-            token(match("..")),
-            token(multi(new_combinator(), PASCAL_T_NONE,
-                integer(PASCAL_T_INTEGER),
-                char_literal(PASCAL_T_CHAR),
-                cident(PASCAL_T_IDENTIFIER),
-                NULL)),
-            NULL),
+        token(range_case_label),    // Try range first
+        token(simple_case_value),   // Then single values
         NULL
     );
     
