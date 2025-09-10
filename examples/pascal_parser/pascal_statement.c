@@ -206,16 +206,11 @@ void init_pascal_statement_parser(combinator_t** p) {
 
     // Case statement: case expression of label1: stmt1; label2: stmt2; [else stmt;] end
     // Now implement the full case statement properly
-    // Use non-lazy expression parser for case labels to avoid conflicts
-    combinator_t** case_label_expr = (combinator_t**)safe_malloc(sizeof(combinator_t*));
-    *case_label_expr = new_combinator();
-    (*case_label_expr)->extra_to_free = case_label_expr;
-    init_pascal_expression_parser(case_label_expr);
-    
     combinator_t* case_label = multi(new_combinator(), PASCAL_T_CASE_LABEL,
         token(integer(PASCAL_T_INTEGER)),      // integer literals
         token(char_literal(PASCAL_T_CHAR)),    // character literals 
         token(cident(PASCAL_T_IDENTIFIER)),    // identifier constants
+        // TODO: Add range support in future (a..b expressions)
         NULL
     );
     
