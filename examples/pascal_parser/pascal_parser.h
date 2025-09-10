@@ -74,6 +74,11 @@ typedef enum {
     PASCAL_T_DO,
     PASCAL_T_TO,
     PASCAL_T_DOWNTO,
+    PASCAL_T_CASE_STMT,
+    PASCAL_T_CASE_BRANCH,
+    PASCAL_T_CASE_LABEL,
+    PASCAL_T_CASE_LABEL_LIST,
+    PASCAL_T_OF,
     PASCAL_T_ASM_BLOCK,
     // Exception handling types
     PASCAL_T_TRY_BLOCK,

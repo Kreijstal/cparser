@@ -204,12 +204,23 @@ void init_pascal_statement_parser(combinator_t** p) {
     // Exit statement: exit
     combinator_t* exit_stmt = token(create_keyword_parser("exit", PASCAL_T_EXIT_STMT));
 
+    // Case statement: case expression of label1: stmt1; label2: stmt2; [else stmt;] end
+    // Start with a very simple implementation first
+    combinator_t* simple_case_stmt = seq(new_combinator(), PASCAL_T_CASE_STMT,
+        token(keyword_ci("case")),             // case keyword (case-insensitive)
+        lazy(expr_parser),                     // expression to match
+        token(keyword_ci("of")),               // of keyword (case-insensitive)
+        token(keyword_ci("end")),              // end keyword (case-insensitive)
+        NULL
+    );
+
     // Main statement parser: try different types of statements (order matters!)
     // Note: VAR sections are handled by the complete program parser context
     multi(*stmt_parser, PASCAL_T_NONE,
         begin_end_block,                      // compound statements (must come before expr_stmt)
         try_finally,                          // try-finally blocks
         try_except,                           // try-except blocks
+        simple_case_stmt,                     // case statements (before other keyword statements)
         raise_stmt,                           // raise statements
         inherited_stmt,                       // inherited statements
         exit_stmt,                            // exit statements

@@ -143,6 +143,11 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_DO: return "DO";
         case PASCAL_T_TO: return "TO";
         case PASCAL_T_DOWNTO: return "DOWNTO";
+        case PASCAL_T_CASE_STMT: return "CASE_STMT";
+        case PASCAL_T_CASE_BRANCH: return "CASE_BRANCH";
+        case PASCAL_T_CASE_LABEL: return "CASE_LABEL";
+        case PASCAL_T_CASE_LABEL_LIST: return "CASE_LABEL_LIST";
+        case PASCAL_T_OF: return "OF";
         case PASCAL_T_ASM_BLOCK: return "ASM_BLOCK";
         // Exception handling types
         case PASCAL_T_TRY_BLOCK: return "TRY_BLOCK";
