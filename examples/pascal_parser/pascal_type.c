@@ -215,11 +215,13 @@ combinator_t* class_type(tag_t tag) {
     // Method declarations (simplified - just headers for now)
     combinator_t* method_name = token(cident(PASCAL_T_IDENTIFIER));
     
-    // Proper Pascal parameter: name : type
+    // Proper Pascal parameter: [const|var] name : type
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        token(cident(PASCAL_T_IDENTIFIER)),  // parameter name
-        token(match(":")),                   // colon
-        token(cident(PASCAL_T_IDENTIFIER)),  // parameter type
+        optional(token(keyword_ci("const"))),        // optional const modifier
+        optional(token(keyword_ci("var"))),          // optional var modifier
+        token(cident(PASCAL_T_IDENTIFIER)),          // parameter name
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
         NULL
     );
     

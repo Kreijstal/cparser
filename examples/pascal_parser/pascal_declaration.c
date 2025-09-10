@@ -150,7 +150,13 @@ void init_pascal_unit_parser(combinator_t** p) {
     );
 
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        token(cident(PASCAL_T_IDENTIFIER)), token(match(":")), token(cident(PASCAL_T_IDENTIFIER)), NULL);
+        optional(token(keyword_ci("const"))),        // optional const modifier
+        optional(token(keyword_ci("var"))),          // optional var modifier  
+        token(cident(PASCAL_T_IDENTIFIER)),          // parameter name
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
+        NULL
+    );
     combinator_t* param_list = optional(between(
         token(match("(")), token(match(")")), sep_by(param, token(match(";")))));
 
