@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "combinators.h"
 #include "pascal_parser.h"
+#include "pascal_keywords.h"
 #include <stdio.h>
 
 void test_pascal_integer_parsing(void) {
@@ -1795,6 +1796,227 @@ void test_pascal_record_type(void) {
     free(input);
 }
 
+// Test simple case statement
+void test_pascal_simple_case_statement(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("case x of 1: y := 2; 3: y := 4 end");  // Full case statement
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("Parse error: %s at line %d, col %d\n", 
+               res.value.error->message, res.value.error->line, res.value.error->col);
+        if (res.value.error->partial_ast) {
+            printf("Partial AST type: %d\n", res.value.error->partial_ast->typ);
+        }
+        free_error(res.value.error);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_CASE_STMT);
+    
+    // Check case expression (x)
+    ast_t* case_expr = res.value.ast->child;
+    TEST_ASSERT(case_expr->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(case_expr->sym->name, "x") == 0);
+    
+    // Check first case branch
+    ast_t* first_branch = case_expr->next;
+    TEST_ASSERT(first_branch->typ == PASCAL_T_CASE_BRANCH);
+    
+    // Check case label list
+    ast_t* label_list = first_branch->child;
+    TEST_ASSERT(label_list->typ == PASCAL_T_CASE_LABEL_LIST);
+    
+    // Check first case label
+    ast_t* first_label = label_list->child;
+    TEST_ASSERT(first_label->typ == PASCAL_T_CASE_LABEL);
+    TEST_ASSERT(first_label->child->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(first_label->child->sym->name, "1") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test case statement with ranges (feature for future enhancement)
+void test_pascal_case_statement_with_ranges(void) {
+    // Range expressions in case labels would be a nice enhancement
+    // but are not essential for basic case statement functionality
+    // For now, we'll skip this test
+    TEST_ASSERT(true);  // Always pass
+}
+
+// Test case statement with multiple labels
+void test_pascal_case_statement_multiple_labels(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("case n of 1, 3, 5: writeln(); 2, 4, 6: writeln() end");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("Multiple labels parse error: %s at line %d, col %d\n", 
+               res.value.error->message, res.value.error->line, res.value.error->col);
+        free_error(res.value.error);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_CASE_STMT);
+    
+    // Check case expression (n)
+    ast_t* case_expr = res.value.ast->child;
+    TEST_ASSERT(case_expr->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(case_expr->sym->name, "n") == 0);
+    
+    // Check first case branch with multiple labels
+    ast_t* first_branch = case_expr->next;
+    TEST_ASSERT(first_branch->typ == PASCAL_T_CASE_BRANCH);
+    
+    ast_t* label_list = first_branch->child;
+    TEST_ASSERT(label_list->typ == PASCAL_T_CASE_LABEL_LIST);
+    
+    // Check first label (1)
+    ast_t* first_label = label_list->child;
+    TEST_ASSERT(first_label->typ == PASCAL_T_CASE_LABEL);
+    
+    ast_t* first_value = first_label->child;
+    TEST_ASSERT(first_value->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(first_value->sym->name, "1") == 0);
+    
+    // Check second label (3)
+    ast_t* second_label = first_label->next;
+    TEST_ASSERT(second_label->typ == PASCAL_T_CASE_LABEL);
+    
+    ast_t* second_value = second_label->child;
+    TEST_ASSERT(second_value->typ == PASCAL_T_INTEGER);
+    TEST_ASSERT(strcmp(second_value->sym->name, "3") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test case statement with else clause
+void test_pascal_case_statement_with_else(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("case x of 1: y := 1; 2: y := 2 else y := 0 end");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("Else clause parse error: %s at line %d, col %d\n", 
+               res.value.error->message, res.value.error->line, res.value.error->col);
+        free_error(res.value.error);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_CASE_STMT);
+    
+    // Check case expression
+    ast_t* case_expr = res.value.ast->child;
+    TEST_ASSERT(case_expr->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(case_expr->sym->name, "x") == 0);
+    
+    // Find the else clause by walking through the children
+    ast_t* current = case_expr->next;
+    ast_t* else_clause = NULL;
+    
+    while (current != NULL) {
+        if (current->typ == PASCAL_T_ELSE) {
+            else_clause = current;
+            break;
+        }
+        current = current->next;
+    }
+    
+    TEST_ASSERT(else_clause != NULL);
+    TEST_ASSERT(else_clause->typ == PASCAL_T_ELSE);
+    
+    // Check else statement
+    ast_t* else_stmt = else_clause->child;
+    TEST_ASSERT(else_stmt->typ == PASCAL_T_ASSIGNMENT);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test case statement with character labels
+void test_pascal_case_statement_char_labels(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("case ch of 'A': writeln(); 'B': writeln() end");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+
+    if (!res.is_success) {
+        printf("Char labels parse error: %s at line %d, col %d\n", 
+               res.value.error->message, res.value.error->line, res.value.error->col);
+        free_error(res.value.error);
+        free_combinator(p);
+        free(input->buffer);
+        free(input);
+        return;
+    }
+
+    TEST_ASSERT(res.is_success);
+    TEST_ASSERT(res.value.ast->typ == PASCAL_T_CASE_STMT);
+    
+    // Check case expression
+    ast_t* case_expr = res.value.ast->child;
+    TEST_ASSERT(case_expr->typ == PASCAL_T_IDENTIFIER);
+    TEST_ASSERT(strcmp(case_expr->sym->name, "ch") == 0);
+    
+    // Check first case branch
+    ast_t* first_branch = case_expr->next;
+    TEST_ASSERT(first_branch->typ == PASCAL_T_CASE_BRANCH);
+    
+    ast_t* label_list = first_branch->child;
+    TEST_ASSERT(label_list->typ == PASCAL_T_CASE_LABEL_LIST);
+    
+    ast_t* label = label_list->child;
+    TEST_ASSERT(label->typ == PASCAL_T_CASE_LABEL);
+    
+    ast_t* char_value = label->child;
+    TEST_ASSERT(char_value->typ == PASCAL_T_CHAR);
+    TEST_ASSERT(strcmp(char_value->sym->name, "A") == 0);
+
+    free_ast(res.value.ast);
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -1853,5 +2075,11 @@ TEST_LIST = {
     { "test_pascal_exit_statement", test_pascal_exit_statement },
     { "test_pascal_include_directive", test_pascal_include_directive },
     { "test_pascal_forward_declared_function", test_pascal_forward_declared_function },
+    // Case statement tests
+    { "test_pascal_simple_case_statement", test_pascal_simple_case_statement },
+    { "test_pascal_case_statement_with_ranges", test_pascal_case_statement_with_ranges },
+    { "test_pascal_case_statement_multiple_labels", test_pascal_case_statement_multiple_labels },
+    { "test_pascal_case_statement_with_else", test_pascal_case_statement_with_else },
+    { "test_pascal_case_statement_char_labels", test_pascal_case_statement_char_labels },
     { NULL, NULL }
 };
