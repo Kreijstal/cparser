@@ -9,6 +9,24 @@
 #include <string.h>
 #include <ctype.h>
 
+// Helper function to create parameter parser (reduces code duplication)
+combinator_t* create_pascal_param_parser(void) {
+    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        optional(multi(new_combinator(), PASCAL_T_NONE,     // only one modifier allowed
+            token(keyword_ci("const")),              // const modifier
+            token(keyword_ci("var")),                // var modifier
+            NULL
+        )),
+        param_name_list,                             // parameter name(s) - can be multiple comma-separated
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
+        NULL
+    );
+    return optional(between(
+        token(match("(")), token(match(")")), sep_by(param, token(match(";")))));
+}
+
 // Bring in the global sentinel value for an empty AST node
 extern ast_t* ast_nil;
 
@@ -149,17 +167,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         NULL
     );
 
-    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
-    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        optional(token(keyword_ci("const"))),        // optional const modifier
-        optional(token(keyword_ci("var"))),          // optional var modifier  
-        param_name_list,                             // parameter name(s) - can be multiple comma-separated
-        token(match(":")),                           // colon
-        token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
-        NULL
-    );
-    combinator_t* param_list = optional(between(
-        token(match("(")), token(match(")")), sep_by(param, token(match(";")))));
+    combinator_t* param_list = create_pascal_param_parser();
 
     combinator_t* procedure_header = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), param_list, token(match(";")), NULL);

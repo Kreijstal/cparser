@@ -224,7 +224,7 @@ static ParseResult hex_integer_fn(input_t* in, void* args, char* parser_name) {
     save_input_state(in, &state);
 
     int start_pos = in->start;
-    char c = read1(in);
+    int c = read1(in);
 
     // Must start with $
     if (c != '$') {
@@ -234,13 +234,13 @@ static ParseResult hex_integer_fn(input_t* in, void* args, char* parser_name) {
 
     // Must have at least one hex digit after $
     c = read1(in);
-    if (!isxdigit(c)) {
+    if (c == EOF || !isxdigit(c)) {
         restore_input_state(in, &state);
         return make_failure_v2(in, parser_name, strdup("Expected hex digit after '$'"), NULL);
     }
 
     // Continue reading hex digits
-    while (isxdigit(c = read1(in)));
+    while ((c = read1(in)) != EOF && isxdigit(c));
     if (c != EOF) in->start--;
 
     // Extract the hex text (including the $)
