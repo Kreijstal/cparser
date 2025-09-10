@@ -210,7 +210,20 @@ void init_pascal_statement_parser(combinator_t** p) {
         token(integer(PASCAL_T_INTEGER)),      // integer literals
         token(char_literal(PASCAL_T_CHAR)),    // character literals 
         token(cident(PASCAL_T_IDENTIFIER)),    // identifier constants
-        // TODO: Add range support in future (a..b expressions)
+        // Allow ranges by parsing them as expressions using the existing range operator
+        seq(new_combinator(), PASCAL_T_RANGE,
+            token(multi(new_combinator(), PASCAL_T_NONE,
+                integer(PASCAL_T_INTEGER),
+                char_literal(PASCAL_T_CHAR),
+                cident(PASCAL_T_IDENTIFIER),
+                NULL)),
+            token(match("..")),
+            token(multi(new_combinator(), PASCAL_T_NONE,
+                integer(PASCAL_T_INTEGER),
+                char_literal(PASCAL_T_CHAR),
+                cident(PASCAL_T_IDENTIFIER),
+                NULL)),
+            NULL),
         NULL
     );
     

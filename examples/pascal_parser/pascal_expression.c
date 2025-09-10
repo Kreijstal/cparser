@@ -217,6 +217,60 @@ combinator_t* real_number(tag_t tag) {
     return comb;
 }
 
+// Custom parser for hexadecimal integers (e.g., $FF, $1A2B)
+static ParseResult hex_integer_fn(input_t* in, void* args, char* parser_name) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+
+    int start_pos = in->start;
+    char c = read1(in);
+
+    // Must start with $
+    if (c != '$') {
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected '$' for hex literal"), NULL);
+    }
+
+    // Must have at least one hex digit after $
+    c = read1(in);
+    if (!isxdigit(c)) {
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected hex digit after '$'"), NULL);
+    }
+
+    // Continue reading hex digits
+    while (isxdigit(c = read1(in)));
+    if (c != EOF) in->start--;
+
+    // Extract the hex text (including the $)
+    int len = in->start - start_pos;
+    char* text = (char*)safe_malloc(len + 1);
+    strncpy(text, in->buffer + start_pos, len);
+    text[len] = '\0';
+
+    // Create AST node with the hex literal value
+    ast_t* ast = new_ast();
+    ast->typ = pargs->tag;
+    ast->sym = sym_lookup(text);
+    free(text);
+    ast->child = NULL;
+    ast->next = NULL;
+    set_ast_position(ast, in);
+
+    return make_success(ast);
+}
+
+combinator_t* hex_integer(tag_t tag) {
+    prim_args* args = (prim_args*)safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY; // Reuse existing type for custom parser
+    comb->fn = hex_integer_fn;
+    comb->args = args;
+    return comb;
+}
+
 // Custom parser for character literals (e.g., 'A', 'x')
 static ParseResult char_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
@@ -649,6 +703,7 @@ void init_pascal_expression_parser(combinator_t** p) {
 
     combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
         token(real_number(PASCAL_T_REAL)),        // Real numbers (3.14) - try first
+        token(hex_integer(PASCAL_T_INTEGER)),     // Hex integers ($FF) - try before decimal
         token(integer(PASCAL_T_INTEGER)),         // Integers (123)
         token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
         token(pascal_string(PASCAL_T_STRING)),    // Strings ("hello" or 'hello')

@@ -31,6 +31,15 @@ combinator_t* pascal_comment() {
         NULL);
 }
 
+// Pascal-style parentheses comment parser: (* comment content *)
+combinator_t* pascal_paren_comment() {
+    return seq(new_combinator(), PASCAL_T_NONE,
+        match("(*"),
+        until(match("*)"), PASCAL_T_NONE),
+        match("*)"),
+        NULL);
+}
+
 // C++-style comment parser: // comment content until end of line
 combinator_t* cpp_comment() {
     return seq(new_combinator(), PASCAL_T_NONE,
@@ -55,11 +64,13 @@ combinator_t* compiler_directive(tag_t tag) {
 combinator_t* pascal_whitespace() {
     combinator_t* ws_char = satisfy(is_whitespace_char, PASCAL_T_NONE);
     combinator_t* pascal_comment_parser = pascal_comment();
+    combinator_t* pascal_paren_comment_parser = pascal_paren_comment();
     combinator_t* cpp_comment_parser = cpp_comment();
     combinator_t* directive = compiler_directive(PASCAL_T_NONE);  // Treat directives as ignorable whitespace
     combinator_t* ws_or_comment = multi(new_combinator(), PASCAL_T_NONE,
         ws_char,
         pascal_comment_parser,
+        pascal_paren_comment_parser,
         cpp_comment_parser,
         directive,  // Include compiler directives in whitespace
         NULL
