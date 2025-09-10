@@ -121,6 +121,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_SHL: return "SHL";
         case PASCAL_T_SHR: return "SHR";
         case PASCAL_T_ADDR: return "ADDR";
+        case PASCAL_T_DEREF: return "DEREF";
         case PASCAL_T_RANGE: return "RANGE";
         case PASCAL_T_SET: return "SET";
         case PASCAL_T_IN: return "IN";

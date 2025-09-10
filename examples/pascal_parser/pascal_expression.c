@@ -451,6 +451,125 @@ combinator_t* set_constructor(tag_t tag, combinator_t** expr_parser) {
 
 // Removed unused relational_ops() function that had non-boundary-aware match("in")
 
+// Arguments for factor_with_deref_fn
+typedef struct {
+    combinator_t** expr_parser;
+} expr_args;
+
+// Custom parser function for handling postfix pointer dereference
+static ParseResult factor_with_deref_fn(input_t* in, void* args, char* parser_name) {
+    expr_args* expr_args_ptr = (expr_args*)args;
+    combinator_t** p = expr_args_ptr->expr_parser;
+    
+    // Create the base factor parser
+    combinator_t* boolean_true = seq(new_combinator(), PASCAL_T_BOOLEAN,
+        match_ci("true"), NULL);
+    combinator_t* boolean_false = seq(new_combinator(), PASCAL_T_BOOLEAN,
+        match_ci("false"), NULL);
+    combinator_t* tuple = seq(new_combinator(), PASCAL_T_TUPLE,
+        token(match("(")),
+        sep_by(lazy(p), token(match(","))),
+        token(match(")")), NULL);
+    
+    // Function name and array access
+    combinator_t* func_name = token(pascal_expression_identifier(PASCAL_T_IDENTIFIER));
+    combinator_t* arg_list = between(
+        token(match("(")), token(match(")")),
+        optional(sep_by(lazy(p), token(match(",")))));
+    combinator_t* func_call = seq(new_combinator(), PASCAL_T_FUNC_CALL,
+        func_name, arg_list, NULL);
+    combinator_t* index_list = between(
+        token(match("[")), token(match("]")),
+        sep_by(lazy(p), token(match(","))));
+    combinator_t* array_access = seq(new_combinator(), PASCAL_T_ARRAY_ACCESS,
+        func_name, index_list, NULL);
+    combinator_t* typecast = seq(new_combinator(), PASCAL_T_TYPECAST,
+        token(type_name(PASCAL_T_IDENTIFIER)),
+        between(token(match("(")), token(match(")")), lazy(p)), NULL);
+    
+    combinator_t* base_factor = multi(new_combinator(), PASCAL_T_NONE,
+        token(real_number(PASCAL_T_REAL)),
+        token(hex_integer(PASCAL_T_INTEGER)),
+        token(integer(PASCAL_T_INTEGER)),
+        token(char_literal(PASCAL_T_CHAR)),
+        token(pascal_string(PASCAL_T_STRING)),
+        token(set_constructor(PASCAL_T_SET, p)),
+        token(boolean_true),
+        token(boolean_false),
+        typecast,
+        array_access,
+        func_call,
+        between(token(match("(")), token(match(")")), lazy(p)),
+        tuple,
+        token(pascal_expression_identifier(PASCAL_T_IDENTIFIER)),
+        NULL
+    );
+    
+    // Parse the base factor first
+    ParseResult base_res = parse(in, base_factor);
+    if (!base_res.is_success) {
+        free_combinator(base_factor);
+        free_combinator(boolean_true);
+        free_combinator(boolean_false);
+        free_combinator(tuple);
+        free_combinator(func_call);
+        free_combinator(array_access);
+        free_combinator(typecast);
+        return base_res;
+    }
+    
+    // Check for optional ^ after the base
+    InputState state; save_input_state(in, &state);
+    combinator_t* caret = token(match("^"));
+    ParseResult caret_res = parse(in, caret);
+    free_combinator(caret);
+    
+    if (caret_res.is_success) {
+        // Found ^, wrap the base in a DEREF node
+        free_ast(caret_res.value.ast);  // free the caret token
+        ast_t* deref_node = new_ast();
+        deref_node->typ = PASCAL_T_DEREF;
+        deref_node->child = base_res.value.ast;
+        deref_node->next = NULL;
+        set_ast_position(deref_node, in);
+        
+        // Clean up
+        free_combinator(base_factor);
+        free_combinator(boolean_true);
+        free_combinator(boolean_false);
+        free_combinator(tuple);
+        free_combinator(func_call);
+        free_combinator(array_access);
+        free_combinator(typecast);
+        return make_success(deref_node);
+    } else {
+        // No ^, just return the base
+        free_error(caret_res.value.error);
+        restore_input_state(in, &state);
+        
+        // Clean up
+        free_combinator(base_factor);
+        free_combinator(boolean_true);
+        free_combinator(boolean_false);
+        free_combinator(tuple);
+        free_combinator(func_call);
+        free_combinator(array_access);
+        free_combinator(typecast);
+        return base_res;
+    }
+}
+
+// Create combinator for factor with optional pointer dereference
+combinator_t* factor_with_deref(combinator_t** expr_parser) {
+    expr_args* args = (expr_args*)safe_malloc(sizeof(expr_args));
+    args->expr_parser = expr_parser;
+    combinator_t* comb = new_combinator();
+    comb->type = P_SATISFY;
+    comb->fn = factor_with_deref_fn;
+    comb->args = args;
+    return comb;
+}
+
 // Pascal single-quoted string content parser using combinators - handles '' escaping
 static ParseResult pascal_single_quoted_content_fn(input_t* in, void* args, char* parser_name) {
     prim_args* pargs = (prim_args*)args;
@@ -701,23 +820,8 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
 
-    combinator_t *factor = multi(new_combinator(), PASCAL_T_NONE,
-        token(real_number(PASCAL_T_REAL)),        // Real numbers (3.14) - try first
-        token(hex_integer(PASCAL_T_INTEGER)),     // Hex integers ($FF) - try before decimal
-        token(integer(PASCAL_T_INTEGER)),         // Integers (123)
-        token(char_literal(PASCAL_T_CHAR)),       // Characters ('A')
-        token(pascal_string(PASCAL_T_STRING)),    // Strings ("hello" or 'hello')
-        token(set_constructor(PASCAL_T_SET, p)),  // Set constructors [1, 2, 3]
-        token(boolean_true),                      // Boolean true
-        token(boolean_false),                     // Boolean false
-        typecast,                                 // Type casts Integer(x) - try before func_call
-        array_access,                             // Array access table[i,j] - try before func_call
-        func_call,                                // Function calls func(x)
-        between(token(match("(")), token(match(")")), lazy(p)), // Parenthesized expressions - try before tuple
-        tuple,                                    // Tuple constants (a,b,c) - try after parenthesized expressions
-        identifier,                               // Identifiers (variables, built-ins)
-        NULL
-    );
+    // Use the new factor parser that handles pointer dereference
+    combinator_t *factor = factor_with_deref(p);
 
     expr(*p, factor);
 
@@ -776,6 +880,8 @@ void init_pascal_expression_parser(combinator_t** p) {
         NULL
     );
     expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(member_access_op));
+
+    // Note: Pointer dereference is now handled in the factor parser
 }
 
 // --- Utility Functions ---

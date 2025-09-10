@@ -168,8 +168,75 @@ void init_pascal_unit_parser(combinator_t** p) {
         token(keyword_ci("function")), token(cident(PASCAL_T_IDENTIFIER)), param_list, 
         token(match(":")), token(cident(PASCAL_T_RETURN_TYPE)), token(match(";")), NULL);
 
+    // Simple procedure implementation for unit
     combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list), token(match(";")),
+        lazy(stmt_parser), optional(token(match(";"))), NULL);
+
+    // Method implementations with qualified names (Class.Method)
+    combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_QUALIFIED_IDENTIFIER,
+        token(cident(PASCAL_T_IDENTIFIER)),          // class name
+        token(match(".")),                           // dot
+        token(cident(PASCAL_T_IDENTIFIER)),          // method name
+        NULL
+    );
+
+    // Return type for functions: : type
+    combinator_t* return_type = seq(new_combinator(), PASCAL_T_RETURN_TYPE,
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // return type
+        NULL
+    );
+
+    // Constructor implementation: constructor ClassName.MethodName[(params)]; body
+    combinator_t* constructor_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
+        token(keyword_ci("constructor")),            // constructor keyword
+        method_name_with_class,                      // ClassName.MethodName
+        optional(param_list),                        // optional parameter list
+        token(match(";")),                           // semicolon
+        lazy(stmt_parser),                           // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+
+    // Destructor implementation: destructor ClassName.MethodName[(params)]; body
+    combinator_t* destructor_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
+        token(keyword_ci("destructor")),             // destructor keyword
+        method_name_with_class,                      // ClassName.MethodName
+        optional(param_list),                        // optional parameter list
+        token(match(";")),                           // semicolon
+        lazy(stmt_parser),                           // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+
+    // Method procedure implementation: procedure ClassName.MethodName[(params)]; body
+    combinator_t* method_procedure_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
+        token(keyword_ci("procedure")),              // procedure keyword
+        method_name_with_class,                      // ClassName.MethodName
+        optional(param_list),                        // optional parameter list
+        token(match(";")),                           // semicolon
+        lazy(stmt_parser),                           // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+
+    // Method function implementation: function ClassName.MethodName[(params)]: ReturnType; body
+    combinator_t* method_function_impl = seq(new_combinator(), PASCAL_T_METHOD_IMPL,
+        token(keyword_ci("function")),               // function keyword
+        method_name_with_class,                      // ClassName.MethodName
+        optional(param_list),                        // optional parameter list
+        return_type,                                 // return type
+        token(match(";")),                           // semicolon
+        lazy(stmt_parser),                           // method body
+        optional(token(match(";"))),                 // optional terminating semicolon
+        NULL
+    );
+
+    // Simple function implementation for unit
+    combinator_t* function_impl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
+        token(keyword_ci("function")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list),
+        return_type, token(match(";")),
         lazy(stmt_parser), optional(token(match(";"))), NULL);
 
     // Interface section declarations: uses, const, type, procedure/function headers
@@ -183,7 +250,19 @@ void init_pascal_unit_parser(combinator_t** p) {
     );
     
     combinator_t* interface_declarations = many(interface_declaration);
-    combinator_t* implementation_definitions = many(procedure_impl);
+    
+    // Implementation section can contain both simple implementations and method implementations
+    combinator_t* implementation_definition = multi(new_combinator(), PASCAL_T_NONE,
+        constructor_impl,                            // constructor Class.Method implementations
+        destructor_impl,                             // destructor Class.Method implementations
+        method_procedure_impl,                       // procedure Class.Method implementations
+        method_function_impl,                        // function Class.Method implementations
+        procedure_impl,                              // simple procedure implementations
+        function_impl,                               // simple function implementations
+        NULL
+    );
+    
+    combinator_t* implementation_definitions = many(implementation_definition);
 
     combinator_t* interface_section = seq(new_combinator(), PASCAL_T_INTERFACE_SECTION,
         token(keyword_ci("interface")), interface_declarations, NULL);
