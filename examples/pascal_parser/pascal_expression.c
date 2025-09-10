@@ -770,15 +770,16 @@ void init_pascal_expression_parser(combinator_t** p) {
     // Field width operator for formatted output: expression:width (same precedence as unary)
     expr_insert(*p, 7, PASCAL_T_FIELD_WIDTH, EXPR_INFIX, ASSOC_LEFT, token(match(":")));
 
-    // Precedence 8: Member access (highest precedence) - but not if followed by another dot
+    // Precedence 8: Member access (highest precedence)
     combinator_t* member_access_op = seq(new_combinator(), PASCAL_T_NONE,
         match("."),
         pnot(match(".")),  // not followed by another dot
         NULL
     );
     expr_insert(*p, 8, PASCAL_T_MEMBER_ACCESS, EXPR_INFIX, ASSOC_LEFT, token(member_access_op));
-
-    // Note: Pointer dereference is now handled in the factor parser
+    
+    // Precedence 9: Pointer dereference operator (postfix): expression^ (higher than member access)
+    expr_insert(*p, 9, PASCAL_T_DEREF, EXPR_POSTFIX, ASSOC_LEFT, token(match("^")));
 }
 
 // --- Utility Functions ---
