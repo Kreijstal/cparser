@@ -205,12 +205,40 @@ void init_pascal_statement_parser(combinator_t** p) {
     combinator_t* exit_stmt = token(create_keyword_parser("exit", PASCAL_T_EXIT_STMT));
 
     // Case statement: case expression of label1: stmt1; label2: stmt2; [else stmt;] end
-    // Now implement the full case statement properly
+    // Case labels should handle constant expressions, not just simple values
+    
+    // Constant expressions for case labels - more flexible than simple values
+    // but restricted to avoid conflicts with statement parsing
+    combinator_t* const_expr_factor = multi(new_combinator(), PASCAL_T_NONE,
+        integer(PASCAL_T_INTEGER),
+        char_literal(PASCAL_T_CHAR), 
+        cident(PASCAL_T_IDENTIFIER),
+        between(token(match("(")), token(match(")")), lazy(expr_parser)), // parenthesized expressions
+        NULL);
+    
+    // Allow simple arithmetic in case labels like (CONST + 1) or -5
+    combinator_t* case_expression = multi(new_combinator(), PASCAL_T_NONE,
+        seq(new_combinator(), PASCAL_T_NEG,
+            token(match("-")),
+            const_expr_factor,
+            NULL),
+        seq(new_combinator(), PASCAL_T_POS,
+            token(match("+")),
+            const_expr_factor,
+            NULL),
+        const_expr_factor,
+        NULL);
+    
+    // Range case label: expression..expression
+    combinator_t* range_case_label = seq(new_combinator(), PASCAL_T_RANGE,
+        case_expression,
+        token(match("..")),
+        case_expression,
+        NULL);
+    
     combinator_t* case_label = multi(new_combinator(), PASCAL_T_CASE_LABEL,
-        token(integer(PASCAL_T_INTEGER)),      // integer literals
-        token(char_literal(PASCAL_T_CHAR)),    // character literals 
-        token(cident(PASCAL_T_IDENTIFIER)),    // identifier constants
-        // TODO: Add range support in future (a..b expressions)
+        token(range_case_label),    // Try range first
+        token(case_expression),     // Then single expressions
         NULL
     );
     

@@ -50,31 +50,68 @@ static void print_ast_indented(ast_t* ast, int depth) {
 
 int main(int argc, char *argv[]) {
     bool print_ast = false;
-    char *expr_str = NULL;
+    char *filename = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--print-ast") == 0) {
             print_ast = true;
         } else {
-            expr_str = argv[i];
+            filename = argv[i];
         }
     }
 
-    if (expr_str == NULL) {
-        fprintf(stderr, "Usage: %s [--print-ast] \"<expression>\"\n", argv[0]);
+    if (filename == NULL) {
+        fprintf(stderr, "Usage: %s [--print-ast] <filename>\n", argv[0]);
         return 1;
     }
 
+    // Read file content
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        fprintf(stderr, "Error: Cannot open file '%s'\n", filename);
+        return 1;
+    }
+    
+    // Get file size
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    // Allocate buffer and read file
+    char *file_content = malloc(file_size + 1);
+    if (file_content == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed\n");
+        fclose(file);
+        return 1;
+    }
+    
+    size_t bytes_read = fread(file_content, 1, file_size, file);
+    file_content[bytes_read] = '\0';
+    fclose(file);
+
     combinator_t *parser = new_combinator();
-    init_pascal_expression_parser(&parser);
+    // Use unit parser instead of expression parser for full Pascal units
+    init_pascal_unit_parser(&parser);
+    
+    printf("Parsing file: %s\n", filename);
+    printf("File size: %zu bytes\n", bytes_read);
+    printf("First 100 characters: '%.100s'\n", file_content);
 
     input_t *in = new_input();
-    in->buffer = expr_str;
-    in->length = strlen(expr_str);
+    in->buffer = file_content;
+    in->length = bytes_read;
     ast_nil = new_ast();
     ast_nil->typ = PASCAL_T_NONE;
 
     ParseResult result = parse(in, parser);
+    
+    printf("Parse completed. Success: %s\n", result.is_success ? "YES" : "NO");
+    if (!result.is_success && result.value.error) {
+        printf("Input position when failed: %d of %zu\n", in->start, in->length);
+        if (in->start < in->length) {
+            printf("Context around failure: '%.50s'\n", in->buffer + in->start);
+        }
+    }
 
     if (result.is_success) {
         if (in->start < in->length) {
@@ -89,12 +126,14 @@ int main(int argc, char *argv[]) {
     } else {
         print_error_with_partial_ast(result.value.error);
         free_error(result.value.error);
+        free(file_content);
         return 1;
     }
 
     free_combinator(parser);
     free(in);
     free(ast_nil);
+    free(file_content);
 
     return 0;
 }
