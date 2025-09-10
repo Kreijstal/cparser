@@ -215,11 +215,12 @@ combinator_t* class_type(tag_t tag) {
     // Method declarations (simplified - just headers for now)
     combinator_t* method_name = token(cident(PASCAL_T_IDENTIFIER));
     
-    // Proper Pascal parameter: [const|var] name : type
+    // Proper Pascal parameter: [const|var] name1,name2,name3 : type
+    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
         optional(token(keyword_ci("const"))),        // optional const modifier
         optional(token(keyword_ci("var"))),          // optional var modifier
-        token(cident(PASCAL_T_IDENTIFIER)),          // parameter name
+        param_name_list,                             // parameter name(s) - can be multiple comma-separated
         token(match(":")),                           // colon
         token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
         NULL
@@ -251,12 +252,14 @@ combinator_t* class_type(tag_t tag) {
         NULL
     );
 
-    // Procedure declaration: procedure Name;
+    // Procedure declaration: procedure Name; [override];
     combinator_t* procedure_decl = seq(new_combinator(), PASCAL_T_METHOD_DECL,
         token(keyword_ci("procedure")),
         method_name,
         param_list,
         token(match(";")),
+        optional(token(keyword_ci("override"))),  // optional override keyword
+        optional(token(match(";"))),              // optional semicolon after override
         NULL
     );
 
@@ -316,17 +319,13 @@ combinator_t* class_type(tag_t tag) {
         NULL
     );
 
-    // Access section: access_keyword followed by members
-    combinator_t* access_section = seq(new_combinator(), PASCAL_T_NONE,
-        access_keyword,
-        many(class_element),
-        NULL
-    );
+    // Access section: just the access keyword (members will be parsed individually)
+    combinator_t* access_section = access_keyword;
 
-    // Class body: optional access sections and members
+    // Class body: mix of access modifiers and class members  
     combinator_t* class_body_parser = many(multi(new_combinator(), PASCAL_T_NONE,
-        access_section,
-        class_element,
+        access_section,      // access modifiers like private/public
+        class_element,       // individual class members
         NULL
     ));
 

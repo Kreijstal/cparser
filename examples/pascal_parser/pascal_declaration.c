@@ -149,10 +149,11 @@ void init_pascal_unit_parser(combinator_t** p) {
         NULL
     );
 
+    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
         optional(token(keyword_ci("const"))),        // optional const modifier
         optional(token(keyword_ci("var"))),          // optional var modifier  
-        token(cident(PASCAL_T_IDENTIFIER)),          // parameter name
+        param_name_list,                             // parameter name(s) - can be multiple comma-separated
         token(match(":")),                           // colon
         token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
         NULL
@@ -220,11 +221,14 @@ void init_pascal_procedure_parser(combinator_t** p) {
     (*stmt_parser)->extra_to_free = stmt_parser;
     init_pascal_statement_parser(stmt_parser);
 
-    // Parameter: identifier : type (simplified - just use identifier for type)
+    // Parameter: [const|var] identifier1,identifier2,... : type
+    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        token(cident(PASCAL_T_IDENTIFIER)),      // parameter name
-        token(match(":")),                       // colon
-        token(cident(PASCAL_T_IDENTIFIER)),      // type name (simplified)
+        optional(token(keyword_ci("const"))),        // optional const modifier
+        optional(token(keyword_ci("var"))),          // optional var modifier
+        param_name_list,                             // parameter name(s) - can be multiple comma-separated
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // type name (simplified)
         NULL
     );
 
@@ -279,11 +283,14 @@ void init_pascal_method_implementation_parser(combinator_t** p) {
     (*stmt_parser)->extra_to_free = stmt_parser;
     init_pascal_statement_parser(stmt_parser);
 
-    // Parameter: identifier : type (simplified - just use identifier for type)
+    // Parameter: [const|var] identifier1,identifier2,... : type
+    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        token(cident(PASCAL_T_IDENTIFIER)),      // parameter name
-        token(match(":")),                       // colon
-        token(cident(PASCAL_T_IDENTIFIER)),      // type name (simplified)
+        optional(token(keyword_ci("const"))),        // optional const modifier
+        optional(token(keyword_ci("var"))),          // optional var modifier
+        param_name_list,                             // parameter name(s) - can be multiple comma-separated
+        token(match(":")),                           // colon
+        token(cident(PASCAL_T_IDENTIFIER)),          // type name (simplified)
         NULL
     );
 
@@ -461,11 +468,12 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     (*stmt_parser)->extra_to_free = stmt_parser;
     init_pascal_statement_parser(stmt_parser);
 
-    // Enhanced parameter: [var] identifier : type (support for var parameters)
-    combinator_t* var_keyword = optional(token(match("var")));
+    // Enhanced parameter: [const|var] identifier1,identifier2,... : type
+    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
     combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        var_keyword,                                 // optional var keyword
-        token(cident(PASCAL_T_IDENTIFIER)),          // parameter name
+        optional(token(keyword_ci("const"))),        // optional const modifier
+        optional(token(keyword_ci("var"))),          // optional var modifier
+        param_name_list,                             // parameter name(s) - can be multiple comma-separated
         token(match(":")),                           // colon
         token(cident(PASCAL_T_IDENTIFIER)),          // type name (simplified)
         NULL
