@@ -131,7 +131,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
         range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
         pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
-        token(pascal_identifier(PASCAL_T_IDENTIFIER)),  // simple type names (excludes keywords)
+        // Note: Removed simple type names to avoid keyword conflicts for now
         NULL
     );
     

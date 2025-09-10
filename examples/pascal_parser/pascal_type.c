@@ -214,10 +214,19 @@ combinator_t* class_type(tag_t tag) {
 
     // Method declarations (simplified - just headers for now)
     combinator_t* method_name = token(cident(PASCAL_T_IDENTIFIER));
+    
+    // Proper Pascal parameter: name : type
+    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
+        token(cident(PASCAL_T_IDENTIFIER)),  // parameter name
+        token(match(":")),                   // colon
+        token(cident(PASCAL_T_IDENTIFIER)),  // parameter type
+        NULL
+    );
+    
     combinator_t* param_list = optional(between(
         token(match("(")),
         token(match(")")),
-        sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(";")))
+        sep_by(param, token(match(";")))     // parameters separated by semicolons
     ));
 
     // Constructor declaration: constructor Name;
@@ -249,7 +258,7 @@ combinator_t* class_type(tag_t tag) {
         NULL
     );
 
-    // Function declaration: function Name: ReturnType;
+    // Function declaration: function Name: ReturnType; [override];
     combinator_t* function_decl = seq(new_combinator(), PASCAL_T_METHOD_DECL,
         token(keyword_ci("function")),
         method_name,
@@ -257,6 +266,8 @@ combinator_t* class_type(tag_t tag) {
         token(match(":")),
         token(cident(PASCAL_T_IDENTIFIER)), // return type
         token(match(";")),
+        optional(token(keyword_ci("override"))),  // optional override keyword
+        optional(token(match(";"))),              // optional semicolon after override
         NULL
     );
 

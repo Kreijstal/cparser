@@ -104,6 +104,14 @@ int main(int argc, char *argv[]) {
     ast_nil->typ = PASCAL_T_NONE;
 
     ParseResult result = parse(in, parser);
+    
+    printf("Parse completed. Success: %s\n", result.is_success ? "YES" : "NO");
+    if (!result.is_success && result.value.error) {
+        printf("Input position when failed: %d of %zu\n", in->start, in->length);
+        if (in->start < in->length) {
+            printf("Context around failure: '%.50s'\n", in->buffer + in->start);
+        }
+    }
 
     if (result.is_success) {
         if (in->start < in->length) {
