@@ -258,7 +258,7 @@ void init_pascal_statement_parser(combinator_t** p) {
         token(keyword_ci("case")),             // case keyword
         lazy(expr_parser),                     // case expression
         token(keyword_ci("of")),               // of keyword
-        sep_by(case_branch, token(match(";"))), // case branches separated by semicolons
+        sep_end_by(case_branch, token(match(";"))), // case branches with optional trailing semicolon
         optional(seq(new_combinator(), PASCAL_T_ELSE, // optional else clause
             token(keyword_ci("else")),         // else keyword
             lazy(stmt_parser),                 // else statement
