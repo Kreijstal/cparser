@@ -17,7 +17,7 @@ add_test(unit_tests tests)
 
 
 # --- Examples and Integration Tests ---
-option(BUILD_INTEGRATION_TESTS "Build the example applications and their tests" OFF)
+option(BUILD_INTEGRATION_TESTS "Build the example applications and their tests" ON)
 
 if(BUILD_INTEGRATION_TESTS)
     message(STATUS "Building integration tests and examples...")
