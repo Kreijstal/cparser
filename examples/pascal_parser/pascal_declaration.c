@@ -146,6 +146,7 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* type_definition = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
         class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end (try first)
         record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
+        enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
         range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
         pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
@@ -462,6 +463,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     combinator_t* type_spec = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
         class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end
         record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
+        enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
         pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^TMyObject
         range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1

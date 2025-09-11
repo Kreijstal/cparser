@@ -186,6 +186,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_POINTER_TYPE: return "POINTER_TYPE";
         case PASCAL_T_ARRAY_TYPE: return "ARRAY_TYPE";
         case PASCAL_T_RECORD_TYPE: return "RECORD_TYPE";
+        case PASCAL_T_ENUMERATED_TYPE: return "ENUMERATED_TYPE";
         case PASCAL_T_CLASS_TYPE: return "CLASS_TYPE";
         case PASCAL_T_CLASS_MEMBER: return "CLASS_MEMBER";
         case PASCAL_T_ACCESS_MODIFIER: return "ACCESS_MODIFIER";

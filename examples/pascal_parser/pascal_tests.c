@@ -2259,7 +2259,7 @@ void test_pascal_case_range_label(void) {
 
 void test_pascal_enumerated_type_declaration(void) {
     combinator_t* p = new_combinator();
-    init_pascal_program_parser(&p);
+    init_pascal_complete_program_parser(&p);
     input_t* input = new_input();
     char* program = "program Test; type TMyEnum = (Value1, Value2, Value3); begin end.";
     input->buffer = strdup(program);
@@ -2278,7 +2278,7 @@ void test_pascal_enumerated_type_declaration(void) {
 
 void test_pascal_simple_const_declaration(void) {
     combinator_t* p = new_combinator();
-    init_pascal_program_parser(&p);
+    init_pascal_complete_program_parser(&p);
     input_t* input = new_input();
     char* program = "program Test; const MyConst = 10; begin end.";
     input->buffer = strdup(program);
@@ -2297,7 +2297,7 @@ void test_pascal_simple_const_declaration(void) {
 
 void test_pascal_var_section(void) {
     combinator_t* p = new_combinator();
-    init_pascal_program_parser(&p);
+    init_pascal_complete_program_parser(&p);
     input_t* input = new_input();
     char* program = "program Test; var i: integer; begin end.";
     input->buffer = strdup(program);
