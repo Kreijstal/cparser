@@ -2351,6 +2351,80 @@ void test_fpc_style_unit_parsing(void) {
     free(input);
 }
 
+void test_complex_fpc_rax64int_unit(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_unit_parser(&p);
+    input_t* input = new_input();
+    char* program = 
+        "Unit rax64int;\n"
+        "\n"
+        "  interface\n"
+        "\n"
+        "    uses\n"
+        "      aasmtai,\n"
+        "      rax86int;\n"
+        "\n"
+        "    type\n"
+        "      tx8664intreader = class(tx86intreader)\n"
+        "        actsehdirective: TAsmSehDirective;\n"
+        "        function is_targetdirective(const s:string):boolean;override;\n"
+        "        procedure HandleTargetDirective;override;\n"
+        "      end;\n"
+        "\n"
+        "\n"
+        "  implementation\n"
+        "\n"
+        "    uses\n"
+        "      globtype,\n"
+        "      cutils,\n"
+        "      systems,\n"
+        "      verbose,\n"
+        "      cgbase,\n"
+        "      symconst,\n"
+        "      procinfo,\n"
+        "      rabase;\n"
+        "\n"
+        "    const\n"
+        "      { max offset and bitmask for .seh_savereg and .seh_setframe }\n"
+        "      maxoffset: array[boolean] of aint=(high(dword), 240);\n"
+        "      modulo: array[boolean] of integer=(7, 15);\n"
+        "\n"
+        "    function tx8664intreader.is_targetdirective(const s:string):boolean;\n"
+        "      var\n"
+        "        i: TAsmSehDirective;\n"
+        "      begin\n"
+        "        result:=false;\n"
+        "        if target_info.system<>system_x86_64_win64 then exit;\n"
+        "\n"
+        "        for i:=low(TAsmSehDirective) to high(TAsmSehDirective) do\n"
+        "          begin\n"
+        "            if not (i in recognized_directives) then\n"
+        "              continue;\n"
+        "            if s=sehdirectivestr[i] then\n"
+        "              begin\n"
+        "                actsehdirective:=i;\n"
+        "                result:=true;\n"
+        "                break;\n"
+        "              end;\n"
+        "          end;\n"
+        "      end;\n"
+        "\n"
+        "end.";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+    ParseResult res = parse(input, p);
+    
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -2427,5 +2501,6 @@ TEST_LIST = {
     { "test_pascal_simple_const_declaration", test_pascal_simple_const_declaration },
     { "test_pascal_var_section", test_pascal_var_section },
     { "test_fpc_style_unit_parsing", test_fpc_style_unit_parsing },
+    { "test_complex_fpc_rax64int_unit", test_complex_fpc_rax64int_unit },
     { NULL, NULL }
 };

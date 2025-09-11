@@ -57,6 +57,7 @@ typedef enum {
     // Procedure/Function Declaration types
     PASCAL_T_PROCEDURE_DECL,
     PASCAL_T_FUNCTION_DECL,
+    PASCAL_T_FUNCTION_BODY,
     PASCAL_T_PARAM_LIST,
     PASCAL_T_PARAM,
     PASCAL_T_RETURN_TYPE,

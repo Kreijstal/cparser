@@ -171,6 +171,33 @@ void init_pascal_unit_parser(combinator_t** p) {
 
     combinator_t* param_list = create_pascal_param_parser();
 
+    // Variable declaration for function/procedure local variables
+    combinator_t* var_decl = seq(new_combinator(), PASCAL_T_VAR_DECL,
+        sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(","))), // variable name(s)
+        token(match(":")),                          // colon
+        token(cident(PASCAL_T_IDENTIFIER)),         // variable type
+        optional(token(match(";"))),                // optional semicolon
+        NULL
+    );
+
+    combinator_t* var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
+        token(keyword_ci("var")),                   // var keyword
+        many(var_decl),                            // multiple variable declarations
+        NULL
+    );
+
+    // Function/procedure body that can contain local declarations
+    combinator_t* function_body = seq(new_combinator(), PASCAL_T_FUNCTION_BODY,
+        many(multi(new_combinator(), PASCAL_T_NONE,    // Optional local declarations
+            var_section,                               // local variables
+            const_section,                             // local constants
+            type_section,                              // local types
+            NULL
+        )),
+        lazy(stmt_parser),                          // main statement block
+        NULL
+    );
+
     combinator_t* procedure_header = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), param_list, token(match(";")), NULL);
 
@@ -181,7 +208,7 @@ void init_pascal_unit_parser(combinator_t** p) {
     // Simple procedure implementation for unit
     combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list), token(match(";")),
-        lazy(stmt_parser), optional(token(match(";"))), NULL);
+        function_body, optional(token(match(";"))), NULL);
 
     // Method implementations with qualified names (Class.Method)
     combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_QUALIFIED_IDENTIFIER,
@@ -204,7 +231,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         optional(param_list),                        // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -215,7 +242,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         optional(param_list),                        // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -226,7 +253,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         optional(param_list),                        // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -238,7 +265,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         optional(param_list),                        // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -247,7 +274,7 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* function_impl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
         token(keyword_ci("function")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list),
         return_type, token(match(";")),
-        lazy(stmt_parser), optional(token(match(";"))), NULL);
+        function_body, optional(token(match(";"))), NULL);
 
     // Interface section declarations: uses, const, type, procedure/function headers
     combinator_t* interface_declaration = multi(new_combinator(), PASCAL_T_NONE,
