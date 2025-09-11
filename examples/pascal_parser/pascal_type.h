@@ -11,5 +11,6 @@ combinator_t* enumerated_type(tag_t tag);
 combinator_t* class_type(tag_t tag);
 combinator_t* type_name(tag_t tag);
 combinator_t* pointer_type(tag_t tag);
+combinator_t* set_type(tag_t tag);
 
 #endif // PASCAL_TYPE_H

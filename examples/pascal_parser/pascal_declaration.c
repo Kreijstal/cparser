@@ -105,6 +105,19 @@ void init_pascal_unit_parser(combinator_t** p) {
         NULL
     );
 
+    // Type section: type name = TypeDefinition; ...
+    combinator_t* type_definition = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
+        class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end (try first)
+        record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
+        enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
+        array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
+        set_type(PASCAL_T_SET),                         // set types like set of TAsmSehDirective
+        range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
+        pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
+        // Note: Removed simple type names to avoid keyword conflicts for now
+        NULL
+    );
+
     // Const section: const name : type = value; ...
     // For now, we'll create a simplified const parser that accepts basic values
     // plus a fallback for complex expressions
@@ -127,7 +140,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         token(cident(PASCAL_T_IDENTIFIER)),          // constant name
         optional(seq(new_combinator(), PASCAL_T_NONE,
             token(match(":")),                       // optional type specification
-            token(cident(PASCAL_T_TYPE_SPEC)),       // type name
+            type_definition,                         // full type definition (not just simple identifier)
             NULL
         )),
         token(match("=")),                           // equals sign
@@ -139,18 +152,6 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* const_section = seq(new_combinator(), PASCAL_T_CONST_SECTION,
         token(keyword_ci("const")),                     // const keyword (with word boundary check)
         many(const_decl),                            // multiple const declarations
-        NULL
-    );
-
-    // Type section: type name = TypeDefinition; ...
-    combinator_t* type_definition = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
-        class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end (try first)
-        record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
-        enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
-        array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
-        range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
-        pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
-        // Note: Removed simple type names to avoid keyword conflicts for now
         NULL
     );
     
@@ -261,7 +262,11 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* interface_declarations = many(interface_declaration);
     
     // Implementation section can contain both simple implementations and method implementations
+    // as well as uses, const, type, and var sections
     combinator_t* implementation_definition = multi(new_combinator(), PASCAL_T_NONE,
+        uses_section,                                // uses clauses in implementation
+        const_section,                               // const declarations in implementation  
+        type_section,                                // type declarations in implementation
         constructor_impl,                            // constructor Class.Method implementations
         destructor_impl,                             // destructor Class.Method implementations
         method_procedure_impl,                       // procedure Class.Method implementations
@@ -465,6 +470,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
         enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
+        set_type(PASCAL_T_SET),                         // set types like set of TAsmSehDirective
         pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^TMyObject
         range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1
         type_name(PASCAL_T_IDENTIFIER),                 // built-in types
@@ -535,7 +541,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         token(cident(PASCAL_T_IDENTIFIER)),          // constant name
         optional(seq(new_combinator(), PASCAL_T_NONE,
             token(match(":")),                       // colon
-            token(cident(PASCAL_T_IDENTIFIER)),      // type (simplified)
+            type_spec,                               // full type specification (not just simple identifier)
             NULL
         )),
         token(match("=")),                           // equals

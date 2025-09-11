@@ -2314,6 +2314,43 @@ void test_pascal_var_section(void) {
     free(input);
 }
 
+void test_fpc_style_unit_parsing(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_unit_parser(&p);
+    input_t* input = new_input();
+    char* program = 
+        "Unit rax64int;\n"
+        "interface\n"
+        "uses aasmtai, rax86int;\n"
+        "type\n"
+        "  tx8664intreader = class(tx86intreader)\n"
+        "    actsehdirective: TAsmSehDirective;\n"
+        "    function is_targetdirective(const s:string):boolean;override;\n"
+        "  end;\n"
+        "implementation\n"
+        "uses globtype, cutils;\n"
+        "const\n"
+        "  maxoffset: array[boolean] of aint=(high(dword), 240);\n"
+        "function tx8664intreader.is_targetdirective(const s:string):boolean;\n"
+        "begin\n"
+        "  result:=false;\n"
+        "end;\n"
+        "end.";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+    ParseResult res = parse(input, p);
+    
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -2389,5 +2426,6 @@ TEST_LIST = {
     { "test_pascal_enumerated_type_declaration", test_pascal_enumerated_type_declaration },
     { "test_pascal_simple_const_declaration", test_pascal_simple_const_declaration },
     { "test_pascal_var_section", test_pascal_var_section },
+    { "test_fpc_style_unit_parsing", test_fpc_style_unit_parsing },
     { NULL, NULL }
 };

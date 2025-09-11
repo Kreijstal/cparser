@@ -498,3 +498,59 @@ combinator_t* enumerated_type(tag_t tag) {
     comb->fn = enumerated_type_fn;
     return comb;
 }
+
+// Set type parser: set of TypeName (e.g., set of TAsmSehDirective)
+static ParseResult set_type_fn(input_t* in, void* args, char* parser_name) {
+    prim_args* pargs = (prim_args*)args;
+    InputState state;
+    save_input_state(in, &state);
+
+    // Parse "set"
+    combinator_t* set_keyword = token(keyword_ci("set"));
+    ParseResult set_result = parse(in, set_keyword);
+    if (!set_result.is_success) {
+        free_combinator(set_keyword);
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected 'set'"), NULL);
+    }
+    free_combinator(set_keyword);
+    free_ast(set_result.value.ast);
+
+    // Parse "of"
+    combinator_t* of_keyword = token(keyword_ci("of"));
+    ParseResult of_result = parse(in, of_keyword);
+    if (!of_result.is_success) {
+        free_combinator(of_keyword);
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected 'of' after 'set'"), NULL);
+    }
+    free_combinator(of_keyword);
+    free_ast(of_result.value.ast);
+
+    // Parse element type (usually an identifier)
+    combinator_t* element_type = token(cident(PASCAL_T_IDENTIFIER));
+    ParseResult element_result = parse(in, element_type);
+    if (!element_result.is_success) {
+        free_combinator(element_type);
+        restore_input_state(in, &state);
+        return make_failure_v2(in, parser_name, strdup("Expected element type after 'of'"), NULL);
+    }
+    free_combinator(element_type);
+
+    // Create set type AST node
+    ast_t* set_ast = new_ast();
+    set_ast->typ = pargs->tag;
+    set_ast->child = element_result.value.ast;
+    set_ast_position(set_ast, in);
+
+    return make_success(set_ast);
+}
+
+combinator_t* set_type(tag_t tag) {
+    combinator_t* comb = new_combinator();
+    prim_args* args = safe_malloc(sizeof(prim_args));
+    args->tag = tag;
+    comb->args = args;
+    comb->fn = set_type_fn;
+    return comb;
+}
