@@ -1,6 +1,7 @@
 #include "pascal_type.h"
 #include "pascal_parser.h"
 #include "pascal_keywords.h"
+#include "pascal_declaration.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -215,22 +216,8 @@ combinator_t* class_type(tag_t tag) {
     // Method declarations (simplified - just headers for now)
     combinator_t* method_name = token(cident(PASCAL_T_IDENTIFIER));
     
-    // Proper Pascal parameter: [const|var] name1,name2,name3 : type
-    combinator_t* param_name_list = sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(",")));
-    combinator_t* param = seq(new_combinator(), PASCAL_T_PARAM,
-        optional(token(keyword_ci("const"))),        // optional const modifier
-        optional(token(keyword_ci("var"))),          // optional var modifier
-        param_name_list,                             // parameter name(s) - can be multiple comma-separated
-        token(match(":")),                           // colon
-        token(cident(PASCAL_T_IDENTIFIER)),          // parameter type
-        NULL
-    );
-    
-    combinator_t* param_list = optional(between(
-        token(match("(")),
-        token(match(")")),
-        sep_by(param, token(match(";")))     // parameters separated by semicolons
-    ));
+    // Use the shared parameter parser
+    combinator_t* param_list = create_pascal_param_parser();
 
     // Constructor declaration: constructor Name;
     combinator_t* constructor_decl = seq(new_combinator(), PASCAL_T_CONSTRUCTOR_DECL,
@@ -247,8 +234,11 @@ combinator_t* class_type(tag_t tag) {
         method_name,
         param_list,
         token(match(";")),
-        optional(token(keyword_ci("override"))),
-        optional(token(match(";"))),
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(keyword_ci("override")),       // override keyword
+            optional(token(match(";"))),         // optional semicolon after override
+            NULL
+        )),
         NULL
     );
 
@@ -258,8 +248,11 @@ combinator_t* class_type(tag_t tag) {
         method_name,
         param_list,
         token(match(";")),
-        optional(token(keyword_ci("override"))),  // optional override keyword
-        optional(token(match(";"))),              // optional semicolon after override
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(keyword_ci("override")),       // override keyword
+            optional(token(match(";"))),         // optional semicolon after override
+            NULL
+        )),
         NULL
     );
 
@@ -271,8 +264,11 @@ combinator_t* class_type(tag_t tag) {
         token(match(":")),
         token(cident(PASCAL_T_IDENTIFIER)), // return type
         token(match(";")),
-        optional(token(keyword_ci("override"))),  // optional override keyword
-        optional(token(match(";"))),              // optional semicolon after override
+        optional(seq(new_combinator(), PASCAL_T_NONE,
+            token(keyword_ci("override")),       // override keyword
+            optional(token(match(";"))),         // optional semicolon after override
+            NULL
+        )),
         NULL
     );
 

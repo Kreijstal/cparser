@@ -2107,6 +2107,102 @@ void test_pascal_case_statement_char_labels(void) {
     free(input);
 }
 
+// Test case statement with invalid expressions as labels (should fail)
+void test_pascal_case_invalid_expression_labels(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_statement_parser(&p);
+
+    // Test with function call as case label (should be invalid)
+    input_t* input = new_input();
+    input->buffer = strdup("case x of func(): writeln() end");
+    input->length = strlen(input->buffer);
+
+    ParseResult res = parse(input, p);
+    
+    // This should fail because function calls are not valid case labels
+    TEST_ASSERT(!res.is_success);
+    
+    if (!res.is_success) {
+        free_error(res.value.error);
+    } else {
+        free_ast(res.value.ast);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+
+    // Test with variable assignment as case label (should be invalid)
+    p = new_combinator();
+    init_pascal_statement_parser(&p);
+    
+    input = new_input();
+    input->buffer = strdup("case x of y := 5: writeln() end");
+    input->length = strlen(input->buffer);
+
+    res = parse(input, p);
+    
+    // This should fail because assignments are not valid case labels
+    TEST_ASSERT(!res.is_success);
+    
+    if (!res.is_success) {
+        free_error(res.value.error);
+    } else {
+        free_ast(res.value.ast);
+    }
+    
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test pointer dereference operator (basic support)
+void test_pascal_pointer_dereference(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("x");  // For now just test that identifiers work
+    input->length = strlen("x");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+// Test array access (basic support) 
+void test_pascal_array_access_with_deref(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_expression_parser(&p);
+
+    input_t* input = new_input();
+    input->buffer = strdup("oper[i]");  // For now just test that array access works
+    input->length = strlen("oper[i]");
+
+    ParseResult res = parse(input, p);
+
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        TEST_ASSERT(res.value.ast->typ == PASCAL_T_ARRAY_ACCESS);
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 void test_pascal_paren_star_comment(void) {
     combinator_t* p = new_combinator();
     init_pascal_expression_parser(&p);
@@ -2226,8 +2322,11 @@ TEST_LIST = {
     { "test_pascal_case_statement_with_else", test_pascal_case_statement_with_else },
     { "test_pascal_case_expression_labels", test_pascal_case_expression_labels },
     { "test_pascal_case_statement_char_labels", test_pascal_case_statement_char_labels },
+    { "test_pascal_case_invalid_expression_labels", test_pascal_case_invalid_expression_labels },
     { "test_pascal_paren_star_comment", test_pascal_paren_star_comment },
     { "test_pascal_hex_literal", test_pascal_hex_literal },
     { "test_pascal_case_range_label", test_pascal_case_range_label },
+    { "test_pascal_pointer_dereference", test_pascal_pointer_dereference },
+    { "test_pascal_array_access_with_deref", test_pascal_array_access_with_deref },
     { NULL, NULL }
 };

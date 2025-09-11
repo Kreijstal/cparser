@@ -75,17 +75,28 @@ int main(int argc, char *argv[]) {
     // Get file size
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
+    if (file_size == -1L) {
+        fprintf(stderr, "Error: could not determine file size for '%s'\n", filename);
+        fclose(file);
+        return 1;
+    }
     fseek(file, 0, SEEK_SET);
     
     // Allocate buffer and read file
-    char *file_content = malloc(file_size + 1);
+    char *file_content = malloc((size_t)file_size + 1);
     if (file_content == NULL) {
         fprintf(stderr, "Error: Memory allocation failed\n");
         fclose(file);
         return 1;
     }
     
-    size_t bytes_read = fread(file_content, 1, file_size, file);
+    size_t bytes_read = fread(file_content, 1, (size_t)file_size, file);
+    if (bytes_read != (size_t)file_size && ferror(file)) {
+        fprintf(stderr, "Error: Failed to read complete file '%s'\n", filename);
+        free(file_content);
+        fclose(file);
+        return 1;
+    }
     file_content[bytes_read] = '\0';
     fclose(file);
 
@@ -107,7 +118,7 @@ int main(int argc, char *argv[]) {
     
     printf("Parse completed. Success: %s\n", result.is_success ? "YES" : "NO");
     if (!result.is_success && result.value.error) {
-        printf("Input position when failed: %d of %zu\n", in->start, in->length);
+        printf("Input position when failed: %d of %d\n", in->start, in->length);
         if (in->start < in->length) {
             printf("Context around failure: '%.50s'\n", in->buffer + in->start);
         }
