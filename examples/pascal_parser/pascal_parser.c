@@ -139,6 +139,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_TUPLE: return "TUPLE";
         case PASCAL_T_PROCEDURE_DECL: return "PROCEDURE_DECL";
         case PASCAL_T_FUNCTION_DECL: return "FUNCTION_DECL";
+        case PASCAL_T_FUNCTION_BODY: return "FUNCTION_BODY";
         case PASCAL_T_PARAM_LIST: return "PARAM_LIST";
         case PASCAL_T_PARAM: return "PARAM";
         case PASCAL_T_RETURN_TYPE: return "RETURN_TYPE";
@@ -186,6 +187,7 @@ const char* pascal_tag_to_string(tag_t tag) {
         case PASCAL_T_POINTER_TYPE: return "POINTER_TYPE";
         case PASCAL_T_ARRAY_TYPE: return "ARRAY_TYPE";
         case PASCAL_T_RECORD_TYPE: return "RECORD_TYPE";
+        case PASCAL_T_ENUMERATED_TYPE: return "ENUMERATED_TYPE";
         case PASCAL_T_CLASS_TYPE: return "CLASS_TYPE";
         case PASCAL_T_CLASS_MEMBER: return "CLASS_MEMBER";
         case PASCAL_T_ACCESS_MODIFIER: return "ACCESS_MODIFIER";

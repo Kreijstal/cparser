@@ -105,6 +105,19 @@ void init_pascal_unit_parser(combinator_t** p) {
         NULL
     );
 
+    // Type section: type name = TypeDefinition; ...
+    combinator_t* type_definition = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
+        class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end (try first)
+        record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
+        enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
+        array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
+        set_type(PASCAL_T_SET),                         // set types like set of TAsmSehDirective
+        range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
+        pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
+        // Note: Removed simple type names to avoid keyword conflicts for now
+        NULL
+    );
+
     // Const section: const name : type = value; ...
     // For now, we'll create a simplified const parser that accepts basic values
     // plus a fallback for complex expressions
@@ -127,7 +140,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         token(cident(PASCAL_T_IDENTIFIER)),          // constant name
         optional(seq(new_combinator(), PASCAL_T_NONE,
             token(match(":")),                       // optional type specification
-            token(cident(PASCAL_T_TYPE_SPEC)),       // type name
+            type_definition,                         // full type definition (not just simple identifier)
             NULL
         )),
         token(match("=")),                           // equals sign
@@ -139,17 +152,6 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* const_section = seq(new_combinator(), PASCAL_T_CONST_SECTION,
         token(keyword_ci("const")),                     // const keyword (with word boundary check)
         many(const_decl),                            // multiple const declarations
-        NULL
-    );
-
-    // Type section: type name = TypeDefinition; ...
-    combinator_t* type_definition = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
-        class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end (try first)
-        record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
-        array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
-        range_type(PASCAL_T_RANGE_TYPE),                // range types like 1..100
-        pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^integer
-        // Note: Removed simple type names to avoid keyword conflicts for now
         NULL
     );
     
@@ -169,6 +171,33 @@ void init_pascal_unit_parser(combinator_t** p) {
 
     combinator_t* param_list = create_pascal_param_parser();
 
+    // Variable declaration for function/procedure local variables
+    combinator_t* var_decl = seq(new_combinator(), PASCAL_T_VAR_DECL,
+        sep_by(token(cident(PASCAL_T_IDENTIFIER)), token(match(","))), // variable name(s)
+        token(match(":")),                          // colon
+        token(cident(PASCAL_T_IDENTIFIER)),         // variable type
+        optional(token(match(";"))),                // optional semicolon
+        NULL
+    );
+
+    combinator_t* var_section = seq(new_combinator(), PASCAL_T_VAR_SECTION,
+        token(keyword_ci("var")),                   // var keyword
+        many(var_decl),                            // multiple variable declarations
+        NULL
+    );
+
+    // Function/procedure body that can contain local declarations
+    combinator_t* function_body = seq(new_combinator(), PASCAL_T_FUNCTION_BODY,
+        many(multi(new_combinator(), PASCAL_T_NONE,    // Optional local declarations
+            var_section,                               // local variables
+            const_section,                             // local constants
+            type_section,                              // local types
+            NULL
+        )),
+        lazy(stmt_parser),                          // main statement block
+        NULL
+    );
+
     combinator_t* procedure_header = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), param_list, token(match(";")), NULL);
 
@@ -179,7 +208,7 @@ void init_pascal_unit_parser(combinator_t** p) {
     // Simple procedure implementation for unit
     combinator_t* procedure_impl = seq(new_combinator(), PASCAL_T_PROCEDURE_DECL,
         token(keyword_ci("procedure")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list), token(match(";")),
-        lazy(stmt_parser), optional(token(match(";"))), NULL);
+        function_body, optional(token(match(";"))), NULL);
 
     // Method implementations with qualified names (Class.Method)
     combinator_t* method_name_with_class = seq(new_combinator(), PASCAL_T_QUALIFIED_IDENTIFIER,
@@ -202,7 +231,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         optional(param_list),                        // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -213,7 +242,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         optional(param_list),                        // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -224,7 +253,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         method_name_with_class,                      // ClassName.MethodName
         optional(param_list),                        // optional parameter list
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -236,7 +265,7 @@ void init_pascal_unit_parser(combinator_t** p) {
         optional(param_list),                        // optional parameter list
         return_type,                                 // return type
         token(match(";")),                           // semicolon
-        lazy(stmt_parser),                           // method body
+        function_body,                               // method body with local declarations
         optional(token(match(";"))),                 // optional terminating semicolon
         NULL
     );
@@ -245,7 +274,7 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* function_impl = seq(new_combinator(), PASCAL_T_FUNCTION_DECL,
         token(keyword_ci("function")), token(cident(PASCAL_T_IDENTIFIER)), optional(param_list),
         return_type, token(match(";")),
-        lazy(stmt_parser), optional(token(match(";"))), NULL);
+        function_body, optional(token(match(";"))), NULL);
 
     // Interface section declarations: uses, const, type, procedure/function headers
     combinator_t* interface_declaration = multi(new_combinator(), PASCAL_T_NONE,
@@ -260,7 +289,11 @@ void init_pascal_unit_parser(combinator_t** p) {
     combinator_t* interface_declarations = many(interface_declaration);
     
     // Implementation section can contain both simple implementations and method implementations
+    // as well as uses, const, type, and var sections
     combinator_t* implementation_definition = multi(new_combinator(), PASCAL_T_NONE,
+        uses_section,                                // uses clauses in implementation
+        const_section,                               // const declarations in implementation  
+        type_section,                                // type declarations in implementation
         constructor_impl,                            // constructor Class.Method implementations
         destructor_impl,                             // destructor Class.Method implementations
         method_procedure_impl,                       // procedure Class.Method implementations
@@ -462,7 +495,9 @@ void init_pascal_complete_program_parser(combinator_t** p) {
     combinator_t* type_spec = multi(new_combinator(), PASCAL_T_TYPE_SPEC,
         class_type(PASCAL_T_CLASS_TYPE),                // class types like class ... end
         record_type(PASCAL_T_RECORD_TYPE),              // record types like record ... end
+        enumerated_type(PASCAL_T_ENUMERATED_TYPE),      // enumerated types like (Value1, Value2, Value3)
         array_type(PASCAL_T_ARRAY_TYPE),                // array types like ARRAY[0..9] OF integer
+        set_type(PASCAL_T_SET),                         // set types like set of TAsmSehDirective
         pointer_type(PASCAL_T_POINTER_TYPE),            // pointer types like ^TMyObject
         range_type(PASCAL_T_RANGE_TYPE),                // range types like -1..1
         type_name(PASCAL_T_IDENTIFIER),                 // built-in types
@@ -533,7 +568,7 @@ void init_pascal_complete_program_parser(combinator_t** p) {
         token(cident(PASCAL_T_IDENTIFIER)),          // constant name
         optional(seq(new_combinator(), PASCAL_T_NONE,
             token(match(":")),                       // colon
-            token(cident(PASCAL_T_IDENTIFIER)),      // type (simplified)
+            type_spec,                               // full type specification (not just simple identifier)
             NULL
         )),
         token(match("=")),                           // equals
