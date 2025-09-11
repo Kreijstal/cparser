@@ -52,36 +52,17 @@ void test_pascal_function_call(void) {
     run_parser_test("my_func", init_pascal_expression_parser, validate_function_call);
 }
 
-void test_pascal_string_literal(void) {
-    combinator_t* p = new_combinator();
-    init_pascal_expression_parser(&p);
-
-    input_t* input = new_input();
-    input->buffer = strdup("\"hello world\"");
-    input->length = strlen("\"hello world\"");
-
-    ParseResult res = parse(input, p);
-
+void validate_string_literal(ParseResult res) {
     TEST_ASSERT(res.is_success);
     TEST_ASSERT(res.value.ast->typ == PASCAL_T_STRING);
     TEST_ASSERT(strcmp(res.value.ast->sym->name, "hello world") == 0);
-
-    free_ast(res.value.ast);
-    free_combinator(p);
-    free(input->buffer);
-    free(input);
 }
 
-void test_pascal_function_call_no_args(void) {
-    combinator_t* p = new_combinator();
-    init_pascal_expression_parser(&p);
+void test_pascal_string_literal(void) {
+    run_parser_test("\"hello world\"", init_pascal_expression_parser, validate_string_literal);
+}
 
-    input_t* input = new_input();
-    input->buffer = strdup("func()");
-    input->length = strlen("func()");
-
-    ParseResult res = parse(input, p);
-
+void validate_function_call_no_args(ParseResult res) {
     TEST_ASSERT(res.is_success);
     TEST_ASSERT(res.value.ast->typ == PASCAL_T_FUNC_CALL);
     
@@ -99,11 +80,10 @@ void test_pascal_function_call_no_args(void) {
     TEST_ASSERT(actual_name_node->sym && 
                actual_name_node->sym->name && 
                strcmp(actual_name_node->sym->name, "func") == 0);
+}
 
-    free_ast(res.value.ast);
-    free_combinator(p);
-    free(input->buffer);
-    free(input);
+void test_pascal_function_call_no_args(void) {
+    run_parser_test("func()", init_pascal_expression_parser, validate_function_call_no_args);
 }
 
 void test_pascal_function_call_with_args(void) {
