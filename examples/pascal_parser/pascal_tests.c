@@ -2257,6 +2257,63 @@ void test_pascal_case_range_label(void) {
     free(input);
 }
 
+void test_pascal_enumerated_type_declaration(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);
+    input_t* input = new_input();
+    char* program = "program Test; type TMyEnum = (Value1, Value2, Value3); begin end.";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+    ParseResult res = parse(input, p);
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_simple_const_declaration(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);
+    input_t* input = new_input();
+    char* program = "program Test; const MyConst = 10; begin end.";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+    ParseResult res = parse(input, p);
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
+void test_pascal_var_section(void) {
+    combinator_t* p = new_combinator();
+    init_pascal_program_parser(&p);
+    input_t* input = new_input();
+    char* program = "program Test; var i: integer; begin end.";
+    input->buffer = strdup(program);
+    input->length = strlen(program);
+    ParseResult res = parse(input, p);
+    TEST_ASSERT(res.is_success);
+    if (res.is_success) {
+        free_ast(res.value.ast);
+    } else {
+        free_error(res.value.error);
+    }
+    free_combinator(p);
+    free(input->buffer);
+    free(input);
+}
+
 TEST_LIST = {
     { "test_pascal_integer_parsing", test_pascal_integer_parsing },
     { "test_pascal_invalid_input", test_pascal_invalid_input },
@@ -2328,5 +2385,9 @@ TEST_LIST = {
     { "test_pascal_case_range_label", test_pascal_case_range_label },
     { "test_pascal_pointer_dereference", test_pascal_pointer_dereference },
     { "test_pascal_array_access_with_deref", test_pascal_array_access_with_deref },
+    // New failing tests for missing features
+    { "test_pascal_enumerated_type_declaration", test_pascal_enumerated_type_declaration },
+    { "test_pascal_simple_const_declaration", test_pascal_simple_const_declaration },
+    { "test_pascal_var_section", test_pascal_var_section },
     { NULL, NULL }
 };
