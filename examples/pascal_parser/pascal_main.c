@@ -101,8 +101,8 @@ int main(int argc, char *argv[]) {
     fclose(file);
 
     combinator_t *parser = new_combinator();
-    // Use unit parser instead of expression parser for full Pascal units
-    init_pascal_unit_parser(&parser);
+    // Use complete program parser for full Pascal programs
+    init_pascal_complete_program_parser(&parser);
     
     printf("Parsing file: %s\n", filename);
     printf("File size: %zu bytes\n", bytes_read);
