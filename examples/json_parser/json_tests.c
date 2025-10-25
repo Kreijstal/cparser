@@ -2,7 +2,10 @@
 #include "parser.h"
 #include "combinators.h"
 #include "json_parser.h"
+#include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // --- Test Helpers ---
 

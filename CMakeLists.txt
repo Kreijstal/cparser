@@ -83,4 +83,8 @@ if(BUILD_INTEGRATION_TESTS)
     add_executable(pascal_tests examples/pascal_parser/pascal_tests.c)
     target_link_libraries(pascal_tests pascal_parser_lib)
     add_test(NAME pascal_tests COMMAND pascal_tests)
+
+    add_executable(pascal_string_tests examples/pascal_parser/test_strings.c)
+    target_link_libraries(pascal_string_tests pascal_parser_lib)
+    add_test(NAME pascal_string_tests COMMAND pascal_string_tests)
 endif()

@@ -17,13 +17,21 @@ static ParseResult pascal_identifier_fn(input_t* in, void* args, char* parser_na
     char c = read1(in);
 
     // Must start with letter or underscore
-    if (c != '_' && !isalpha(c)) {
+    if (c != '_' && !isalpha((unsigned char)c)) {
         restore_input_state(in, &state);
         return make_failure_v2(in, parser_name, strdup("Expected identifier"), NULL);
     }
 
     // Continue with alphanumeric or underscore
-    while (isalnum(c = read1(in)) || c == '_');
+    while (1) {
+        c = read1(in);
+        if (c == EOF) {
+            break;
+        }
+        if (!(isalnum((unsigned char)c) || c == '_')) {
+            break;
+        }
+    }
     if (c != EOF) in->start--;
 
     // Extract the identifier text
@@ -90,13 +98,21 @@ static ParseResult pascal_expression_identifier_fn(input_t* in, void* args, char
     char c = read1(in);
 
     // Must start with letter or underscore
-    if (c != '_' && !isalpha(c)) {
+    if (c != '_' && !isalpha((unsigned char)c)) {
         restore_input_state(in, &state);
         return make_failure_v2(in, parser_name, strdup("Expected identifier"), NULL);
     }
 
     // Continue with alphanumeric or underscore
-    while (isalnum(c = read1(in)) || c == '_');
+    while (1) {
+        c = read1(in);
+        if (c == EOF) {
+            break;
+        }
+        if (!(isalnum((unsigned char)c) || c == '_')) {
+            break;
+        }
+    }
     if (c != EOF) in->start--;
 
     // Extract the identifier text
@@ -144,12 +160,17 @@ static ParseResult real_fn(input_t* in, void* args, char* parser_name) {
 
     // Parse integer part
     char c = read1(in);
-    if (!isdigit(c)) {
+    if (!isdigit((unsigned char)c)) {
         restore_input_state(in, &state);
         return make_failure_v2(in, parser_name, strdup("Expected digit"), NULL);
     }
 
-    while (isdigit(c = read1(in)));
+    while (1) {
+        c = read1(in);
+        if (c == EOF || !isdigit((unsigned char)c)) {
+            break;
+        }
+    }
     if (c != EOF) in->start--; // Back up one if not EOF
 
     // Must have decimal point
@@ -160,12 +181,17 @@ static ParseResult real_fn(input_t* in, void* args, char* parser_name) {
 
     // Parse fractional part (at least one digit required)
     c = read1(in);
-    if (!isdigit(c)) {
+    if (!isdigit((unsigned char)c)) {
         restore_input_state(in, &state);
         return make_failure_v2(in, parser_name, strdup("Expected digit after decimal point"), NULL);
     }
 
-    while (isdigit(c = read1(in)));
+    while (1) {
+        c = read1(in);
+        if (c == EOF || !isdigit((unsigned char)c)) {
+            break;
+        }
+    }
     if (c != EOF) in->start--; // Back up one if not EOF
 
     // Optional exponent part (e.g., E+10, e-5, E3)
@@ -178,13 +204,18 @@ static ParseResult real_fn(input_t* in, void* args, char* parser_name) {
         }
 
         // Must have at least one digit after E/e
-        if (!isdigit(c)) {
+        if (!isdigit((unsigned char)c)) {
             restore_input_state(in, &state);
             return make_failure_v2(in, parser_name, strdup("Expected digit after exponent"), NULL);
         }
 
         // Parse remaining exponent digits
-        while (isdigit(c = read1(in)));
+        while (1) {
+            c = read1(in);
+            if (c == EOF || !isdigit((unsigned char)c)) {
+                break;
+            }
+        }
         if (c != EOF) in->start--; // Back up one if not EOF
     } else if (c != EOF) {
         in->start--; // Back up if we didn't find exponent
@@ -234,13 +265,14 @@ static ParseResult hex_integer_fn(input_t* in, void* args, char* parser_name) {
 
     // Must have at least one hex digit after $
     c = read1(in);
-    if (c == EOF || !isxdigit(c)) {
+    if (c == EOF || !isxdigit((unsigned char)c)) {
         restore_input_state(in, &state);
         return make_failure_v2(in, parser_name, strdup("Expected hex digit after '$'"), NULL);
     }
 
     // Continue reading hex digits
-    while ((c = read1(in)) != EOF && isxdigit(c));
+    while ((c = read1(in)) != EOF && isxdigit((unsigned char)c))
+        ;
     if (c != EOF) in->start--;
 
     // Extract the hex text (including the $)
@@ -376,7 +408,12 @@ static ParseResult set_fn(input_t* in, void* args, char* parser_name) {
 
     // Skip whitespace manually
     char c;
-    while (isspace(c = read1(in)));
+    while (1) {
+        c = read1(in);
+        if (c == EOF || !isspace((unsigned char)c)) {
+            break;
+        }
+    }
     if (c != EOF) in->start--;
 
     // Check for empty set
@@ -395,7 +432,12 @@ static ParseResult set_fn(input_t* in, void* args, char* parser_name) {
 
     while (true) {
         // Skip whitespace
-        while (isspace(c = read1(in)));
+        while (1) {
+            c = read1(in);
+            if (c == EOF || !isspace((unsigned char)c)) {
+                break;
+            }
+        }
         if (c != EOF) in->start--;
 
         ParseResult elem_result = parse(in, expr_parser);
@@ -417,7 +459,12 @@ static ParseResult set_fn(input_t* in, void* args, char* parser_name) {
         }
 
         // Skip whitespace
-        while (isspace(c = read1(in)));
+        while (1) {
+            c = read1(in);
+            if (c == EOF || !isspace((unsigned char)c)) {
+                break;
+            }
+        }
         if (c != EOF) in->start--;
 
         // Check for comma or closing bracket
