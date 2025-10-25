@@ -1,7 +1,9 @@
-#include "../../acutest.h"
-#include "../../parser.h"
-#include "../../combinators.h" 
+#include "acutest.h"
+#include "parser.h"
+#include "combinators.h"
 #include "pascal_parser.h"
+#include <stdio.h>
+#include <string.h>
 
 void test_pascal_string_escapes(void) {
     combinator_t* p = new_combinator();

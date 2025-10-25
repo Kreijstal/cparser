@@ -251,7 +251,7 @@ static ParseResult match_ci_fn(input_t * in, void * args, char* parser_name) {
     InputState state; save_input_state(in, &state);
     for (int i = 0, len = strlen(str); i < len; i++) {
         char c = read1(in);
-        if (tolower(c) != tolower(str[i])) {
+        if (tolower((unsigned char)c) != tolower((unsigned char)str[i])) {
             restore_input_state(in, &state);
             char* unexpected = strndup(in->buffer + state.start, 10);
             char* err_msg;
@@ -287,12 +287,17 @@ static ParseResult integer_fn(input_t * in, void * args, char* parser_name) {
    InputState state; save_input_state(in, &state);
    int start_pos_ws = in->start;
    char c = read1(in);
-   if (!isdigit(c)) {
+   if (!isdigit((unsigned char)c)) {
        restore_input_state(in, &state);
        char* unexpected = strndup(in->buffer + state.start, 10);
        return make_failure_v2(in, parser_name, strdup("Expected a digit."), unexpected);
    }
-   while (isdigit(c = read1(in))) ;
+   while (1) {
+       c = read1(in);
+       if (c == EOF || !isdigit((unsigned char)c)) {
+           break;
+       }
+   }
    if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
    char * text = (char*)safe_malloc(len + 1);
@@ -310,12 +315,17 @@ static ParseResult cident_fn(input_t * in, void * args, char* parser_name) {
    InputState state; save_input_state(in, &state);
    int start_pos_ws = in->start;
    char c = read1(in);
-   if (c != '_' && !isalpha(c)) {
+   if (c != '_' && !isalpha((unsigned char)c)) {
        restore_input_state(in, &state);
        char* unexpected = strndup(in->buffer + state.start, 10);
        return make_failure_v2(in, parser_name, strdup("Expected identifier."), unexpected);
    }
-   while (isalnum(c = read1(in)) || c == '_') ;
+   while (1) {
+       c = read1(in);
+       if (c == EOF || !(isalnum((unsigned char)c) || c == '_')) {
+           break;
+       }
+   }
    if (c != EOF) in->start--;
    int len = in->start - start_pos_ws;
    char * text = (char*)safe_malloc(len + 1);
